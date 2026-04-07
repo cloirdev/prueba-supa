@@ -1,0 +1,215 @@
+---
+// @ts-nocheck
+import { supabase } from '@/lib/supabase.js'
+import { slugify } from '@/utils/slugify.js'
+import Layout from '@/layouts/Layout.astro'
+import LogoCBJaca from "@/assets/new-logo.svg";
+
+export async function getStaticPaths() {
+  const { data: inscripciones } = await supabase
+    .from('inscripciones')  
+    .select(`
+      id,
+      equipos (id, nombre, categoria, cover_url, sponsor),
+      competiciones (nombre),
+      temporadas (id, nombre)
+    `)
+
+  return inscripciones.map((i) => ({
+    params: {
+      // Importante: El nombre del parámetro debe coincidir con el nombre del archivo [equipo].astro
+      equipo: slugify(i.equipos.nombre),
+      temporada: slugify(i.temporadas.nombre)
+    },
+    props: { inscripcion: i }
+  }))
+}
+
+const { inscripcion } = Astro.props
+const { equipos, competiciones, temporadas } = inscripcion
+
+// Consultamos la plantilla para este equipo y temporada específica
+const { data: convocatorias } = await supabase
+  .from('convocatorias_temporada')
+  .select(`
+    dorsal,
+    jugadores (id, nombre, apellido, posicion, img_url)
+  `)
+  .eq('equipo_id', equipos.id)
+  .eq('temporada_id', temporadas.id)
+  .order('dorsal')
+
+const teamCover = equipos.cover_url || '/placeholder-team.jpg';
+---
+
+<Layout titulo={`${equipos.nombre} · ${temporadas.nombre}`}>
+  <header class="team-hero" style={`--bg-img: url(${teamCover})`}>
+    <div class="hero-content">
+      <a href="/equipos" class="back-link">← Volver a equipos</a>
+      <div class="hero-main">
+        <div class="hero-text">
+          <span class="category-badge">{equipos.categoria}</span>
+          <h1>{equipos.nombre}</h1>
+          <p class="subtitle">{competiciones.nombre} | Temporada {temporadas.nombre}</p>
+        </div>
+        <div class="hero-logos">
+          <LogoCBJaca class="main-logo" />
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <h2 class="section-title">Plantilla Oficial</h2>
+    
+    <div class="player-grid">
+      {convocatorias && convocatorias.length > 0 ? (
+        convocatorias.map((c) => (
+          <div class="player-card">
+            <div class="dorsal">{c.dorsal}</div>
+            <div class="player-info">
+              <span class="player-name">{c.jugadores.nombre} {c.jugadores.apellido}</span>
+              <span class="player-position">{c.jugadores.posicion}</span>
+            </div>
+          </div>
+        ))
+      ) : (
+        <p class="muted">Aún no se ha cargado la plantilla para esta temporada.</p>
+      )}
+    </div>
+  </main>
+</Layout>
+
+<style>
+  .team-hero {
+    position: relative;
+    padding: 4rem 2rem;
+    color: white;
+    background-color: #000;
+    min-height: 300px;
+    display: flex;
+    align-items: flex-end;
+    overflow: hidden;
+    margin-bottom: 3rem;
+  }
+
+  .team-hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: 
+      linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.4) 100%),
+      var(--bg-img);
+    background-size: cover;
+    background-position: center;
+    z-index: 0;
+  }
+
+  .hero-content {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .back-link {
+    color: var(--naranja);
+    text-decoration: none;
+    font-size: 0.9rem;
+    display: block;
+    margin-bottom: 2rem;
+  }
+
+  .hero-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+
+  .category-badge {
+    background: var(--naranja);
+    color: black;
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-weight: 800;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+  }
+
+  h1 { font-size: clamp(2rem, 5vw, 3.5rem); margin: 0.5rem 0; }
+  .subtitle { opacity: 0.8; font-size: 1.1rem; }
+
+  .hero-logos svg {
+    width: 80px;
+    height: auto;
+    fill: white;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 2rem 4rem;
+  }
+
+  .section-title {
+    font-size: 1.5rem;
+    border-left: 4px solid var(--naranja);
+    padding-left: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  /* Grid de Jugadores Estilo Moderno */
+  .player-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .player-card {
+    background: var(--azul-oscuro, #1a1a1a);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 8px;
+    padding: 1.2rem;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    transition: transform 0.2s ease;
+  }
+
+  .player-card:hover {
+    transform: translateY(-5px);
+    border-color: var(--naranja);
+  }
+
+  .dorsal {
+    font-size: 2rem;
+    font-weight: 900;
+    color: var(--naranja);
+    min-width: 50px;
+    line-height: 1;
+  }
+
+  .player-info {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .player-name {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: white;
+  }
+
+  .player-position {
+    color: #888;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  @media (max-width: 600px) {
+    .hero-main { flex-direction: column; align-items: flex-start; gap: 2rem; }
+    .hero-logos { display: none; }
+  }
+</style>

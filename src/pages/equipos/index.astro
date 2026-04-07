@@ -1,0 +1,125 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import { supabase } from '@/lib/supabase.js';
+import { slugify } from '@/utils/slugify.js';
+
+// 1. Traemos los equipos e inscripciones de la temporada actual desde Supabase
+// Nota: Ajusta el nombre de las tablas si varían (ej. 'inscripciones', 'equipos')
+const { data: inscripciones, error } = await supabase
+  .from('inscripciones')
+  .select(`
+    equipos (id, nombre, categoria, cover_url, sponsor),
+    temporadas (nombre, actual)
+  `)
+  .eq('temporadas.actual', true); // Filtramos solo por la temporada activa
+
+if (error) console.error("Error cargando equipos:", error);
+
+// 2. Extraemos los equipos únicos (evitando duplicados si una inscripción falla)
+const equipos = inscripciones?.map(i => ({
+  ...i.equipos,
+  temporada: i.temporadas.nombre,
+  slug: slugify(i.equipos.nombre)
+})) || [];
+
+// 3. Lógica de ordenación (Tu lógica original de Strapi adaptada)
+const categoryOrder = {
+  Senior: 1, Junior: 2, Cadete: 3, Infantil: 4, Alevín: 5, Escuela: 6,
+};
+
+function compareTeams(a, b) {
+  const aCategory = a.nombre.split(" ")[0];
+  const bCategory = b.nombre.split(" ")[0];
+  const aGender = a.nombre.toLowerCase().includes("masculino") ? "masc" : "fem";
+  const bGender = b.nombre.toLowerCase().includes("masculino") ? "masc" : "fem";
+
+  const aRank = categoryOrder[aCategory] || 99;
+  const bRank = categoryOrder[bCategory] || 99;
+
+  if (aRank !== bRank) return aRank - bRank;
+  if (aGender !== bGender) return aGender === "masc" ? -1 : 1;
+  return 0;
+}
+
+const sortedEquipos = equipos.sort(compareTeams);
+---
+
+<Layout title="CB Jaca | Equipos">
+  <section>
+    <h1>Nuestros Equipos</h1>
+
+    <div class="team-grid">
+      {sortedEquipos.map((equipo) => (
+        <a
+          href={`/equipos/${equipo.slug}`}
+          style={`--bg-img: url(${equipo.cover_url || '/placeholder-team.jpg'})`}
+          class="team-card"
+          transition:name={`bg-img-${equipo.id}`}
+        >
+          <div class="team-header">
+            <div>
+              <h2>{equipo.sponsor || 'CB Jaca'}</h2>
+              <p>{equipo.nombre}</p>
+            </div>
+            <div class="team-logo">
+              <LogoCBJaca />
+              </div>
+          </div>
+        </a>
+      ))}
+    </div>
+  </section>
+</Layout>
+
+<style>
+  /* Mantenemos tus estilos originales */
+  section { margin: 2rem auto; min-height: 75vh; }
+  h1 { text-align: center; color: white; margin-bottom: 2rem; }
+
+  .team-grid {
+    display: grid;
+    width: clamp(350px, 90vw, 1400px);
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 2rem;
+    margin: 1rem auto;
+  }
+
+  .team-card {
+    color: white;
+    position: relative;
+    border-radius: 12px;
+    padding: 2rem;
+    border: 1px solid rgba(255,255,255,0.1);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    height: 350px;
+    text-decoration: none;
+  }
+
+  .team-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background-image: 
+        linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.8) 100%),
+        var(--bg-img);
+    background-position: center;
+    background-size: cover;
+    transition: transform 0.5s ease;
+  }
+
+  .team-card:hover::before { transform: scale(1.05); }
+
+  .team-header { display: flex; justify-content: space-between; align-items: flex-start; }
+  .team-header h2 { margin: 0; font-size: 1.5rem; text-transform: uppercase; }
+  .team-header p { margin: 0; opacity: 0.8; font-weight: 300; }
+
+  .team-logo svg { width: 3.5rem; height: auto; fill: white; }
+
+  @media (max-width: 800px) {
+    .team-grid { grid-template-columns: 1fr; }
+  }
+</style>

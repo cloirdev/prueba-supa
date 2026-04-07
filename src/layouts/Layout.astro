@@ -1,0 +1,51 @@
+---
+const { titulo } = Astro.props
+---
+
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{titulo} · CB Ejemplo</title>
+    <link rel="stylesheet" href="/src/styles/global.css" />
+  </head>
+  <body>
+    <nav>
+      <a href="/" class="nav-logo">CB <span>Ejemplo</span></a>
+      <div class="nav-links">
+        <a href="/">Inicio</a>
+        <a href="/equipos">Equipos</a>
+      </div>
+      <button class="theme-btn" id="theme-btn">Tema oscuro</button>
+    </nav>
+    <main>
+      <slot />
+    </main>
+  </body>
+  <script>
+    const btn = document.getElementById('theme-btn')
+    const saved = localStorage.getItem('tema')
+    if (saved) {
+      document.documentElement.setAttribute('data-theme', saved)
+      btn.textContent = saved === 'dark' ? 'Tema claro' : 'Tema oscuro'
+    }
+    btn.addEventListener('click', () => {
+      const actual = document.documentElement.getAttribute('data-theme')
+      const nuevo = actual === 'dark' ? 'light' : 'dark'
+      document.documentElement.setAttribute('data-theme', nuevo)
+      localStorage.setItem('tema', nuevo)
+      btn.textContent = nuevo === 'dark' ? 'Tema claro' : 'Tema oscuro'
+    })
+  </script>
+</html>
+
+<style is:global>
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none !important;
+    margin: 0 !important;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield !important;
+  }
+</style>

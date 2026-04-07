@@ -1,0 +1,67 @@
+  ---
+  // @ts-nocheck
+  import { supabase } from '@/lib/supabase.js'
+  import { slugify } from '@/utils/slugify.js'
+  import Layout from '@/layouts/Layout.astro'
+
+  export async function getStaticPaths() {
+    const { data: inscripciones } = await supabase
+      .from('inscripciones')  
+      .select(`
+        id,
+        equipos (id, nombre, categoria),
+        competiciones (nombre),
+        temporadas (id, nombre)
+      `)
+
+    return inscripciones.map((i) => ({
+      params: {
+        equipo: slugify(i.equipos.nombre),
+        temporada: slugify(i.temporadas.nombre)
+      },
+      props: { inscripcion: i }
+    }))
+  }
+
+  const { inscripcion } = Astro.props
+  const { equipos, competiciones, temporadas } = inscripcion
+
+  const { data: convocatorias } = await supabase
+    .from('convocatorias_temporada')
+    .select(`
+      dorsal,
+      jugadores (id, nombre, apellido, posicion, img_url)
+    `)
+    .eq('equipo_id', equipos.id)
+    .eq('temporada_id', temporadas.id)
+    .order('dorsal')
+  ---
+
+  <Layout titulo={`${equipos.nombre} · ${temporadas.nombre}`}>
+    <a href={`/equipos/${slugify(equipos.nombre)}`} class="muted" style="display:inline-block; margin-bottom:16px">
+      ← Volver
+    </a>
+
+    <h1>{equipos.nombre} <span style="color:var(--naranja)">{temporadas.nombre}</span></h1>
+    <p class="muted" style="margin-bottom:28px">{competiciones.nombre} · {equipos.categoria}</p>
+
+    <div class="section-title">Plantilla</div>
+
+    <div class="grid-3">
+      {convocatorias.map((c) => (
+        <div class="card">
+          <div style="display:flex; align-items:center; gap:12px">
+            <div style="width:44px; height:44px; border-radius:50%; background:var(--azul-oscuro); display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:800; color:var(--naranja); flex-shrink:0">
+              {c.dorsal}
+            </div>
+            <div>
+              <div style="font-weight:700; font-size:14px">
+                {c.jugadores.nombre} {c.jugadores.apellido}
+              </div>
+              <div class="muted">{c.jugadores.posicion}</div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  </Layout>

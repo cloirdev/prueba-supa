@@ -1,17 +1,79 @@
 ---
+// @ts-nocheck
+import { supabase } from '@/lib/supabase'
+import Layout from '@/layouts/Layout.astro'
+import { slugify } from '@/utils/slugify'
 
+const { data: equipos } = await supabase
+  .from('equipos')
+  .select('*')
+  .order('nombre')
+
+const { data: partidos } = await supabase
+  .from('partidos')
+  .select(`
+    id,
+    rival,
+    es_local,
+    fecha,
+    jornada,
+    puntos_favor,
+    puntos_contra,
+    inscripciones (
+      equipos (nombre),
+      competiciones (nombre),
+      temporadas (nombre)
+    )
+  `)
+  .order('fecha', { ascending: false })
+  .limit(3)
 ---
 
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
-	</head>
-	<body>
-		<h1>Astro</h1>
-	</body>
-</html>
+<Layout titulo="Inicio">
+
+  <div style="background:var(--azul-oscuro); border-radius:12px; padding:32px; margin-bottom:32px; position:relative; overflow:hidden">
+    <div style="position:absolute; right:-30px; top:-30px; width:180px; height:180px; border-radius:50%; background:var(--naranja); opacity:.08"></div>
+    <p style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:var(--naranja); margin-bottom:8px">Bienvenido</p>
+    <h1 style="color:white; font-size:28px; font-weight:800; margin-bottom:8px">Club Baloncesto <span style="color:var(--naranja)">Ejemplo</span></h1>
+    <p style="color:rgba(255,255,255,0.6); font-size:14px">Temporada 2025-26 · Nacional A2</p>
+  </div>
+
+  <div class="section-title">Equipos</div>
+  <div class="grid-2" style="margin-bottom:32px">
+    {equipos.map((e) => (
+      <a href={`/equipos/${slugify(e.nombre)}`} class="card" style="display:block">
+        <div style="font-weight:700; font-size:14px; margin-bottom:4px">{e.nombre}</div>
+        <div class="muted">{e.categoria}</div>
+        <span class={`badge ${e.categoria === 'senior' ? 'badge-naranja' : 'badge-azul'}`} style="margin-top:8px">
+          {e.categoria}
+        </span>
+      </a>
+    ))}
+  </div>
+
+  <div class="section-title">Últimos resultados</div>
+  <div style="display:flex; flex-direction:column; gap:8px">
+    {partidos && partidos.map((p) => {
+      const victoria = p.puntos_favor > p.puntos_contra
+      return (
+        <div class="card" style="display:flex; align-items:center; justify-content:space-between">
+          <div>
+            <div style="font-weight:700; font-size:13px">
+              {p.es_local ? 'vs' : '@'} {p.rival}
+            </div>
+            <div class="muted" style="font-size:11px; margin-top:2px">
+              {p.inscripciones?.equipos?.nombre} · J{p.jornada} · {new Date(p.fecha).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+            </div>
+          </div>
+          <div style={`font-size:20px; font-weight:800; color:${victoria ? 'var(--naranja)' : 'var(--azul)'}`}>
+            {p.puntos_favor} – {p.puntos_contra}
+          </div>
+        </div>
+      )
+    })}
+    {(!partidos || partidos.length === 0) && (
+      <p class="muted">No hay partidos registrados aún.</p>
+    )}
+  </div>
+
+</Layout>
