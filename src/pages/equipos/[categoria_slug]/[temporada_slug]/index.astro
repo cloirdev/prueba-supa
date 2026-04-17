@@ -1,0 +1,151 @@
+---
+// src/pages/equipos/[categoria_slug]/[temporada_slug]/index.astro
+// @ts-nocheck
+import { supabase } from '@/lib/supabase.js'
+import { slugify } from '@/utils/slugify.js'
+import Layout from '@/layouts/Layout.astro'
+
+export async function getStaticPaths() {
+  const { data: equipos, error } = await supabase
+    .from('equipos')
+    .select(`
+      id,
+      categorias (nombre),
+      temporadas (nombre)
+    `);
+
+  if (error || !equipos) {
+    console.error("❌ Error en Supabase:", error);
+    return [];
+  }
+
+  const rutasMap = new Map();
+
+  equipos.forEach((e) => {
+    const cNombre = e.categorias?.nombre;
+    const tNombre = e.temporadas?.nombre;
+
+    if (!cNombre || !tNombre) {
+      console.warn("⚠️ Equipo sin categoría o temporada:", e.id);
+      return;
+    }
+
+    const cSlug = slugify(cNombre);
+    const tSlug = slugify(tNombre);
+    const key = `${cSlug}/${tSlug}`;
+
+    if (!rutasMap.has(key)) {
+      rutasMap.set(key, {
+        params: { categoria_slug: cSlug, temporada_slug: tSlug },
+        props: {
+          equipoIds: [e.id],
+          categoriaNombre: cNombre,
+          temporadaNombre: tNombre,
+        }
+      });
+    } else {
+      rutasMap.get(key).props.equipoIds.push(e.id);
+    }
+  });
+
+  return Array.from(rutasMap.values());
+}
+
+const { equipoIds, categoriaNombre, temporadaNombre } = Astro.props;
+
+const { data: equipos } = await supabase
+  .from('equipos')
+  .select(`*, categorias(nombre), temporadas(nombre), competiciones(nombre)`)
+  .in('id', equipoIds);
+
+// Para cada equipo, sacamos su plantilla via convocatorias_temporada
+const { data: convocatorias } = await supabase
+  .from('convocatorias_temporada')
+  .select(`
+    dorsal,
+    equipo_id,
+    jugadores (
+      id,
+      nombre,
+      apellido,
+      posicion
+    )
+  `)
+  .in('equipo_id', equipoIds)
+  .order('dorsal', { ascending: true });
+
+// Agrupamos jugadores por equipo_id
+const jugadoresPorEquipo = new Map();
+if (convocatorias) {
+  convocatorias.forEach((c) => {
+    if (!jugadoresPorEquipo.has(c.equipo_id)) {
+      jugadoresPorEquipo.set(c.equipo_id, []);
+    }
+    jugadoresPorEquipo.get(c.equipo_id).push(c);
+  });
+}
+---
+
+<Layout titulo={`${categoriaNombre} – ${temporadaNombre}`}>
+  <div style="margin-bottom: 32px;">
+    <a href={`/equipos/${Astro.params.categoria_slug}`} style="color: var(--naranja); text-decoration: none; font-weight: bold; font-size: 14px;">
+      ← VOLVER A TEMPORADAS
+    </a>
+    <h1 style="font-size: 32px; font-weight: 800; margin-top: 16px; color: white;">
+      {categoriaNombre} <span style="color: var(--naranja)">{temporadaNombre}</span>
+    </h1>
+  </div>
+
+  {equipos && equipos.length > 0 ? (
+    equipos.map((equipo) => {
+      const plantilla = jugadoresPorEquipo.get(equipo.id) ?? [];
+      return (
+        <div style="margin-bottom: 40px;">
+          <div style="background: var(--azul-oscuro); border-radius: 8px; padding: 20px; margin-bottom: 16px; border: 1px solid rgba(255,255,255,0.1);">
+            <p style="color: var(--naranja); font-size: 12px; font-weight: 700; text-transform: uppercase; margin-bottom: 4px;">
+              {equipo.competiciones?.nombre ?? 'Sin competición'}
+            </p>
+            {equipo.sponsor && (
+              <p style="color: rgba(255,255,255,0.5); font-size: 13px;">
+                Sponsor: {equipo.sponsor}
+              </p>
+            )}
+          </div>
+
+          {plantilla.length > 0 ? (
+            <table style="width: 100%; border-collapse: collapse;">
+              <thead>
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                  <th style="text-align: left; padding: 10px 12px; color: var(--naranja); font-size: 12px; text-transform: uppercase;">#</th>
+                  <th style="text-align: left; padding: 10px 12px; color: var(--naranja); font-size: 12px; text-transform: uppercase;">Jugador</th>
+                  <th style="text-align: left; padding: 10px 12px; color: var(--naranja); font-size: 12px; text-transform: uppercase;">Posición</th>
+                </tr>
+              </thead>
+              <tbody>
+                {plantilla.map((c) => (
+                  <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <td style="padding: 12px; color: rgba(255,255,255,0.4); font-weight: 700; font-size: 14px;">
+                      {c.dorsal ?? '—'}
+                    </td>
+                    <td style="padding: 12px; color: white; font-weight: 600;">
+                      {c.jugadores?.nombre} {c.jugadores?.apellido}
+                    </td>
+                    <td style="padding: 12px; color: rgba(255,255,255,0.6); font-size: 14px;">
+                      {c.jugadores?.posicion ?? '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p style="color: rgba(255,255,255,0.4); font-size: 14px; padding: 16px 0;">
+              Sin jugadores registrados en esta plantilla.
+            </p>
+          )}
+        </div>
+      );
+    })
+  ) : (
+    <p style="color: white;">No se encontraron equipos.</p>
+  )}
+</Layout>

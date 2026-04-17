@@ -6,8 +6,13 @@ import { slugify } from '@/utils/slugify'
 
 const { data: equipos } = await supabase
   .from('equipos')
-  .select('*')
-  .order('nombre')
+  .select(`
+    *,
+    categorias (
+      nombre
+    )
+  `)
+  .order('sponsor', { nullsFirst: false });
 
 const { data: partidos } = await supabase
   .from('partidos')
@@ -40,16 +45,31 @@ const { data: partidos } = await supabase
 
   <div class="section-title">Equipos</div>
   <div class="grid-2" style="margin-bottom:32px">
-    {equipos.map((e) => (
-      <a href={`/equipos/${slugify(e.nombre)}`} class="card" style="display:block">
-        <div style="font-weight:700; font-size:14px; margin-bottom:4px">{e.nombre}</div>
-        <div class="muted">{e.categoria}</div>
-        <span class={`badge ${e.categoria === 'senior' ? 'badge-naranja' : 'badge-azul'}`} style="margin-top:8px">
-          {e.categoria}
+  {equipos && equipos.map((e) => {
+    // Generamos el nombre público: Sponsor + CB Jaca
+    const nombrePublico = e.sponsor ? `${e.sponsor} CB Jaca` : 'CB Jaca';
+    
+    // Accedemos al nombre de la categoría a través de la relación
+    // Usamos ?. para evitar errores si por algún motivo un equipo no tiene categoría
+    const nombreCategoria = e.categorias?.nombre || 'Sin categoría';
+
+    return (
+      <a href={`/equipos/${slugify(nombrePublico)}`} class="card" style="display:block">
+        <div style="font-weight:700; font-size:14px; margin-bottom:4px">
+          {nombrePublico}
+        </div>
+        
+        <div class="muted">
+          {nombreCategoria}
+        </div>
+
+        <span class={`badge ${nombreCategoria.includes('Senior') ? 'badge-naranja' : 'badge-azul'}`} style="margin-top:8px">
+          Ver detalles
         </span>
       </a>
-    ))}
-  </div>
+    )
+  })}
+</div>
 
   <div class="section-title">Últimos resultados</div>
   <div style="display:flex; flex-direction:column; gap:8px">

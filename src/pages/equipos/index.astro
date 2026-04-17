@@ -1,125 +1,60 @@
 ---
-import Layout from "@/layouts/Layout.astro";
-import { supabase } from '@/lib/supabase.js';
-import { slugify } from '@/utils/slugify.js';
+// @ts-nocheck
+import { supabase } from '@/lib/supabase.js'
+import { slugify } from '@/utils/slugify.js'
+import Layout from '@/layouts/Layout.astro'
 
-// 1. Traemos los equipos e inscripciones de la temporada actual desde Supabase
-// Nota: Ajusta el nombre de las tablas si varían (ej. 'inscripciones', 'equipos')
-const { data: inscripciones, error } = await supabase
-  .from('inscripciones')
-  .select(`
-    equipos (id, nombre, categoria, cover_url, sponsor),
-    temporadas (nombre, actual)
-  `)
-  .eq('temporadas.actual', true); // Filtramos solo por la temporada activa
+// 1. Traemos todas las categorías, ordenadas si tienes el campo 'orden'
+const { data: categorias, error } = await supabase
+  .from('categorias')
+  .select('*')
+  .order('orden', { ascending: true }); // Si no tienes 'orden', usa 'nombre'
 
-if (error) console.error("Error cargando equipos:", error);
-
-// 2. Extraemos los equipos únicos (evitando duplicados si una inscripción falla)
-const equipos = inscripciones?.map(i => ({
-  ...i.equipos,
-  temporada: i.temporadas.nombre,
-  slug: slugify(i.equipos.nombre)
-})) || [];
-
-// 3. Lógica de ordenación (Tu lógica original de Strapi adaptada)
-const categoryOrder = {
-  Senior: 1, Junior: 2, Cadete: 3, Infantil: 4, Alevín: 5, Escuela: 6,
-};
-
-function compareTeams(a, b) {
-  const aCategory = a.nombre.split(" ")[0];
-  const bCategory = b.nombre.split(" ")[0];
-  const aGender = a.nombre.toLowerCase().includes("masculino") ? "masc" : "fem";
-  const bGender = b.nombre.toLowerCase().includes("masculino") ? "masc" : "fem";
-
-  const aRank = categoryOrder[aCategory] || 99;
-  const bRank = categoryOrder[bCategory] || 99;
-
-  if (aRank !== bRank) return aRank - bRank;
-  if (aGender !== bGender) return aGender === "masc" ? -1 : 1;
-  return 0;
-}
-
-const sortedEquipos = equipos.sort(compareTeams);
+if (error) console.error("Error cargando categorías:", error);
 ---
 
-<Layout title="CB Jaca | Equipos">
-  <section>
-    <h1>Nuestros Equipos</h1>
+<Layout titulo="Equipos - CB Jaca">
+  <div style="margin-bottom: 40px;">
+    <h1 style="font-size: 36px; font-weight: 800; color: black;">Nuestros <span style="color:var(--naranja)">Equipos</span></h1>
+    <p class="muted">Selecciona una categoría para ver su historial y plantillas.</p>
+  </div>
 
-    <div class="team-grid">
-      {sortedEquipos.map((equipo) => (
-        <a
-          href={`/equipos/${equipo.slug}`}
-          style={`--bg-img: url(${equipo.cover_url || '/placeholder-team.jpg'})`}
-          class="team-card"
-          transition:name={`bg-img-${equipo.id}`}
-        >
-          <div class="team-header">
-            <div>
-              <h2>{equipo.sponsor || 'CB Jaca'}</h2>
-              <p>{equipo.nombre}</p>
-            </div>
-            <div class="team-logo">
-              <LogoCBJaca />
-              </div>
-          </div>
-        </a>
-      ))}
+  <div class="grid-2">
+    {categorias && categorias.map((cat) => (
+      <a 
+        href={`/equipos/${slugify(cat.nombre)}`} 
+        class="card" 
+        style="display: block; padding: 24px; text-decoration: none; transition: transform 0.2s;"
+      >
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h2 style="margin: 0; font-size: 20px; color: orange;">{cat.nombre}</h2>
+          <span style="background: var(--azul-oscuro); color: var(--naranja); padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;">
+            Ver temporadas
+          </span>
+        </div>
+        
+        <p class="muted" style="margin-top: 12px; font-size: 14px;">
+          Toda la información de los equipos {cat.nombre.toLowerCase()} del club.
+        </p>
+      </a>
+    ))}
+  </div>
+
+  {(!categorias || categorias.length === 0) && (
+    <div class="card" style="text-align: center; padding: 40px;">
+      <p class="muted">No se han encontrado categorías en la base de datos.</p>
     </div>
-  </section>
+  )}
 </Layout>
 
 <style>
-  /* Mantenemos tus estilos originales */
-  section { margin: 2rem auto; min-height: 75vh; }
-  h1 { text-align: center; color: white; margin-bottom: 2rem; }
-
-  .team-grid {
+  .grid-2 {
     display: grid;
-    width: clamp(350px, 90vw, 1400px);
-    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-    gap: 2rem;
-    margin: 1rem auto;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
   }
-
-  .team-card {
-    color: white;
-    position: relative;
-    border-radius: 12px;
-    padding: 2rem;
-    border: 1px solid rgba(255,255,255,0.1);
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
-    height: 350px;
-    text-decoration: none;
-  }
-
-  .team-card::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    background-image: 
-        linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.8) 100%),
-        var(--bg-img);
-    background-position: center;
-    background-size: cover;
-    transition: transform 0.5s ease;
-  }
-
-  .team-card:hover::before { transform: scale(1.05); }
-
-  .team-header { display: flex; justify-content: space-between; align-items: flex-start; }
-  .team-header h2 { margin: 0; font-size: 1.5rem; text-transform: uppercase; }
-  .team-header p { margin: 0; opacity: 0.8; font-weight: 300; }
-
-  .team-logo svg { width: 3.5rem; height: auto; fill: white; }
-
-  @media (max-width: 800px) {
-    .team-grid { grid-template-columns: 1fr; }
+  .card:hover {
+    transform: translateY(-4px);
+    border-color: var(--naranja);
   }
 </style>

@@ -6,38 +6,47 @@ export default function AdminTemporadas({
   onSelect,
   onBack,
 }) {
-  const [inscripciones, setInscripciones] = useState([]);
+  const [temporadas, setTemporadas] = useState([]);
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
     async function cargar() {
       try {
-        const { data, error: err } = await supabase
-          .from("inscripciones")
+        // Un equipo pertenece a una temporada, pero puede haber varios
+        // equipos del mismo club en distintas temporadas
+        // Buscamos todos los equipos que comparten categoria_id con el equipo actual
+        const { data, error } = await supabase
+          .from("equipos")
           .select(
             `
-          id,
-          temporadas (id, nombre),
-          competiciones (nombre)
-        `,
+            id,
+            categoria_id,
+            sponsor,
+            temporadas (id, nombre),
+            competiciones (nombre)
+          `,
           )
-          .eq("equipo_id", equipo.id);
+          .eq("categoria_id", equipo.categoria_id);
+
+        if (error) throw error;
 
         const sorted = (data ?? [])
-          .filter((i) => i.temporadas)
+          .filter((e) => e.temporadas)
           .sort((a, b) =>
             b.temporadas.nombre.localeCompare(a.temporadas.nombre),
           );
 
-        setInscripciones(sorted);
-        setCargando(false);
+        setTemporadas(sorted);
       } catch (e) {
         console.error("Error en cargar:", e);
+      } finally {
         setCargando(false);
       }
     }
+
     cargar();
   }, [equipo]);
+
   if (cargando)
     return <p style={{ color: "var(--muted)" }}>Cargando temporadas...</p>;
 
@@ -57,8 +66,9 @@ export default function AdminTemporadas({
       >
         ← Volver
       </button>
-
-      <h1 style={{ marginBottom: "4px" }}>{equipo.nombre}</h1>
+      <h1 style={{ marginBottom: "4px" }}>
+        {equipo.categorias?.nombre ?? equipo.sponsor ?? "Equipo"}
+      </h1>
       <p
         style={{
           color: "var(--muted)",
@@ -68,7 +78,6 @@ export default function AdminTemporadas({
       >
         Selecciona la temporada
       </p>
-
       <div
         style={{
           display: "flex",
@@ -77,10 +86,15 @@ export default function AdminTemporadas({
           maxWidth: "500px",
         }}
       >
-        {inscripciones.map((i, idx) => (
+        {temporadas.length === 0 && (
+          <p style={{ color: "var(--muted)", fontSize: "14px" }}>
+            No hay temporadas registradas.
+          </p>
+        )}
+        {temporadas.map((e, idx) => (
           <div
-            key={i.id}
-            onClick={() => onSelect(i)}
+            key={e.id}
+            onClick={() => onSelect(e)}
             className="card"
             style={{
               display: "flex",
@@ -91,7 +105,7 @@ export default function AdminTemporadas({
           >
             <div>
               <div style={{ fontWeight: 700, fontSize: "14px" }}>
-                {i.temporadas.nombre}
+                {e.temporadas.nombre}
               </div>
               <div
                 style={{
@@ -100,7 +114,7 @@ export default function AdminTemporadas({
                   marginTop: "2px",
                 }}
               >
-                {i.competiciones.nombre}
+                {e.competiciones?.nombre ?? "—"}
               </div>
             </div>
             <span

@@ -65,6 +65,8 @@ export default function AdminApp() {
   if (!session) return <AdminLogin supabase={supabase} />;
 
   const tieneEquipo = equipoActual && temporadaActual;
+  const equipoLabel =
+    equipoActual?.categorias?.nombre ?? equipoActual?.sponsor ?? "Equipo";
 
   return (
     <div
@@ -118,9 +120,7 @@ export default function AdminApp() {
         </NavSection>
 
         {tieneEquipo && (
-          <NavSection
-            label={equipoActual.nombre.split(" ").slice(-2).join(" ")}
-          >
+          <NavSection label={equipoLabel}>
             <NavItem
               label="Plantilla"
               activa={vista === "plantilla"}
@@ -247,7 +247,7 @@ export default function AdminApp() {
                   style={{ cursor: "pointer" }}
                   onClick={() => setVista("equipos")}
                 >
-                  {equipoActual.nombre}
+                  {equipoLabel}
                 </span>
                 <span>›</span>
                 <span style={{ color: "var(--texto)", fontWeight: 500 }}>

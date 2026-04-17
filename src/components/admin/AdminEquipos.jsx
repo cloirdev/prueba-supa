@@ -6,24 +6,45 @@ export default function AdminEquipos({ supabase, perfil, onSelect }) {
 
   useEffect(() => {
     async function cargar() {
-      let data = [];
+      let d = [];
+
       if (perfil?.rol === "admin") {
-        const { data: d } = await supabase
-          .from("equipos")
-          .select("*")
-          .order("nombre");
-        data = d ?? [];
+        const { data } = await supabase.from("equipos").select(`
+            id,
+            categoria_id,
+            sponsor,
+            temporadas (nombre),
+            categorias (nombre),
+            competiciones (nombre)
+          `);
+        d = data ?? [];
       } else if (perfil?.equipo_ids?.length) {
-        const { data: d } = await supabase
+        const { data } = await supabase
           .from("equipos")
-          .select("*")
-          .in("id", perfil.equipo_ids)
-          .order("nombre");
-        data = d ?? [];
+          .select(
+            `
+            id,
+            categoria_id
+            sponsor,
+            temporadas (nombre),
+            categorias (nombre),
+            competiciones (nombre)
+          `,
+          )
+          .in("id", perfil.equipo_ids);
+        d = data ?? [];
       }
-      setEquipos(data);
+
+      setEquipos(
+        d.sort((a, b) =>
+          (b.temporadas?.nombre ?? "").localeCompare(
+            a.temporadas?.nombre ?? "",
+          ),
+        ),
+      );
       setCargando(false);
     }
+
     if (perfil) cargar();
   }, [perfil]);
 
@@ -42,7 +63,6 @@ export default function AdminEquipos({ supabase, perfil, onSelect }) {
       >
         Selecciona el equipo que quieres gestionar
       </p>
-
       <div
         style={{
           display: "grid",
@@ -61,10 +81,10 @@ export default function AdminEquipos({ supabase, perfil, onSelect }) {
             <div
               style={{ fontWeight: 700, fontSize: "14px", marginBottom: "4px" }}
             >
-              {e.nombre}
+              {e.sponsor ?? e.categorias?.nombre ?? "—"}
             </div>
             <div style={{ fontSize: "12px", color: "var(--muted)" }}>
-              {e.categoria}
+              {e.categorias?.nombre} · {e.competiciones?.nombre}
             </div>
             <span
               style={{
@@ -74,11 +94,11 @@ export default function AdminEquipos({ supabase, perfil, onSelect }) {
                 padding: "2px 8px",
                 borderRadius: "20px",
                 fontWeight: 700,
-                background: e.categoria === "senior" ? "#fff7ed" : "#eff6ff",
-                color: e.categoria === "senior" ? "#c2410c" : "#1d4ed8",
+                background: "#eff6ff",
+                color: "#1d4ed8",
               }}
             >
-              {e.categoria}
+              {e.temporadas?.nombre}
             </span>
           </div>
         ))}

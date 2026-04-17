@@ -1,0 +1,95 @@
+---
+// @ts-nocheck
+import { supabase } from '@/lib/supabase.js'
+import { slugify } from '@/utils/slugify.js'
+import Layout from '@/layouts/Layout.astro'
+
+export async function getStaticPaths() {
+  // Obtenemos las categorías de la tabla maestra
+  const { data: categorias } = await supabase
+    .from('categorias')
+    .select('nombre')
+
+  if (!categorias) return [];
+
+  return categorias.map((cat) => ({
+    params: { categoria_slug: slugify(cat.nombre) },
+    props: { nombreReal: cat.nombre }
+  }));
+}
+
+const { categoria_slug } = Astro.params;
+const { nombreReal } = Astro.props;
+
+const { data: equipos, error } = await supabase
+  .from('equipos')
+  .select(`
+    id,
+    temporada_id,
+    temporadas (
+      id,
+      nombre
+    ),
+    categorias!inner (
+      nombre
+    )
+  `)
+  .eq('categorias.nombre', nombreReal);
+
+if (error) console.error("Error en consulta:", error);
+
+// Extraer temporadas únicas de la tabla equipos
+const temporadasMap = new Map();
+if (equipos) {
+  equipos.forEach(e => {
+    if (e.temporadas) {
+      temporadasMap.set(e.temporadas.id, e.temporadas);
+    }
+  });
+}
+
+const temporadasUnicas = Array.from(temporadasMap.values())
+  .sort((a, b) => b.nombre.localeCompare(a.nombre));
+---
+
+<Layout titulo={`Temporadas - ${nombreReal}`}>
+  <div style="margin-bottom: 32px;">
+    <a href="/equipos" style="color: var(--naranja); text-decoration: none; font-weight: bold; font-size: 14px;">
+      ← VOLVER A CATEGORÍAS
+    </a>
+    <h1 style="font-size: 32px; font-weight: 800; margin-top: 16px; color: black;">
+      {nombreReal}
+    </h1>
+    <p style="color: rgba(90, 90, 90, 0.6)">
+      Historial de equipos y plantillas por temporada.
+    </p>
+  </div>
+
+  <div style="display: grid; gap: 12px;">
+    {temporadasUnicas.length > 0 ? (
+      temporadasUnicas.map((t) => (
+        <a 
+          href={`/equipos/${categoria_slug}/${slugify(t.nombre)}`} 
+          class="card" 
+          style="display: flex; justify-content: space-between; align-items: center; padding: 20px; background: var(--azul-oscuro); border-radius: 8px; text-decoration: none; color: white; border: 1px solid rgba(255,255,255,0.1); transition: border-color 0.2s;"
+        >
+          <div>
+            <span style="display: block; font-size: 12px; color: var(--naranja); font-weight: 700; text-transform: uppercase; margin-bottom: 4px;">Archivo</span>
+            <span style="font-weight: 700; font-size: 18px;">Temporada {t.nombre}</span>
+          </div>
+          <span style="color: var(--naranja); font-weight: 900; font-size: 20px;">→</span>
+        </a>
+      ))
+    ) : (
+      <div class="card" style="padding: 32px; background: rgba(255,255,255,0.05); border-radius: 8px; text-align: center; border: 1px dashed rgba(255,255,255,0.2);">
+        <p class="muted">Aún no hay equipos registrados para la categoría <strong>{nombreReal}</strong>.</p>
+      </div>
+    )}
+  </div>
+</Layout>
+
+<style>
+  .card:hover {
+    border-color: var(--naranja) !important;
+  } 
+</style>
