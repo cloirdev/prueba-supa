@@ -8,6 +8,7 @@ import AdminPanel from "./AdminPanel.jsx";
 import AdminPlantilla from "./AdminPlantilla.jsx";
 import AdminCalendario from "./AdminCalendario.jsx";
 import AdminNoticias from "./AdminNoticias.jsx";
+import AdminJugadores from "./AdminJugadores.jsx";
 
 const supabase = createClient(
   import.meta.env.PUBLIC_SUPABASE_URL,

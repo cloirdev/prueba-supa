@@ -36,7 +36,7 @@ export default function AdminTemporadas({
         setCargando(false);
       }
     }
-    cargar(); // <- esto faltaba
+    cargar();
   }, [equipo]);
   if (cargando)
     return <p style={{ color: "var(--muted)" }}>Cargando temporadas...</p>;
