@@ -9,17 +9,22 @@ export default function AdminJugadores({ supabase, perfil }) {
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   const [filtroPosicion, setFiltroPosicion] = useState("");
-  const [filtroEquipo, setFiltroEquipo] = useState("");
   const [jugadorSeleccionado, setJugadorSeleccionado] = useState(null);
   const [historial, setHistorial] = useState([]);
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
-  const [panelVista, setPanelVista] = useState("historial"); // "historial" | "editar" | "asignar"
+  const [panelVista, setPanelVista] = useState("historial");
   const [formEditar, setFormEditar] = useState({});
   const [formAsignar, setFormAsignar] = useState({
     equipo_id: "",
     temporada_id: "",
     dorsal: "",
   });
+  const [formNuevo, setFormNuevo] = useState({
+    nombre: "",
+    apellido: "",
+    posicion: "",
+  });
+  const [mostrarFormNuevo, setMostrarFormNuevo] = useState(false);
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
   const [vistaCards, setVistaCards] = useState(false);
@@ -28,7 +33,6 @@ export default function AdminJugadores({ supabase, perfil }) {
   useEffect(() => {
     cargarTodo();
   }, []);
-
   useEffect(() => {
     if (jugadorSeleccionado) cargarHistorial(jugadorSeleccionado.id);
   }, [jugadorSeleccionado]);
@@ -39,7 +43,9 @@ export default function AdminJugadores({ supabase, perfil }) {
         .from("jugadores")
         .select("id, nombre, apellido, posicion")
         .order("apellido"),
-      supabase.from("equipos").select("id, nombre, categoria").order("nombre"),
+      supabase
+        .from("equipos")
+        .select(`id, sponsor, categorias (nombre), temporadas (nombre)`),
       supabase
         .from("temporadas")
         .select("id, nombre")
@@ -56,7 +62,7 @@ export default function AdminJugadores({ supabase, perfil }) {
     const { data } = await supabase
       .from("convocatorias_temporada")
       .select(
-        `dorsal, equipos (id, nombre, categoria), temporadas (id, nombre)`,
+        `dorsal, equipos (id, sponsor, categorias (nombre)), temporadas (id, nombre)`,
       )
       .eq("jugador_id", jugadorId)
       .order("temporada_id", { ascending: false });
@@ -139,6 +145,28 @@ export default function AdminJugadores({ supabase, perfil }) {
     setJugadorSeleccionado(null);
   }
 
+  async function crearJugador() {
+    setError("");
+    setMsg("");
+    if (!formNuevo.nombre || !formNuevo.apellido) {
+      setError("Nombre y apellido son obligatorios");
+      return;
+    }
+    const { error: err } = await supabase.from("jugadores").insert({
+      nombre: formNuevo.nombre,
+      apellido: formNuevo.apellido,
+      posicion: formNuevo.posicion || null,
+    });
+    if (err) {
+      setError("Error al crear jugador");
+      return;
+    }
+    setMsg("Jugador creado correctamente");
+    setFormNuevo({ nombre: "", apellido: "", posicion: "" });
+    setMostrarFormNuevo(false);
+    cargarTodo();
+  }
+
   const jugadoresFiltrados = jugadores.filter((j) => {
     const texto = `${j.nombre} ${j.apellido}`.toLowerCase();
     const okBusqueda = texto.includes(busqueda.toLowerCase());
@@ -160,14 +188,7 @@ export default function AdminJugadores({ supabase, perfil }) {
 
   const iniciales = (j) =>
     `${j.nombre?.[0] ?? ""}${j.apellido?.[0] ?? ""}`.toUpperCase();
-  const colorPosicion = (p) =>
-    ({
-      Base: { bg: "#fef3c7", color: "#92400e" },
-      Escolta: { bg: "#dbeafe", color: "#1e40af" },
-      Alero: { bg: "#dcfce7", color: "#166534" },
-      "Ala-Pívot": { bg: "#ede9fe", color: "#6b21a8" },
-      Pívot: { bg: "#fee2e2", color: "#991b1b" },
-    })[p] ?? { bg: "var(--fondo)", color: "var(--muted)" };
+  const equipoLabel = (eq) => eq.sponsor ?? eq.categorias?.nombre ?? "Equipo";
 
   if (cargando)
     return <p style={{ color: "var(--muted)" }}>Cargando jugadores...</p>;
@@ -181,7 +202,7 @@ export default function AdminJugadores({ supabase, perfil }) {
         overflow: "hidden",
       }}
     >
-      {/* ── Panel izquierdo: lista ── */}
+      {/* Panel izquierdo: lista */}
       <div
         style={{
           width: jugadorSeleccionado ? "360px" : "100%",
@@ -191,14 +212,120 @@ export default function AdminJugadores({ supabase, perfil }) {
           transition: "width .2s",
         }}
       >
-        <div style={{ marginBottom: "20px" }}>
-          <h1 style={{ marginBottom: "2px" }}>Jugadores</h1>
-          <p style={{ color: "var(--muted)", fontSize: "13px" }}>
-            {jugadoresFiltrados.length} jugador
-            {jugadoresFiltrados.length !== 1 ? "es" : ""} encontrado
-            {jugadoresFiltrados.length !== 1 ? "s" : ""}
-          </p>
+        <div
+          style={{
+            marginBottom: "20px",
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+          }}
+        >
+          <div>
+            <h1 style={{ marginBottom: "2px" }}>Jugadores</h1>
+            <p style={{ color: "var(--muted)", fontSize: "13px" }}>
+              {jugadoresFiltrados.length} jugador
+              {jugadoresFiltrados.length !== 1 ? "es" : ""} encontrado
+              {jugadoresFiltrados.length !== 1 ? "s" : ""}
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              setMostrarFormNuevo(!mostrarFormNuevo);
+              setMsg("");
+              setError("");
+            }}
+            style={mostrarFormNuevo ? btnSecondaryStyle : btnPrimaryStyle}
+          >
+            {mostrarFormNuevo ? "Cancelar" : "+ Nuevo jugador"}
+          </button>
         </div>
+        {mostrarFormNuevo && (
+          <div
+            className="card"
+            style={{
+              marginBottom: "20px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "14px",
+              maxWidth: "420px",
+            }}
+          >
+            {msg && (
+              <p
+                style={{
+                  color: "#16a34a",
+                  fontSize: "13px",
+                  padding: "10px 14px",
+                  background: "#f0fdf4",
+                  borderRadius: "8px",
+                  border: "1px solid #bbf7d0",
+                  margin: 0,
+                }}
+              >
+                {msg}
+              </p>
+            )}
+            {error && (
+              <p
+                style={{
+                  color: "#dc2626",
+                  fontSize: "13px",
+                  padding: "10px 14px",
+                  background: "#fef2f2",
+                  borderRadius: "8px",
+                  border: "1px solid #fecaca",
+                  margin: 0,
+                }}
+              >
+                {error}
+              </p>
+            )}
+            <div>
+              <label style={labelStyle}>Nombre</label>
+              <input
+                type="text"
+                value={formNuevo.nombre}
+                onChange={(e) =>
+                  setFormNuevo({ ...formNuevo, nombre: e.target.value })
+                }
+                placeholder="Carlos"
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>Apellido</label>
+              <input
+                type="text"
+                value={formNuevo.apellido}
+                onChange={(e) =>
+                  setFormNuevo({ ...formNuevo, apellido: e.target.value })
+                }
+                placeholder="García"
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>Posición</label>
+              <select
+                value={formNuevo.posicion}
+                onChange={(e) =>
+                  setFormNuevo({ ...formNuevo, posicion: e.target.value })
+                }
+                style={inputStyle}
+              >
+                <option value="">Sin posición</option>
+                {POSICIONES.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button onClick={crearJugador} style={btnPrimaryStyle}>
+              Crear jugador
+            </button>
+          </div>
+        )}
 
         {/* Buscador */}
         <div style={{ position: "relative", marginBottom: "10px" }}>
@@ -254,7 +381,7 @@ export default function AdminJugadores({ supabase, perfil }) {
           )}
         </div>
 
-        {/* Selector de modo de vista (Toggle) */}
+        {/* Toggle vista */}
         <div style={{ marginBottom: "16px" }}>
           <div
             onClick={() => setVistaCards(!vistaCards)}
@@ -271,7 +398,6 @@ export default function AdminJugadores({ supabase, perfil }) {
               userSelect: "none",
             }}
           >
-            {/* Fondo deslizante (Slider) */}
             <div
               style={{
                 position: "absolute",
@@ -285,45 +411,38 @@ export default function AdminJugadores({ supabase, perfil }) {
                 zIndex: 0,
               }}
             />
-
-            {/* Opción Lista */}
             <div
               style={{
                 padding: "6px 12px",
                 display: "flex",
                 alignItems: "center",
-                gap: "6px",
                 zIndex: 1,
                 color: !vistaCards ? "white" : "var(--muted)",
-                fontSize: "12px",
+                fontSize: "14px",
                 fontWeight: 700,
                 transition: "color 0.2s",
               }}
             >
-              <span style={{ fontSize: "14px" }}>☰</span>
+              ☰
             </div>
-
-            {/* Opción Tarjetas */}
             <div
               style={{
                 padding: "6px 12px",
                 display: "flex",
                 alignItems: "center",
-                gap: "6px",
                 zIndex: 1,
                 color: vistaCards ? "white" : "var(--muted)",
-                fontSize: "12px",
+                fontSize: "14px",
                 fontWeight: 700,
                 transition: "color 0.2s",
               }}
             >
-              <span style={{ fontSize: "14px" }}>⊞</span>
+              ⊞
             </div>
           </div>
         </div>
 
-        {/* Filtros */}
-        {/* Filtros */}
+        {/* Filtro posición */}
         <div style={{ marginBottom: "16px" }}>
           <label
             style={{
@@ -341,7 +460,7 @@ export default function AdminJugadores({ supabase, perfil }) {
             value={filtroPosicion}
             onChange={(e) => setFiltroPosicion(e.target.value)}
             style={{
-              ...inputStyle, // Reutilizamos tu objeto de estilos existente
+              ...inputStyle,
               cursor: "pointer",
               background: filtroPosicion
                 ? "rgba(249,115,22,0.05)"
@@ -358,7 +477,7 @@ export default function AdminJugadores({ supabase, perfil }) {
           </select>
         </div>
 
-        {/* Lista */}
+        {/* Lista jugadores */}
         <div
           style={{
             flex: 1,
@@ -368,20 +487,16 @@ export default function AdminJugadores({ supabase, perfil }) {
             flexWrap: vistaCards ? "wrap" : "nowrap",
             gap: "10px",
             paddingRight: "4px",
-            alignContent: "flex-start", // Evita que las filas se estiren verticalmente
+            alignContent: "flex-start",
           }}
         >
-          {/* Mensaje cuando no hay resultados */}
           {jugadoresFiltrados.length === 0 && (
             <p style={{ color: "var(--muted)", fontSize: "13px" }}>
               No hay jugadores que coincidan.
             </p>
           )}
-
           {jugadoresFiltrados.map((j) => {
             const seleccionado = jugadorSeleccionado?.id === j.id;
-            const col = colorPosicion(j.posicion);
-
             return (
               <div
                 key={j.id}
@@ -394,7 +509,6 @@ export default function AdminJugadores({ supabase, perfil }) {
                   padding: vistaCards ? "16px 8px" : "10px 14px",
                   borderRadius: "12px",
                   cursor: "pointer",
-                  // Cálculo para 5 columnas: 100% / 5 = 20%. Restamos un poco por el gap.
                   width: vistaCards
                     ? jugadorSeleccionado
                       ? "calc(50% - 10px)"
@@ -412,7 +526,6 @@ export default function AdminJugadores({ supabase, perfil }) {
                   textAlign: vistaCards ? "center" : "left",
                 }}
               >
-                {/* Avatar */}
                 <div
                   style={{
                     width: vistaCards ? "44px" : "38px",
@@ -428,15 +541,10 @@ export default function AdminJugadores({ supabase, perfil }) {
                     fontWeight: 800,
                     color: "white",
                     flexShrink: 0,
-                    boxShadow: seleccionado
-                      ? "0 4px 12px rgba(249,115,22,0.2)"
-                      : "none",
                   }}
                 >
                   {iniciales(j)}
                 </div>
-
-                {/* Info */}
                 <div style={{ flex: 1, minWidth: 0, width: "100%" }}>
                   <div
                     style={{
@@ -457,15 +565,7 @@ export default function AdminJugadores({ supabase, perfil }) {
                       </div>
                     )}
                   </div>
-
-                  {!vistaCards && (
-                    <div style={{ fontSize: "11px", color: "var(--muted)" }}>
-                      {j.posicion ?? "—"}
-                    </div>
-                  )}
                 </div>
-
-                {/* Posición Badge */}
                 {j.posicion && (
                   <span
                     style={{
@@ -473,11 +573,12 @@ export default function AdminJugadores({ supabase, perfil }) {
                       fontWeight: 800,
                       padding: "2px 6px",
                       borderRadius: "6px",
-                      background: col.bg,
-                      color: col.color,
+                      background: "var(--fondo)",
+                      color: "var(--muted)",
                       flexShrink: 0,
                       textTransform: "uppercase",
                       marginTop: vistaCards ? "4px" : "0",
+                      border: "1px solid var(--borde)",
                     }}
                   >
                     {j.posicion}
@@ -489,7 +590,7 @@ export default function AdminJugadores({ supabase, perfil }) {
         </div>
       </div>
 
-      {/* ── Panel derecho: detalle ── */}
+      {/* Panel derecho: detalle */}
       {jugadorSeleccionado && (
         <div
           style={{
@@ -501,7 +602,7 @@ export default function AdminJugadores({ supabase, perfil }) {
             paddingLeft: "24px",
           }}
         >
-          {/* Header jugador */}
+          {/* Header */}
           <div
             style={{
               display: "flex",
@@ -568,7 +669,6 @@ export default function AdminJugadores({ supabase, perfil }) {
               gap: "4px",
               marginBottom: "20px",
               borderBottom: "1px solid var(--borde)",
-              paddingBottom: "0",
             }}
           >
             {[
@@ -635,7 +735,7 @@ export default function AdminJugadores({ supabase, perfil }) {
             </p>
           )}
 
-          {/* ── Tab: Historial ── */}
+          {/* Tab Historial */}
           {panelVista === "historial" && (
             <div>
               {cargandoHistorial ? (
@@ -690,27 +790,14 @@ export default function AdminJugadores({ supabase, perfil }) {
                         </div>
                         <div>
                           <div style={{ fontWeight: 700, fontSize: "13px" }}>
-                            {h.equipos?.nombre ?? "—"}
+                            {h.equipos?.sponsor ??
+                              h.equipos?.categorias?.nombre ??
+                              "—"}
                           </div>
                           <div
                             style={{ fontSize: "11px", color: "var(--muted)" }}
                           >
                             {h.temporadas?.nombre ?? "—"} · #{h.dorsal}
-                            {h.equipos?.categoria && (
-                              <span
-                                style={{
-                                  marginLeft: "6px",
-                                  padding: "1px 6px",
-                                  borderRadius: "10px",
-                                  fontSize: "10px",
-                                  background: "#eff6ff",
-                                  color: "#1d4ed8",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                {h.equipos.categoria}
-                              </span>
-                            )}
                           </div>
                         </div>
                       </div>
@@ -739,7 +826,7 @@ export default function AdminJugadores({ supabase, perfil }) {
             </div>
           )}
 
-          {/* ── Tab: Editar datos ── */}
+          {/* Tab Editar */}
           {panelVista === "editar" && (
             <div
               style={{
@@ -754,19 +841,7 @@ export default function AdminJugadores({ supabase, perfil }) {
                 { key: "apellido", label: "Apellido", placeholder: "García" },
               ].map(({ key, label, placeholder }) => (
                 <div key={key}>
-                  <label
-                    style={{
-                      fontSize: "12px",
-                      fontWeight: 700,
-                      display: "block",
-                      marginBottom: "5px",
-                      color: "var(--muted)",
-                      textTransform: "uppercase",
-                      letterSpacing: ".05em",
-                    }}
-                  >
-                    {label}
-                  </label>
+                  <label style={labelStyle}>{label}</label>
                   <input
                     type="text"
                     value={formEditar[key] ?? ""}
@@ -779,19 +854,7 @@ export default function AdminJugadores({ supabase, perfil }) {
                 </div>
               ))}
               <div>
-                <label
-                  style={{
-                    fontSize: "12px",
-                    fontWeight: 700,
-                    display: "block",
-                    marginBottom: "5px",
-                    color: "var(--muted)",
-                    textTransform: "uppercase",
-                    letterSpacing: ".05em",
-                  }}
-                >
-                  Posición
-                </label>
+                <label style={labelStyle}>Posición</label>
                 <select
                   value={formEditar.posicion ?? ""}
                   onChange={(e) =>
@@ -827,7 +890,7 @@ export default function AdminJugadores({ supabase, perfil }) {
             </div>
           )}
 
-          {/* ── Tab: Asignar equipo ── */}
+          {/* Tab Asignar */}
           {panelVista === "asignar" && (
             <div
               style={{
@@ -841,19 +904,7 @@ export default function AdminJugadores({ supabase, perfil }) {
                 Vincula a este jugador con un equipo y temporada específicos.
               </p>
               <div>
-                <label
-                  style={{
-                    fontSize: "12px",
-                    fontWeight: 700,
-                    display: "block",
-                    marginBottom: "5px",
-                    color: "var(--muted)",
-                    textTransform: "uppercase",
-                    letterSpacing: ".05em",
-                  }}
-                >
-                  Equipo
-                </label>
+                <label style={labelStyle}>Equipo</label>
                 <select
                   value={formAsignar.equipo_id}
                   onChange={(e) =>
@@ -867,25 +918,13 @@ export default function AdminJugadores({ supabase, perfil }) {
                   <option value="">Selecciona equipo</option>
                   {equipos.map((eq) => (
                     <option key={eq.id} value={eq.id}>
-                      {eq.nombre} ({eq.categoria})
+                      {equipoLabel(eq)}
                     </option>
                   ))}
                 </select>
               </div>
               <div>
-                <label
-                  style={{
-                    fontSize: "12px",
-                    fontWeight: 700,
-                    display: "block",
-                    marginBottom: "5px",
-                    color: "var(--muted)",
-                    textTransform: "uppercase",
-                    letterSpacing: ".05em",
-                  }}
-                >
-                  Temporada
-                </label>
+                <label style={labelStyle}>Temporada</label>
                 <select
                   value={formAsignar.temporada_id}
                   onChange={(e) =>
@@ -905,19 +944,7 @@ export default function AdminJugadores({ supabase, perfil }) {
                 </select>
               </div>
               <div>
-                <label
-                  style={{
-                    fontSize: "12px",
-                    fontWeight: 700,
-                    display: "block",
-                    marginBottom: "5px",
-                    color: "var(--muted)",
-                    textTransform: "uppercase",
-                    letterSpacing: ".05em",
-                  }}
-                >
-                  Dorsal
-                </label>
+                <label style={labelStyle}>Dorsal</label>
                 <input
                   type="number"
                   min="0"
@@ -932,8 +959,6 @@ export default function AdminJugadores({ supabase, perfil }) {
               <button onClick={asignarTemporada} style={btnPrimaryStyle}>
                 Asignar
               </button>
-
-              {/* Historial inline para referencia */}
               {historial.length > 0 && (
                 <div style={{ marginTop: "8px" }}>
                   <div
@@ -961,7 +986,11 @@ export default function AdminJugadores({ supabase, perfil }) {
                       <span style={{ fontWeight: 600, color: "var(--texto)" }}>
                         {h.temporadas?.nombre}
                       </span>{" "}
-                      · {h.equipos?.nombre} · #{h.dorsal}
+                      ·{" "}
+                      {h.equipos?.sponsor ??
+                        h.equipos?.categorias?.nombre ??
+                        "—"}{" "}
+                      · #{h.dorsal}
                     </div>
                   ))}
                 </div>
@@ -970,11 +999,127 @@ export default function AdminJugadores({ supabase, perfil }) {
           )}
         </div>
       )}
+
+      {/* Panel derecho: crear jugador (cuando no hay seleccionado) */}
+      {!jugadorSeleccionado && (
+        <div
+          style={{
+            width: "320px",
+            flexShrink: 0,
+            borderLeft: "1px solid var(--borde)",
+            paddingLeft: "24px",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <h2 style={{ fontSize: "16px", marginBottom: "4px" }}>
+            Nuevo jugador
+          </h2>
+          <p
+            style={{
+              fontSize: "13px",
+              color: "var(--muted)",
+              marginBottom: "20px",
+            }}
+          >
+            Añade un jugador a la base de datos.
+          </p>
+
+          {msg && (
+            <p
+              style={{
+                color: "#16a34a",
+                fontSize: "13px",
+                marginBottom: "14px",
+                padding: "10px 14px",
+                background: "#f0fdf4",
+                borderRadius: "8px",
+                border: "1px solid #bbf7d0",
+              }}
+            >
+              {msg}
+            </p>
+          )}
+          {error && (
+            <p
+              style={{
+                color: "#dc2626",
+                fontSize: "13px",
+                marginBottom: "14px",
+                padding: "10px 14px",
+                background: "#fef2f2",
+                borderRadius: "8px",
+                border: "1px solid #fecaca",
+              }}
+            >
+              {error}
+            </p>
+          )}
+
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: "14px" }}
+          >
+            <div>
+              <label style={labelStyle}>Nombre</label>
+              <input
+                type="text"
+                value={formNuevo.nombre}
+                onChange={(e) =>
+                  setFormNuevo({ ...formNuevo, nombre: e.target.value })
+                }
+                placeholder="Carlos"
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>Apellido</label>
+              <input
+                type="text"
+                value={formNuevo.apellido}
+                onChange={(e) =>
+                  setFormNuevo({ ...formNuevo, apellido: e.target.value })
+                }
+                placeholder="García"
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>Posición</label>
+              <select
+                value={formNuevo.posicion}
+                onChange={(e) =>
+                  setFormNuevo({ ...formNuevo, posicion: e.target.value })
+                }
+                style={inputStyle}
+              >
+                <option value="">Sin posición</option>
+                {POSICIONES.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button onClick={crearJugador} style={btnPrimaryStyle}>
+              Crear jugador
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-// ── Shared styles ──
+const labelStyle = {
+  fontSize: "12px",
+  fontWeight: 700,
+  display: "block",
+  marginBottom: "5px",
+  color: "var(--muted)",
+  textTransform: "uppercase",
+  letterSpacing: ".05em",
+};
+
 const inputStyle = {
   width: "100%",
   padding: "10px 12px",
@@ -1007,17 +1152,3 @@ const btnSecondaryStyle = {
   fontWeight: 600,
   cursor: "pointer",
 };
-
-function chipStyle(activo) {
-  return {
-    padding: "5px 12px",
-    borderRadius: "20px",
-    border: activo ? "none" : "1px solid var(--borde)",
-    background: activo ? "#F97316" : "transparent",
-    color: activo ? "white" : "var(--muted)",
-    fontSize: "12px",
-    fontWeight: 600,
-    cursor: "pointer",
-    transition: "all .15s",
-  };
-}
