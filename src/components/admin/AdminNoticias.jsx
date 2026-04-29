@@ -101,49 +101,18 @@ export default function AdminNoticias({
 
   return (
     <div>
-      <button
-        onClick={onBack}
-        style={{
-          background: "transparent",
-          border: "none",
-          color: "var(--muted)",
-          cursor: "pointer",
-          fontSize: "13px",
-          marginBottom: "24px",
-          padding: 0,
-        }}
-      >
+      <button onClick={onBack} className="adm-back-btn">
         ← Volver
       </button>
-
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: "24px",
-        }}
-      >
+      <div className="adm-header">
         <div>
-          <h1 style={{ marginBottom: "4px" }}>Noticias</h1>
-          <p style={{ color: "var(--muted)", fontSize: "14px" }}>
-            {equipo.nombre} · {temporada.temporadas.nombre}
+          <h1 className="adm-page-title">Noticias</h1>
+          <p className="adm-page-subtitle">
+            {equipo.nombre} · {temporada.nombre}
           </p>
         </div>
         {vista === "lista" && (
-          <button
-            onClick={nuevaNoticia}
-            style={{
-              background: "var(--naranja)",
-              color: "white",
-              border: "none",
-              padding: "10px 20px",
-              borderRadius: "8px",
-              fontSize: "13px",
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
+          <button onClick={nuevaNoticia} className="adm-btn-primary">
             + Nueva noticia
           </button>
         )}
@@ -154,36 +123,19 @@ export default function AdminNoticias({
               setMsg("");
               setError("");
             }}
-            style={{
-              background: "transparent",
-              border: "1px solid var(--borde)",
-              color: "var(--muted)",
-              padding: "8px 16px",
-              borderRadius: "8px",
-              fontSize: "13px",
-              cursor: "pointer",
-            }}
+            className="adm-btn-secondary"
           >
             ← Volver a lista
           </button>
         )}
       </div>
-
-      {msg && (
-        <p style={{ color: "green", fontSize: "13px", marginBottom: "16px" }}>
-          {msg}
-        </p>
-      )}
-      {error && (
-        <p style={{ color: "red", fontSize: "13px", marginBottom: "16px" }}>
-          {error}
-        </p>
-      )}
+      {msg && <p className="adm-msg-success">{msg}</p>}
+      {error && <p className="adm-msg-error">{error}</p>}
 
       {vista === "lista" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+        <div className="adm-list">
           {noticias.length === 0 && (
-            <p style={{ color: "var(--muted)" }}>
+            <p className="adm-empty">
               No hay noticias todavía. Crea la primera.
             </p>
           )}
@@ -198,62 +150,31 @@ export default function AdminNoticias({
               }}
             >
               <div style={{ flex: 1 }}>
-                <div
-                  style={{
-                    fontWeight: 700,
-                    fontSize: "14px",
-                    marginBottom: "2px",
-                  }}
-                >
+                <div className="adm-card-title" style={{ marginBottom: "2px" }}>
                   {n.titulo}
                 </div>
-                <div style={{ fontSize: "12px", color: "var(--muted)" }}>
+                <div className="adm-card-subtitle" style={{ marginTop: 0 }}>
                   {n.subtitulo}
                 </div>
                 <div style={{ marginTop: "6px" }}>
                   <span
-                    style={{
-                      fontSize: "10px",
-                      padding: "2px 8px",
-                      borderRadius: "20px",
-                      fontWeight: 700,
-                      background: n.publicada
-                        ? "#f0fdf4"
-                        : "var(--color-background-secondary)",
-                      color: n.publicada ? "#166534" : "var(--muted)",
-                    }}
+                    className={`adm-pill ${n.publicada ? "adm-pill--success" : "adm-pill--muted"}`}
                   >
                     {n.publicada ? "Publicada" : "Borrador"}
                   </span>
                 </div>
               </div>
-              <div style={{ display: "flex", gap: "8px", marginLeft: "16px" }}>
+              <div className="adm-actions">
                 <button
                   onClick={() => editarNoticia(n)}
-                  style={{
-                    background: "transparent",
-                    border: "1px solid var(--borde)",
-                    color: "var(--texto)",
-                    padding: "6px 12px",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                    fontSize: "12px",
-                  }}
+                  className="adm-btn-secondary"
                 >
                   Editar
                 </button>
                 {perfil?.rol === "admin" && (
                   <button
                     onClick={() => eliminarNoticia(n.id)}
-                    style={{
-                      background: "transparent",
-                      border: "1px solid var(--borde)",
-                      color: "red",
-                      padding: "6px 12px",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      fontSize: "12px",
-                    }}
+                    className="adm-btn-danger"
                   >
                     Eliminar
                   </button>
@@ -265,127 +186,45 @@ export default function AdminNoticias({
       )}
 
       {vista === "editar" && (
-        <div
-          className="card"
-          style={{
-            maxWidth: "700px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "16px",
-          }}
-        >
-          <div>
-            <label
-              style={{
-                fontSize: "13px",
-                fontWeight: 700,
-                display: "block",
-                marginBottom: "6px",
-              }}
-            >
-              Título
-            </label>
+        <div className="card adm-form-card">
+          <div className="adm-field">
+            <label className="adm-label">Título</label>
             <input
               type="text"
               value={form.titulo}
               onChange={(e) => setForm({ ...form, titulo: e.target.value })}
               placeholder="Título de la noticia"
-              style={{
-                width: "100%",
-                padding: "10px 12px",
-                borderRadius: "8px",
-                border: "1px solid var(--borde)",
-                background: "var(--fondo)",
-                color: "var(--texto)",
-                fontSize: "14px",
-              }}
+              className="adm-input"
             />
           </div>
-          <div>
-            <label
-              style={{
-                fontSize: "13px",
-                fontWeight: 700,
-                display: "block",
-                marginBottom: "6px",
-              }}
-            >
-              Subtítulo
-            </label>
+          <div className="adm-field">
+            <label className="adm-label">Subtítulo</label>
             <input
               type="text"
               value={form.subtitulo}
               onChange={(e) => setForm({ ...form, subtitulo: e.target.value })}
               placeholder="Subtítulo o entradilla"
-              style={{
-                width: "100%",
-                padding: "10px 12px",
-                borderRadius: "8px",
-                border: "1px solid var(--borde)",
-                background: "var(--fondo)",
-                color: "var(--texto)",
-                fontSize: "14px",
-              }}
+              className="adm-input"
             />
           </div>
-          <div>
-            <label
-              style={{
-                fontSize: "13px",
-                fontWeight: 700,
-                display: "block",
-                marginBottom: "6px",
-              }}
-            >
-              Contenido
-            </label>
+          <div className="adm-field">
+            <label className="adm-label">Contenido</label>
             <textarea
               value={form.contenido}
               onChange={(e) => setForm({ ...form, contenido: e.target.value })}
               placeholder="Escribe el contenido de la noticia..."
               rows={10}
-              style={{
-                width: "100%",
-                padding: "12px",
-                borderRadius: "8px",
-                border: "1px solid var(--borde)",
-                background: "var(--fondo)",
-                color: "var(--texto)",
-                fontSize: "14px",
-                lineHeight: 1.7,
-                resize: "vertical",
-              }}
+              className="adm-textarea"
             />
           </div>
-          <div style={{ display: "flex", gap: "10px" }}>
+          <div className="adm-row">
             <button
               onClick={() => guardar(false)}
-              style={{
-                background: "transparent",
-                border: "1px solid var(--borde)",
-                color: "var(--texto)",
-                padding: "10px 20px",
-                borderRadius: "8px",
-                fontSize: "14px",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
+              className="adm-btn-secondary"
             >
               Guardar borrador
             </button>
-            <button
-              onClick={() => guardar(true)}
-              style={{
-                background: "var(--naranja)",
-                color: "white",
-                border: "none",
-                padding: "10px 20px",
-                borderRadius: "8px",
-                fontSize: "14px",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
-            >
+            <button onClick={() => guardar(true)} className="adm-btn-primary">
               Publicar
             </button>
           </div>

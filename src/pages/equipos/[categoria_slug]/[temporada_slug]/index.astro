@@ -1,18 +1,15 @@
 ---
 // src/pages/equipos/[categoria_slug]/[temporada_slug]/index.astro
 // @ts-nocheck
-import { supabase } from '@/lib/supabase.js'
-import { slugify } from '@/utils/slugify.js'
-import Layout from '@/layouts/Layout.astro'
+import { supabase } from "@/lib/supabase.js";
+import Layout from "@/layouts/Layout.astro";
 
 export async function getStaticPaths() {
-  const { data: equipos, error } = await supabase
-    .from('equipos')
-    .select(`
-      id,
-      categorias (nombre),
-      temporadas (nombre)
-    `);
+  const { data: equipos, error } = await supabase.from("equipos").select(`
+    id,
+    categorias (nombre, slug),
+    temporadas (nombre)
+  `);
 
   if (error || !equipos) {
     console.error("❌ Error en Supabase:", error);
@@ -22,16 +19,15 @@ export async function getStaticPaths() {
   const rutasMap = new Map();
 
   equipos.forEach((e) => {
-    const cNombre = e.categorias?.nombre;
+    const cSlug = e.categorias?.slug;
     const tNombre = e.temporadas?.nombre;
 
-    if (!cNombre || !tNombre) {
-      console.warn("⚠️ Equipo sin categoría o temporada:", e.id);
+    if (!cSlug || !tNombre) {
+      console.warn("⚠️ Equipo sin slug de categoría o temporada:", e.id);
       return;
     }
 
-    const cSlug = slugify(cNombre);
-    const tSlug = slugify(tNombre);
+    const tSlug = tNombre;
     const key = `${cSlug}/${tSlug}`;
 
     if (!rutasMap.has(key)) {
@@ -39,9 +35,11 @@ export async function getStaticPaths() {
         params: { categoria_slug: cSlug, temporada_slug: tSlug },
         props: {
           equipoIds: [e.id],
-          categoriaNombre: cNombre,
+          categoriaNombre: e.categorias.nombre,
+          categoriaSlug: cSlug,
           temporadaNombre: tNombre,
-        }
+          temporadaSlug: tSlug,
+        },
       });
     } else {
       rutasMap.get(key).props.equipoIds.push(e.id);
@@ -51,101 +49,462 @@ export async function getStaticPaths() {
   return Array.from(rutasMap.values());
 }
 
-const { equipoIds, categoriaNombre, temporadaNombre } = Astro.props;
+const { equipoIds, categoriaNombre, categoriaSlug, temporadaNombre, temporadaSlug } = Astro.props;
 
+// ── Equipos ────────────────────────────────────────────────────────────────
 const { data: equipos } = await supabase
-  .from('equipos')
-  .select(`*, categorias(nombre), temporadas(nombre), competiciones(nombre)`)
-  .in('id', equipoIds);
+  .from("equipos")
+  .select(`*, categorias(nombre, slug), temporadas(nombre), competiciones(nombre)`)
+  .in("id", equipoIds);
 
-// Para cada equipo, sacamos su plantilla via convocatorias_temporada
+// ── Plantilla ──────────────────────────────────────────────────────────────
 const { data: convocatorias } = await supabase
-  .from('convocatorias_temporada')
-  .select(`
-    dorsal,
-    equipo_id,
-    jugadores (
-      id,
-      nombre,
-      apellido,
-      posicion
-    )
-  `)
-  .in('equipo_id', equipoIds)
-  .order('dorsal', { ascending: true });
+  .from("convocatorias_temporada")
+  .select(`dorsal, equipo_id, jugadores(id, nombre, apellido, posicion)`)
+  .in("equipo_id", equipoIds)
+  .order("dorsal", { ascending: true });
 
-// Agrupamos jugadores por equipo_id
 const jugadoresPorEquipo = new Map();
-if (convocatorias) {
-  convocatorias.forEach((c) => {
-    if (!jugadoresPorEquipo.has(c.equipo_id)) {
-      jugadoresPorEquipo.set(c.equipo_id, []);
-    }
-    jugadoresPorEquipo.get(c.equipo_id).push(c);
+(convocatorias ?? []).forEach((c) => {
+  if (!jugadoresPorEquipo.has(c.equipo_id)) jugadoresPorEquipo.set(c.equipo_id, []);
+  jugadoresPorEquipo.get(c.equipo_id).push(c);
+});
+
+// ── Partidos ───────────────────────────────────────────────────────────────
+const { data: partidos } = await supabase
+  .from("partidos")
+  .select(`
+    id, rival, es_local, fecha, jornada, ronda,
+    puntos_favor, puntos_contra, equipo_id,
+    equipos_rivales(nombre_equipo, clubes(nombre))
+  `)
+  .in("equipo_id", equipoIds)
+  .order("fecha", { ascending: true });
+
+const partidosPorEquipo = new Map();
+(partidos ?? []).forEach((p) => {
+  if (!partidosPorEquipo.has(p.equipo_id)) partidosPorEquipo.set(p.equipo_id, []);
+  partidosPorEquipo.get(p.equipo_id).push(p);
+});
+
+// ── Otras temporadas (selector) ────────────────────────────────────────────
+const { data: otrasTemporadas } = await supabase
+  .from("equipos")
+  .select(`id, temporadas(nombre)`)
+  .eq("categoria_id", equipos?.[0]?.categoria_id);
+
+const temporadasOrdenadas = (otrasTemporadas ?? [])
+  .filter((e) => e.temporadas?.nombre)
+  .map((e) => ({
+    nombre: e.temporadas.nombre,
+    slug: e.temporadas.nombre,
+  }))
+  .sort((a, b) => b.nombre.localeCompare(a.nombre))
+  // deduplicar por slug
+  .filter((t, i, arr) => arr.findIndex((x) => x.slug === t.slug) === i);
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function nombreRival(p) {
+  return p.equipos_rivales?.nombre_equipo ?? p.rival;
+}
+
+function formatFecha(fechaStr) {
+  if (!fechaStr) return "Por confirmar";
+  return new Date(fechaStr).toLocaleDateString("es-ES", {
+    weekday: "short", day: "numeric", month: "short",
   });
 }
+
+function etiquetaJornada(p) {
+  if (p.jornada) return `J${p.jornada}`;
+  if (p.ronda && p.ronda !== "Amistoso") return p.ronda;
+  return "Amistoso";
+}
+
+const posicionLabel = {
+  base: "Base", escolta: "Escolta", alero: "Alero",
+  ala_pivot: "Ala-Pívot", pivot: "Pívot",
+};
 ---
 
-<Layout titulo={`${categoriaNombre} – ${temporadaNombre}`}>
-  <div style="margin-bottom: 32px;">
-    <a href={`/equipos/${Astro.params.categoria_slug}`} style="color: var(--naranja); text-decoration: none; font-weight: bold; font-size: 14px;">
-      ← VOLVER A TEMPORADAS
-    </a>
-    <h1 style="font-size: 32px; font-weight: 800; margin-top: 16px; color: white;">
-      {categoriaNombre} <span style="color: var(--naranja)">{temporadaNombre}</span>
-    </h1>
+<Layout titulo={`${categoriaNombre} – ${temporadaNombre} | CB Jaca`}>
+
+  <!-- Cabecera -->
+  <div class="equipo-header">
+    <div class="equipo-header-inner">
+      <a href="/equipos" class="volver">← Equipos</a>
+      <div class="header-top">
+        <div>
+          <p class="categoria-label">{categoriaNombre}</p>
+          <h1>
+            {equipos?.[0]?.sponsor ? `${equipos[0].sponsor} CB Jaca` : `CB Jaca ${categoriaNombre}`}
+          </h1>
+        </div>
+        <!-- Selector de temporadas -->
+        {temporadasOrdenadas.length > 1 && (
+          <div class="temporada-selector">
+            {temporadasOrdenadas.length > 1 && (
+            <select
+              class="temporada-select"
+              onchange={`window.location.href='/equipos/${categoriaSlug}/' + this.value`}
+            >
+              {temporadasOrdenadas.map((t) => (
+                <option value={t.slug} selected={t.slug === temporadaSlug}>
+                  {t.nombre}
+                </option>
+              ))}
+            </select>
+          )}
+          </div>
+        )}
+      </div>
+    </div>
   </div>
 
-  {equipos && equipos.length > 0 ? (
-    equipos.map((equipo) => {
-      const plantilla = jugadoresPorEquipo.get(equipo.id) ?? [];
-      return (
-        <div style="margin-bottom: 40px;">
-          <div style="background: var(--azul-oscuro); border-radius: 8px; padding: 20px; margin-bottom: 16px; border: 1px solid rgba(255,255,255,0.1);">
-            <p style="color: var(--naranja); font-size: 12px; font-weight: 700; text-transform: uppercase; margin-bottom: 4px;">
-              {equipo.competiciones?.nombre ?? 'Sin competición'}
-            </p>
-            {equipo.sponsor && (
-              <p style="color: rgba(255,255,255,0.5); font-size: 13px;">
-                Sponsor: {equipo.sponsor}
-              </p>
-            )}
-          </div>
+  <!-- Contenido por equipo (normalmente 1, puede haber 2 si hay varios en la misma categoría/temporada) -->
+  {(equipos ?? []).map((equipo) => {
+    const plantilla = jugadoresPorEquipo.get(equipo.id) ?? [];
+    const todosPartidos = partidosPorEquipo.get(equipo.id) ?? [];
+    const pendientes = todosPartidos.filter((p) => p.puntos_favor === null);
+    const disputados = todosPartidos.filter((p) => p.puntos_favor !== null).reverse();
+    const nombreEquipo = equipo.sponsor ? `${equipo.sponsor} CB Jaca` : `CB Jaca ${categoriaNombre}`;
 
-          {plantilla.length > 0 ? (
-            <table style="width: 100%; border-collapse: collapse;">
-              <thead>
-                <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
-                  <th style="text-align: left; padding: 10px 12px; color: var(--naranja); font-size: 12px; text-transform: uppercase;">#</th>
-                  <th style="text-align: left; padding: 10px 12px; color: var(--naranja); font-size: 12px; text-transform: uppercase;">Jugador</th>
-                  <th style="text-align: left; padding: 10px 12px; color: var(--naranja); font-size: 12px; text-transform: uppercase;">Posición</th>
-                </tr>
-              </thead>
-              <tbody>
-                {plantilla.map((c) => (
-                  <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                    <td style="padding: 12px; color: rgba(255,255,255,0.4); font-weight: 700; font-size: 14px;">
-                      {c.dorsal ?? '—'}
-                    </td>
-                    <td style="padding: 12px; color: white; font-weight: 600;">
-                      {c.jugadores?.nombre} {c.jugadores?.apellido}
-                    </td>
-                    <td style="padding: 12px; color: rgba(255,255,255,0.6); font-size: 14px;">
-                      {c.jugadores?.posicion ?? '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+    return (
+      <div class="equipo-bloque">
+
+        {equipo.competiciones?.nombre && (
+          <p class="competicion-label">{equipo.competiciones.nombre}</p>
+        )}
+
+        <!-- ── PLANTILLA ── -->
+        <section id="plantilla" class="seccion">
+          <h2 class="seccion-titulo">Plantilla</h2>
+
+          {plantilla.length === 0 ? (
+            <p class="vacio">Sin jugadores registrados.</p>
           ) : (
-            <p style="color: rgba(255,255,255,0.4); font-size: 14px; padding: 16px 0;">
-              Sin jugadores registrados en esta plantilla.
-            </p>
+            <div class="plantilla-grid">
+              {plantilla.map((c) => (
+                <a href={`/jugadores/${c.jugadores?.id}`} class="jugador-card">
+                  <span class="dorsal">{c.dorsal ?? "—"}</span>
+                  <div class="jugador-info">
+                    <span class="jugador-nombre">{c.jugadores?.nombre} {c.jugadores?.apellido}</span>
+                    <span class="jugador-posicion">{posicionLabel[c.jugadores?.posicion] ?? c.jugadores?.posicion ?? "—"}</span>
+                  </div>
+                </a>
+              ))}
+            </div>
           )}
-        </div>
-      );
-    })
-  ) : (
-    <p style="color: white;">No se encontraron equipos.</p>
-  )}
+        </section>
+
+        <!-- ── CALENDARIO / RESULTADOS ── -->
+        <section id="calendario" class="seccion seccion-alt">
+          <h2 class="seccion-titulo">Calendario y Resultados</h2>
+
+          {todosPartidos.length === 0 ? (
+            <p class="vacio">Sin partidos registrados.</p>
+          ) : (
+            <div class="partidos-columnas">
+
+              {/* Próximos */}
+              {pendientes.length > 0 && (
+                <div class="partidos-bloque">
+                  <h3 class="bloque-label">Próximos partidos</h3>
+                  <div class="partidos-lista">
+                    {pendientes.map((p) => (
+                      <div class="partido-card">
+                        <div class="partido-meta">
+                          <span class="jornada">{etiquetaJornada(p)}</span>
+                          <span class="fecha">{formatFecha(p.fecha)}</span>
+                        </div>
+                        <div class="partido-vs">
+                          <span class:list={["rival-nombre", p.es_local && "propio"]}>{p.es_local ? nombreEquipo : nombreRival(p)}</span>
+                          <span class="vs-sep">vs</span>
+                          <span class:list={["rival-nombre", !p.es_local && "propio"]}>{p.es_local ? nombreRival(p) : nombreEquipo}</span>
+                        </div>
+                        <span class:list={["condicion-pill", p.es_local ? "local" : "visitante"]}>
+                          {p.es_local ? "Local" : "Visitante"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Resultados */}
+              {disputados.length > 0 && (
+                <div class="partidos-bloque">
+                  <h3 class="bloque-label">Resultados</h3>
+                  <div class="partidos-lista">
+                    {disputados.map((p) => {
+                      const victoria = p.puntos_favor > p.puntos_contra;
+                      const pNuestros = p.es_local ? p.puntos_favor : p.puntos_contra;
+                      const pEllos   = p.es_local ? p.puntos_contra : p.puntos_favor;
+                      return (
+                        <a href={`/partidos/${p.id}`} class:list={["partido-card", victoria ? "victoria" : "derrota"]}>
+                          <div class="partido-meta">
+                            <span class="jornada">{etiquetaJornada(p)}</span>
+                            <span class="fecha">{formatFecha(p.fecha)}</span>
+                          </div>
+                          <div class="partido-vs">
+                            <span class:list={["rival-nombre", p.es_local && "propio"]}>{p.es_local ? nombreEquipo : nombreRival(p)}</span>
+                            <span class:list={["marcador", victoria ? "victoria" : "derrota"]}>
+                              {p.es_local ? p.puntos_favor : p.puntos_contra}
+                              {" – "}
+                              {p.es_local ? p.puntos_contra : p.puntos_favor}
+                            </span>
+                            <span class:list={["rival-nombre", !p.es_local && "propio"]}>{p.es_local ? nombreRival(p) : nombreEquipo}</span>
+                          </div>
+                          <span class:list={["resultado-badge", victoria ? "victoria" : "derrota"]}>
+                            {victoria ? "V" : "D"}
+                          </span>
+                        </a>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+            </div>
+          )}
+        </section>
+
+      </div>
+    );
+  })}
+
 </Layout>
+
+<style>
+  /* ── Header ── */
+  .equipo-header {
+    background: linear-gradient(to bottom, rgba(0,0,0,0.5), rgba(0,0,0,0.95)),
+      center/cover no-repeat;
+    background-color: #0f172a;
+    padding: 3rem 2rem 2rem;
+    color: white;
+  }
+  .equipo-header-inner {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  .volver {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--orange, #f97316);
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 2rem;
+    margin-top: 1.5rem;
+    flex-wrap: wrap;
+  }
+  .categoria-label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--orange, #f97316);
+    margin-bottom: 0.4rem;
+  }
+  h1 {
+    font-size: clamp(1.6rem, 4vw, 2.5rem);
+    font-weight: 800;
+    margin: 0;
+  }
+
+  .temporada-select {
+  padding: 0.3rem 0.8rem;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: transparent;
+  color: var(--orange, #f97316);
+  border: 1px solid var(--orange, #f97316);
+  cursor: pointer;
+  outline: none;
+}
+
+.temporada-select option {
+  background: #0f172a;
+  color: white;
+}
+
+  /* ── Bloques ── */
+  .equipo-bloque { }
+  .competicion-label {
+    text-align: center;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--orange, #f97316);
+    padding: 0.75rem;
+    background: rgba(249,115,22,0.08);
+    border-bottom: 1px solid rgba(249,115,22,0.2);
+  }
+
+  /* ── Secciones ── */
+  .seccion {
+    padding: 3rem 2rem;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  .seccion-alt {
+    max-width: 100%;
+    background: var(--bg-clr-2, #0f172a);
+    padding: 3rem 2rem;
+  }
+  .seccion-alt > * { max-width: 900px; margin-left: auto; margin-right: auto; }
+  .seccion-titulo {
+    font-size: 1.4rem;
+    font-weight: 800;
+    margin-bottom: 1.5rem;
+  }
+  .bloque-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--orange, #f97316);
+    margin-bottom: 0.75rem;
+  }
+  .vacio { color: var(--muted, #64748b); font-size: 0.9rem; }
+
+  /* ── Plantilla ── */
+  .plantilla-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 0.6rem;
+  }
+  .jugador-card {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.75rem 1rem;
+    background: var(--card, #1e293b);
+    border: 1px solid var(--borde, rgba(255,255,255,0.07));
+    border-radius: 10px;
+    text-decoration: none;
+    color: inherit;
+    transition: border-color 0.2s, transform 0.15s;
+  }
+.jugador-card:hover {
+  border-color: var(--orange, #f97316);
+  transform: translateY(-2px);
+}
+  .dorsal {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--orange, #f97316);
+    color: white;
+    font-weight: 800;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .jugador-info { display: flex; flex-direction: column; gap: 0.1rem; }
+  .jugador-nombre { font-weight: 700; font-size: 0.88rem; }
+  .jugador-posicion { font-size: 0.72rem; color: var(--muted, #64748b); }
+
+  /* ── Partidos ── */
+  .partidos-columnas {
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+  }
+  .partidos-lista { display: flex; flex-direction: column; gap: 0.5rem; }
+  .partido-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.8rem 1rem;
+    background: var(--card, #1e293b);
+    border: 1px solid var(--borde, rgba(255,255,255,0.07));
+    border-left: 3px solid transparent;
+    border-radius: 10px;
+  }
+  .partido-card.victoria { border-left-color: #22c55e; }
+  .partido-card.derrota  { border-left-color: #3b82f6; }
+
+  .partido-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 75px;
+  }
+  .jornada {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--muted, #64748b);
+  }
+  .fecha { font-size: 0.8rem; font-weight: 600; }
+
+  .partido-vs {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex: 1;
+    min-width: 0;
+  }
+  .rival-nombre {
+    font-size: 0.85rem;
+    color: var(--muted, #64748b);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .rival-nombre.propio { font-weight: 700; }
+  .vs-sep { font-size: 0.72rem; color: var(--muted, #64748b); flex-shrink: 0; }
+
+  .marcador {
+    font-size: 1rem;
+    font-weight: 800;
+    min-width: 55px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .marcador.victoria { color: #22c55e; }
+  .marcador.derrota  { color: #f6603b; }
+
+  .condicion-pill {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+    flex-shrink: 0;
+  }
+  .condicion-pill.local     { background: rgba(249,115,22,0.15); color: var(--orange, #f97316); }
+  .condicion-pill.visitante { background: rgba(59,130,246,0.15);  color: #60a5fa; }
+
+  .resultado-badge {
+    font-size: 0.72rem;
+    font-weight: 800;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .resultado-badge.victoria { background: rgba(34,197,94,0.15);  color: #22c55e; }
+  .resultado-badge.derrota  { background: rgba(59,130,246,0.15); color: #60a5fa; }
+
+  @media (max-width: 640px) {
+    .header-top { flex-direction: column; align-items: flex-start; }
+    .temporada-selector { justify-content: flex-start; }
+    .partido-vs { flex-wrap: wrap; }
+    .rival-nombre { flex: unset; max-width: 120px; }
+  }
+</style>

@@ -1,6 +1,10 @@
 import Campo from "./Campo.jsx";
 
 const POSICIONES = ["Base", "Escolta", "Alero", "Ala-Pívot", "Pívot"];
+const GENEROS = [
+  { val: "masculino", label: "Masculino" },
+  { val: "femenino", label: "Femenino" },
+];
 
 export default function FormNuevoJugador({
   form,
@@ -38,6 +42,19 @@ export default function FormNuevoJugador({
           {POSICIONES.map((p) => (
             <option key={p} value={p}>
               {p}
+            </option>
+          ))}
+        </select>
+      </Campo>
+      <Campo label="Género">
+        <select
+          value={form.genero}
+          onChange={(e) => onChange({ ...form, genero: e.target.value })}
+        >
+          <option value="">Sin especificar</option>
+          {GENEROS.map(({ val, label }) => (
+            <option key={val} value={val}>
+              {label}
             </option>
           ))}
         </select>

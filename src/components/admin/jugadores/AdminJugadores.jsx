@@ -9,6 +9,7 @@ export default function AdminJugadores({ supabase, perfil }) {
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   const [filtroPosicion, setFiltroPosicion] = useState("");
+  const [filtroGenero, setFiltroGenero] = useState("");
   const [jugadorSeleccionado, setJugadorSeleccionado] = useState(null);
   const [historial, setHistorial] = useState([]);
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
@@ -23,6 +24,7 @@ export default function AdminJugadores({ supabase, perfil }) {
     nombre: "",
     apellido: "",
     posicion: "",
+    genero: "",
   });
   const [mostrarFormNuevo, setMostrarFormNuevo] = useState(false);
   const [msg, setMsg] = useState("");
@@ -41,11 +43,13 @@ export default function AdminJugadores({ supabase, perfil }) {
     const [{ data: jugs }, { data: eqs }, { data: temps }] = await Promise.all([
       supabase
         .from("jugadores")
-        .select("id, nombre, apellido, posicion")
+        .select("id, nombre, apellido, posicion, genero")
         .order("apellido"),
       supabase
         .from("equipos")
-        .select(`id, sponsor, categorias (nombre), temporadas (nombre)`),
+        .select(
+          `id, sponsor, categorias (nombre, genero), temporadas (id, nombre)`,
+        ),
       supabase
         .from("temporadas")
         .select("id, nombre")
@@ -79,6 +83,7 @@ export default function AdminJugadores({ supabase, perfil }) {
         nombre: formEditar.nombre,
         apellido: formEditar.apellido,
         posicion: formEditar.posicion || null,
+        genero: formEditar.genero || null,
       })
       .eq("id", jugadorSeleccionado.id);
     if (err) {
@@ -156,22 +161,25 @@ export default function AdminJugadores({ supabase, perfil }) {
       nombre: formNuevo.nombre,
       apellido: formNuevo.apellido,
       posicion: formNuevo.posicion || null,
+      genero: formNuevo.genero || null,
     });
     if (err) {
       setError("Error al crear jugador");
       return;
     }
     setMsg("Jugador creado correctamente");
-    setFormNuevo({ nombre: "", apellido: "", posicion: "" });
+    setFormNuevo({ nombre: "", apellido: "", posicion: "", genero: "" });
     setMostrarFormNuevo(false);
     cargarTodo();
   }
 
   const jugadoresFiltrados = jugadores.filter((j) => {
     const texto = `${j.nombre} ${j.apellido}`.toLowerCase();
-    const okBusqueda = texto.includes(busqueda.toLowerCase());
-    const okPosicion = !filtroPosicion || j.posicion === filtroPosicion;
-    return okBusqueda && okPosicion;
+    return (
+      texto.includes(busqueda.toLowerCase()) &&
+      (!filtroPosicion || j.posicion === filtroPosicion) &&
+      (!filtroGenero || j.genero === filtroGenero) // ← añadir
+    );
   });
 
   function abrirJugador(j) {
@@ -180,6 +188,7 @@ export default function AdminJugadores({ supabase, perfil }) {
       nombre: j.nombre,
       apellido: j.apellido,
       posicion: j.posicion ?? "",
+      genero: j.genero ?? "",
     });
     setPanelVista("historial");
     setMsg("");
@@ -442,39 +451,83 @@ export default function AdminJugadores({ supabase, perfil }) {
           </div>
         </div>
 
-        {/* Filtro posición */}
-        <div style={{ marginBottom: "16px" }}>
-          <label
-            style={{
-              fontSize: "11px",
-              fontWeight: 700,
-              color: "var(--muted)",
-              textTransform: "uppercase",
-              display: "block",
-              marginBottom: "6px",
-            }}
-          >
-            Filtrar por posición
-          </label>
-          <select
-            value={filtroPosicion}
-            onChange={(e) => setFiltroPosicion(e.target.value)}
-            style={{
-              ...inputStyle,
-              cursor: "pointer",
-              background: filtroPosicion
-                ? "rgba(249,115,22,0.05)"
-                : "var(--card)",
-              borderColor: filtroPosicion ? "var(--naranja)" : "var(--borde)",
-            }}
-          >
-            <option value="">Todas las posiciones</option>
-            {POSICIONES.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
+        {/* Filtros posición + género */}
+        <div
+          style={{
+            display: "flex",
+            gap: "12px",
+            marginBottom: "16px",
+            alignItems: "flex-end",
+          }}
+        >
+          {/* Posición */}
+          <div>
+            <label
+              style={{
+                fontSize: "11px",
+                fontWeight: 700,
+                color: "var(--muted)",
+                textTransform: "uppercase",
+                display: "block",
+                marginBottom: "6px",
+              }}
+            >
+              Posición
+            </label>
+            <select
+              value={filtroPosicion}
+              onChange={(e) => setFiltroPosicion(e.target.value)}
+              style={{
+                ...inputStyle,
+                width: "auto",
+                cursor: "pointer",
+                background: filtroPosicion
+                  ? "rgba(249,115,22,0.05)"
+                  : "var(--card)",
+                borderColor: filtroPosicion ? "var(--naranja)" : "var(--borde)",
+              }}
+            >
+              <option value="">Todas</option>
+              {POSICIONES.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Género */}
+          <div>
+            <label
+              style={{
+                fontSize: "11px",
+                fontWeight: 700,
+                color: "var(--muted)",
+                textTransform: "uppercase",
+                display: "block",
+                marginBottom: "6px",
+              }}
+            >
+              Género
+            </label>
+            <select
+              value={filtroGenero}
+              onChange={(e) => setFiltroGenero(e.target.value)}
+              style={{
+                ...inputStyle,
+                width: "auto",
+                cursor: "pointer",
+                background: filtroGenero
+                  ? "rgba(249,115,22,0.05)"
+                  : "var(--card)",
+                borderColor: filtroGenero ? "var(--naranja)" : "var(--borde)",
+              }}
+            >
+              <option value="">Todos</option>
+              <option value="masculino">♂ Masculino</option>
+              <option value="femenino">♀ Femenino</option>
+            </select>
+          </div>
         </div>
 
         {/* Lista jugadores */}

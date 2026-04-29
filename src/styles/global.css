@@ -3,7 +3,8 @@
   --naranja-oscuro: #c2410c;
   --azul: #1d4ed8;
   --azul-oscuro: #1e3a5f;
-  --fondo: #f8fafc;
+  --color-background-secondary: #f1f5f9;
+  --fondo: #ffffff;
   --texto: #0f172a;
   --card: #ffffff;
   --borde: #e2e8f0;
@@ -15,6 +16,7 @@
   --texto: #f1f5f9;
   --card: #1e293b;
   --borde: #334155;
+  --color-background-secondary: #1e293b;
   --muted: #94a3b8;
   --azul-oscuro: #0f172a;
 }

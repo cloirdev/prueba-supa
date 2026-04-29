@@ -1,14 +1,17 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
+import "@/styles/admin.css";
 import AdminLogin from "./AdminLogin.jsx";
-import AdminInicio from "./AdminInicio.jsx";
+// import AdminInicio from "./AdminInicio.jsx";
 import AdminEquipos from "./AdminEquipos.jsx";
 import AdminTemporadas from "./AdminTemporadas.jsx";
 import AdminPanel from "./AdminPanel.jsx";
 import AdminPlantilla from "./AdminPlantilla.jsx";
 import AdminCalendario from "./AdminCalendario.jsx";
 import AdminNoticias from "./AdminNoticias.jsx";
-import AdminJugadores from "./AdminJugadores.jsx";
+import AdminJugadores from "./jugadores/AdminJugadores.jsx";
+import AdminEntrenadores from "./AdminEntrenadores.jsx";
+import FormNuevoEquipo from "./FormNuevoEquipo.jsx";
 
 const supabase = createClient(
   import.meta.env.PUBLIC_SUPABASE_URL,
@@ -21,7 +24,7 @@ export default function AdminApp() {
   const [cargando, setCargando] = useState(true);
   const [equipoActual, setEquipoActual] = useState(null);
   const [temporadaActual, setTemporadaActual] = useState(null);
-  const [vista, setVista] = useState("inicio");
+  const [vista, setVista] = useState("temporadas"); // ← empieza en temporadas
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -55,7 +58,7 @@ export default function AdminApp() {
     setPerfil(null);
     setEquipoActual(null);
     setTemporadaActual(null);
-    setVista("inicio");
+    setVista("temporadas");
   }
 
   if (cargando)
@@ -109,13 +112,12 @@ export default function AdminApp() {
         <NavSection label="General">
           <NavItem
             label="Inicio"
-            activa={vista === "inicio"}
-            onClick={() => setVista("inicio")}
-          />
-          <NavItem
-            label="Mis equipos"
-            activa={vista === "equipos"}
-            onClick={() => setVista("equipos")}
+            activa={vista === "temporadas"}
+            onClick={() => {
+              setEquipoActual(null);
+              setTemporadaActual(null);
+              setVista("temporadas");
+            }}
           />
         </NavSection>
 
@@ -145,6 +147,16 @@ export default function AdminApp() {
               label="Jugadores"
               activa={vista === "jugadores"}
               onClick={() => setVista("jugadores")}
+            />
+            <NavItem
+              label="Entrenadores"
+              activa={vista === "entrenadores"}
+              onClick={() => setVista("entrenadores")}
+            />
+            <NavItem
+              label="Nuevo equipo"
+              activa={vista === "nuevoEquipo"}
+              onClick={() => setVista("nuevoEquipo")}
             />
           </NavSection>
         )}
@@ -238,25 +250,48 @@ export default function AdminApp() {
               <>
                 <span
                   style={{ cursor: "pointer" }}
-                  onClick={() => setVista("equipos")}
+                  onClick={() => {
+                    setEquipoActual(null);
+                    setTemporadaActual(null);
+                    setVista("temporadas");
+                  }}
                 >
-                  Equipos
+                  Temporadas
                 </span>
                 <span>›</span>
                 <span
                   style={{ cursor: "pointer" }}
-                  onClick={() => setVista("equipos")}
+                  onClick={() => {
+                    setEquipoActual(null);
+                    setVista("equipos");
+                  }}
                 >
-                  {equipoLabel}
+                  {temporadaActual?.nombre}
                 </span>
                 <span>›</span>
                 <span style={{ color: "var(--texto)", fontWeight: 500 }}>
-                  {temporadaActual.temporadas.nombre}
+                  {equipoLabel}
+                </span>
+              </>
+            ) : temporadaActual ? (
+              <>
+                <span
+                  style={{ cursor: "pointer" }}
+                  onClick={() => {
+                    setTemporadaActual(null);
+                    setVista("temporadas");
+                  }}
+                >
+                  Temporadas
+                </span>
+                <span>›</span>
+                <span style={{ color: "var(--texto)", fontWeight: 500 }}>
+                  {temporadaActual.nombre}
                 </span>
               </>
             ) : (
               <span style={{ color: "var(--texto)", fontWeight: 500 }}>
-                Panel de administración
+                Temporadas
               </span>
             )}
           </div>
@@ -265,7 +300,7 @@ export default function AdminApp() {
               onClick={() => {
                 setEquipoActual(null);
                 setTemporadaActual(null);
-                setVista("equipos");
+                setVista("temporadas");
               }}
               style={{
                 fontSize: "12px",
@@ -284,37 +319,34 @@ export default function AdminApp() {
 
         {/* Content */}
         <div style={{ flex: 1, overflow: "auto", padding: "24px" }}>
-          {vista === "inicio" && (
-            <AdminInicio
-              supabase={supabase}
-              perfil={perfil}
-              onIrAEquipos={() => setVista("equipos")}
-            />
-          )}
-          {vista === "equipos" && !tieneEquipo && (
-            <AdminEquipos
-              supabase={supabase}
-              perfil={perfil}
-              onSelect={(equipo) => {
-                setEquipoActual(equipo);
-                setVista("temporadas");
-              }}
-            />
-          )}
-          {vista === "temporadas" && equipoActual && !temporadaActual && (
+          {/* FLUJO PRINCIPAL: Temporadas → Equipos → Calendario */}
+          {vista === "temporadas" && (
             <AdminTemporadas
               supabase={supabase}
-              equipo={equipoActual}
               onSelect={(temporada) => {
                 setTemporadaActual(temporada);
-                setVista("calendario");
-              }}
-              onBack={() => {
-                setEquipoActual(null);
                 setVista("equipos");
               }}
             />
           )}
+
+          {vista === "equipos" && temporadaActual && (
+            <AdminEquipos
+              supabase={supabase}
+              perfil={perfil}
+              temporada={temporadaActual}
+              onSelect={(equipo) => {
+                setEquipoActual(equipo);
+                setVista("calendario");
+              }}
+              onBack={() => {
+                setTemporadaActual(null);
+                setVista("temporadas");
+              }}
+            />
+          )}
+
+          {/* Vistas de equipo */}
           {vista === "plantilla" && tieneEquipo && (
             <AdminPlantilla
               supabase={supabase}
@@ -330,7 +362,10 @@ export default function AdminApp() {
               perfil={perfil}
               equipo={equipoActual}
               temporada={temporadaActual}
-              onBack={() => setVista("equipos")}
+              onBack={() => {
+                setEquipoActual(null);
+                setVista("equipos");
+              }}
             />
           )}
           {vista === "noticias" && tieneEquipo && (
@@ -342,8 +377,20 @@ export default function AdminApp() {
               onBack={() => setVista("calendario")}
             />
           )}
+
+          {/* Admin */}
+          {vista === "nuevoEquipo" && perfil?.rol === "admin" && (
+            <FormNuevoEquipo
+              supabase={supabase}
+              onCreado={() => setVista("temporadas")}
+              onCancelar={() => setVista("temporadas")}
+            />
+          )}
           {vista === "jugadores" && perfil?.rol === "admin" && (
             <AdminJugadores supabase={supabase} perfil={perfil} />
+          )}
+          {vista === "entrenadores" && perfil?.rol === "admin" && (
+            <AdminEntrenadores supabase={supabase} perfil={perfil} />
           )}
         </div>
       </div>

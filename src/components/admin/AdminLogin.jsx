@@ -24,16 +24,8 @@ export default function AdminLogin({ supabase }) {
 
   return (
     <div style={{ maxWidth: "400px", margin: "80px auto", padding: "0 24px" }}>
-      <h1 style={{ marginBottom: "4px" }}>Panel de administración</h1>
-      <p
-        style={{
-          color: "var(--muted)",
-          fontSize: "14px",
-          marginBottom: "32px",
-        }}
-      >
-        Introduce tus credenciales
-      </p>
+      <h1 className="adm-page-title">Panel de administración</h1>
+      <p className="adm-page-subtitle">Introduce tus credenciales</p>
 
       <div
         style={{
@@ -47,63 +39,27 @@ export default function AdminLogin({ supabase }) {
         }}
       >
         <div>
-          <label
-            style={{
-              fontSize: "13px",
-              fontWeight: 700,
-              display: "block",
-              marginBottom: "6px",
-            }}
-          >
-            Email
-          </label>
+          <label className="adm-label">Email</label>
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="tu@email.com"
-            style={{
-              width: "100%",
-              padding: "10px 12px",
-              borderRadius: "8px",
-              border: "1px solid var(--borde)",
-              background: "var(--fondo)",
-              color: "var(--texto)",
-              fontSize: "14px",
-            }}
+            className="adm-input"
           />
         </div>
         <div>
-          <label
-            style={{
-              fontSize: "13px",
-              fontWeight: 700,
-              display: "block",
-              marginBottom: "6px",
-            }}
-          >
-            Contraseña
-          </label>
+          <label className="adm-label">Contraseña</label>
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••"
             onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-            style={{
-              width: "100%",
-              padding: "10px 12px",
-              borderRadius: "8px",
-              border: "1px solid var(--borde)",
-              background: "var(--fondo)",
-              color: "var(--texto)",
-              fontSize: "14px",
-            }}
+            className="adm-input"
           />
         </div>
-        {error && (
-          <p style={{ color: "red", fontSize: "13px", margin: 0 }}>{error}</p>
-        )}
+        {error && <p style={{ color: "red", fontSize: "13px", margin: 0 }}>{error}</p>}
         <button
           onClick={handleLogin}
           disabled={cargando}

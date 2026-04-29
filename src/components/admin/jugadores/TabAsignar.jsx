@@ -8,29 +8,20 @@ export default function TabAsignar({
   temporadas,
   historial,
   equipoLabel,
+  jugador,
 }) {
   return (
     <div className="form-stack">
       <p style={{ fontSize: "13px", color: "var(--muted)", margin: 0 }}>
         Vincula a este jugador con un equipo y temporada específicos.
       </p>
-      <Campo label="Equipo">
-        <select
-          value={form.equipo_id}
-          onChange={(e) => onChange({ ...form, equipo_id: e.target.value })}
-        >
-          <option value="">Selecciona equipo</option>
-          {equipos.map((eq) => (
-            <option key={eq.id} value={eq.id}>
-              {equipoLabel(eq)}
-            </option>
-          ))}
-        </select>
-      </Campo>
+
       <Campo label="Temporada">
         <select
           value={form.temporada_id}
-          onChange={(e) => onChange({ ...form, temporada_id: e.target.value })}
+          onChange={(e) =>
+            onChange({ ...form, temporada_id: e.target.value, equipo_id: "" })
+          }
         >
           <option value="">Selecciona temporada</option>
           {temporadas.map((t) => (
@@ -40,6 +31,37 @@ export default function TabAsignar({
           ))}
         </select>
       </Campo>
+
+      <Campo label="Equipo">
+        <select
+          value={form.equipo_id}
+          onChange={(e) => onChange({ ...form, equipo_id: e.target.value })}
+          disabled={!form.temporada_id}
+        >
+          <option value="">
+            {form.temporada_id
+              ? "Selecciona equipo"
+              : "Primero selecciona una temporada"}
+          </option>
+          {equipos
+            .filter((eq) => {
+              // Filtro por temporada
+              if (form.temporada_id && eq.temporadas?.id !== form.temporada_id)
+                return false;
+              // Filtro por género
+              if (!jugador?.genero) return true;
+              if (!eq.categorias?.genero || eq.categorias?.genero === "mixto")
+                return true;
+              return eq.categorias.genero === jugador.genero;
+            })
+            .map((eq) => (
+              <option key={eq.id} value={eq.id}>
+                {equipoLabel(eq)}
+              </option>
+            ))}
+        </select>
+      </Campo>
+
       <Campo label="Dorsal">
         <input
           type="number"
@@ -50,9 +72,11 @@ export default function TabAsignar({
           className="dorsal"
         />
       </Campo>
+
       <button className="btn-primary" onClick={onAsignar}>
         Asignar
       </button>
+
       {historial.length > 0 && (
         <div className="asignaciones-lista">
           <div className="asignaciones-titulo">Asignaciones actuales</div>

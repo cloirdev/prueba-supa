@@ -1,0 +1,615 @@
+---
+// src/pages/partidos/[id].astro
+// @ts-nocheck
+import { supabase } from "@/lib/supabase.js";
+import Layout from "@/layouts/Layout.astro";
+
+export async function getStaticPaths() {
+  const { data: partidos } = await supabase
+    .from("partidos")
+    .select("id");
+
+  return (partidos ?? []).map((p) => ({
+    params: { id: p.id },
+  }));
+}
+
+const { id } = Astro.params;
+
+// ── Partido ────────────────────────────────────────────────────────────────
+const { data: partido } = await supabase
+  .from("partidos")
+  .select(`
+    id, rival, es_local, fecha, jornada, ronda,
+    puntos_favor, puntos_contra,
+    equipos (
+      id, sponsor,
+      categorias (nombre, slug),
+      temporadas (nombre),
+      competiciones (nombre)
+    ),
+    equipos_rivales (
+      id, nombre_equipo,
+      clubes (nombre, logo_url)
+    )
+  `)
+  .eq("id", id)
+  .single();
+
+if (!partido) return Astro.redirect("/");
+
+// ── Crónica ────────────────────────────────────────────────────────────────
+const { data: cronica } = await supabase
+  .from("cronicas")
+  .select("contenido, publicada")
+  .eq("partido_id", id)
+  .eq("publicada", true)
+  .single();
+
+// ── Fotos ──────────────────────────────────────────────────────────────────
+const { data: fotos } = await supabase
+  .from("fotos")
+  .select("id, url, descripcion")
+  .eq("partido_id", id);
+
+// ── Boxscore ───────────────────────────────────────────────────────────────
+const { data: boxscore } = await supabase
+  .from("convocatorias_partido")
+  .select(`
+    titular, minutos, puntos,
+    tiros_campo_intentados, tiros_campo_anotados,
+    triples_intentados, triples_anotados,
+    tiros_libres_intentados, tiros_libres_anotados,
+    rebotes_ofensivos, rebotes_defensivos,
+    asistencias, robos, tapones, perdidas, faltas_cometidas,
+    jugadores (id, nombre, apellido, posicion),
+    convocatorias_temporada:jugador_id (dorsal)
+  `)
+  .eq("partido_id", id)
+  .order("titular", { ascending: false });
+
+// Buscar dorsal de cada jugador en esta temporada
+const temporadaId = partido.equipos?.temporadas?.nombre;
+const equipoId    = partido.equipos?.id;
+
+const { data: dorsales } = await supabase
+  .from("convocatorias_temporada")
+  .select("jugador_id, dorsal")
+  .eq("equipo_id", equipoId);
+
+const dorsalMap = new Map((dorsales ?? []).map((d) => [d.jugador_id, d.dorsal]));
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+const disputado    = partido.puntos_favor !== null;
+const nombrePropio = partido.equipos?.sponsor
+  ? `${partido.equipos.sponsor} CB Jaca`
+  : `CB Jaca ${partido.equipos?.categorias?.nombre ?? ""}`;
+const nombreRival  = partido.equipos_rivales?.nombre_equipo ?? partido.rival;
+const logoRival    = partido.equipos_rivales?.clubes?.logo_url ?? null;
+
+const pNuestros = partido.es_local ? partido.puntos_favor  : partido.puntos_contra;
+const pEllos    = partido.es_local ? partido.puntos_contra : partido.puntos_favor;
+const victoria  = disputado && pNuestros > pEllos;
+
+const equipoLocal    = partido.es_local ? nombrePropio : nombreRival;
+const equipoVisit    = partido.es_local ? nombreRival  : nombrePropio;
+const ptosLocal      = partido.es_local ? partido.puntos_favor  : partido.puntos_contra;
+const ptosVisit      = partido.es_local ? partido.puntos_contra : partido.puntos_favor;
+
+function formatFecha(f) {
+  if (!f) return "Fecha por confirmar";
+  return new Date(f).toLocaleDateString("es-ES", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+  });
+}
+
+function etiquetaJornada(p) {
+  if (p.jornada) return `Jornada ${p.jornada}`;
+  if (p.ronda && p.ronda !== "Amistoso") return p.ronda;
+  return "Amistoso";
+}
+
+function pct(an, int_) {
+  if (!int_) return "—";
+  return `${Math.round((an / int_) * 100)}%`;
+}
+
+function sum(lista, campo) {
+  return lista.reduce((a, s) => a + (parseInt(s[campo]) || 0), 0);
+}
+
+const titulares = (boxscore ?? []).filter((s) => s.titular);
+const suplentes = (boxscore ?? []).filter((s) => !s.titular);
+
+const categoriaSlug  = partido.equipos?.categorias?.slug;
+const temporadaSlug  = partido.equipos?.temporadas?.nombre;
+const equipoHref     = categoriaSlug && temporadaSlug
+  ? `/equipos/${categoriaSlug}/${temporadaSlug}`
+  : null;
+---
+
+<Layout titulo={`${nombrePropio} vs ${nombreRival} | CB Jaca`}>
+
+  <!-- Hero marcador estilo Flashscore -->
+  <div class="partido-hero">
+    <div class="partido-hero-inner">
+      <div class="hero-meta">
+        <a href={equipoHref ?? "/"} class="volver">← {nombrePropio}</a>
+        <span class="hero-jornada">{etiquetaJornada(partido)} · {partido.equipos?.competiciones?.nombre}</span>
+        <span class="hero-fecha">{formatFecha(partido.fecha)}</span>
+      </div>
+
+      <!-- Marcador -->
+      <div class="marcador-wrap">
+        <!-- Equipo local -->
+        <div class="equipo-marcador">
+          <div class="escudo-wrap">
+            {partido.es_local
+              ? <div class="escudo-iniciales">{nombrePropio.split(" ").map(w => w[0]).join("").slice(0,3)}</div>
+              : logoRival
+                ? <img src={logoRival} alt={nombreRival} class="escudo-img" />
+                : <div class="escudo-iniciales">{nombreRival.split(" ").map(w => w[0]).join("").slice(0,3)}</div>
+            }
+          </div>
+          <span class="equipo-nombre">{equipoLocal}</span>
+        </div>
+
+        <!-- Resultado -->
+        <div class="resultado-centro">
+          {disputado ? (
+            <>
+              <div class="marcador-numeros">
+                <span class:list={["pts", ptosLocal >= ptosVisit ? "ganador" : "perdedor"]}>{ptosLocal}</span>
+                <span class="separador">–</span>
+                <span class:list={["pts", ptosVisit >= ptosLocal ? "ganador" : "perdedor"]}>{ptosVisit}</span>
+              </div>
+              
+            </>
+          ) : (
+            <div class="pendiente">Pendiente</div>
+          )}
+        </div>
+
+        <!-- Equipo visitante -->
+        <div class="equipo-marcador visitante">
+          <div class="escudo-wrap">
+            {!partido.es_local
+              ? <div class="escudo-iniciales">{nombrePropio.split(" ").map(w => w[0]).join("").slice(0,3)}</div>
+              : logoRival
+                ? <img src={logoRival} alt={nombreRival} class="escudo-img" />
+                : <div class="escudo-iniciales">{nombreRival.split(" ").map(w => w[0]).join("").slice(0,3)}</div>
+            }
+          </div>
+          <span class="equipo-nombre">{equipoVisit}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="contenido">
+
+    <!-- Crónica -->
+    {cronica?.contenido && (
+      <section class="seccion">
+        <h2 class="seccion-titulo">Crónica</h2>
+        <div class="cronica-texto">
+          {cronica.contenido.split("\n").filter(Boolean).map((parrafo) => (
+            <p>{parrafo}</p>
+          ))}
+        </div>
+      </section>
+    )}
+
+    <!-- Fotos -->
+    {fotos && fotos.length > 0 && (
+      <section class="seccion seccion-alt">
+        <h2 class="seccion-titulo">Fotos</h2>
+        <div class="fotos-grid">
+          {fotos.map((f) => (
+            <a href={f.url} target="_blank" rel="noopener" class="foto-wrap">
+              <img src={f.url} alt={f.descripcion ?? "Foto del partido"} class="foto-img" loading="lazy" />
+            </a>
+          ))}
+        </div>
+      </section>
+    )}
+
+    <!-- Boxscore -->
+    {boxscore && boxscore.length > 0 && (
+      <section class="seccion">
+        <h2 class="seccion-titulo">Boxscore</h2>
+
+        {[
+          { label: "Titulares", lista: titulares },
+          { label: "Suplentes", lista: suplentes },
+        ].map(({ label, lista }) => lista.length > 0 && (
+          <div class="boxscore-bloque">
+            <h3 class="boxscore-label">{label}</h3>
+            <div class="boxscore-wrap">
+              <table class="boxscore-tabla">
+                <thead>
+                  <tr>
+                    <th class="left">#</th>
+                    <th class="left">Jugador</th>
+                    <th>MIN</th>
+                    <th>PTS</th>
+                    <th>REB</th>
+                    <th>AST</th>
+                    <th>FG</th>
+                    <th>3PT</th>
+                    <th>TL</th>
+                    <th>ROB</th>
+                    <th>TAP</th>
+                    <th>PER</th>
+                    <th>FC</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lista.map((s) => {
+                    const j   = s.jugadores;
+                    const reb = (parseInt(s.rebotes_ofensivos) || 0) + (parseInt(s.rebotes_defensivos) || 0);
+                    const dorsal = dorsalMap.get(j?.id) ?? "—";
+                    return (
+                      <tr>
+                        <td class="dorsal-col">{dorsal}</td>
+                        <td class="jugador-col">
+                          <a href={`/jugadores/${j?.id}`} class="jugador-link">
+                            {j?.nombre[0]}. {j?.apellido}
+                          </a>
+                        </td>
+                        <td>{s.minutos ?? 0}</td>
+                        <td class="pts-col">{s.puntos ?? 0}</td>
+                        <td>{reb}</td>
+                        <td>{s.asistencias ?? 0}</td>
+                        <td class="tiro">{s.tiros_campo_anotados ?? 0}/{s.tiros_campo_intentados ?? 0}</td>
+                        <td class="tiro">{s.triples_anotados ?? 0}/{s.triples_intentados ?? 0}</td>
+                        <td class="tiro">{s.tiros_libres_anotados ?? 0}/{s.tiros_libres_intentados ?? 0}</td>
+                        <td>{s.robos ?? 0}</td>
+                        <td>{s.tapones ?? 0}</td>
+                        <td>{s.perdidas ?? 0}</td>
+                        <td>{s.faltas_cometidas ?? 0}</td>
+                      </tr>
+                    );
+                  })}
+                  <!-- Fila totales -->
+                  <tr class="totales-row">
+                    <td></td>
+                    <td class="left" style="font-size:0.65rem;font-weight:700;letter-spacing:.06em;">TOTALES</td>
+                    <td>{sum(lista, "minutos")}</td>
+                    <td class="pts-col">{sum(lista, "puntos")}</td>
+                    <td>{sum(lista, "rebotes_ofensivos") + sum(lista, "rebotes_defensivos")}</td>
+                    <td>{sum(lista, "asistencias")}</td>
+                    <td class="tiro">{sum(lista, "tiros_campo_anotados")}/{sum(lista, "tiros_campo_intentados")}</td>
+                    <td class="tiro">{sum(lista, "triples_anotados")}/{sum(lista, "triples_intentados")}</td>
+                    <td class="tiro">{sum(lista, "tiros_libres_anotados")}/{sum(lista, "tiros_libres_intentados")}</td>
+                    <td>{sum(lista, "robos")}</td>
+                    <td>{sum(lista, "tapones")}</td>
+                    <td>{sum(lista, "perdidas")}</td>
+                    <td>{sum(lista, "faltas_cometidas")}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
+
+        <!-- Totales globales del equipo -->
+        {boxscore.length > 0 && (
+          <div class="equipo-totales">
+            {[
+              { label: "Puntos",   val: sum(boxscore, "puntos") },
+              { label: "Rebotes",  val: sum(boxscore, "rebotes_ofensivos") + sum(boxscore, "rebotes_defensivos") },
+              { label: "Asist.",   val: sum(boxscore, "asistencias") },
+              { label: "Robos",    val: sum(boxscore, "robos") },
+              { label: "Tapones",  val: sum(boxscore, "tapones") },
+              { label: "% TC", val: pct(sum(boxscore, "tiros_campo_anotados"), sum(boxscore, "tiros_campo_intentados")) },
+              { label: "% 3PT", val: pct(sum(boxscore, "triples_anotados"), sum(boxscore, "triples_intentados")) },
+              { label: "% TL",  val: pct(sum(boxscore, "tiros_libres_anotados"), sum(boxscore, "tiros_libres_intentados")) },
+            ].map(({ label, val }) => (
+              <div class="equipo-total-item">
+                <span class="equipo-total-val">{val}</span>
+                <span class="equipo-total-label">{label}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    )}
+
+  </div>
+</Layout>
+
+<style>
+  /* ── Hero ── */
+  .partido-hero {
+    background-color: #0f172a;
+    padding: 2rem 2rem 2.5rem;
+    color: white;
+  }
+  .partido-hero-inner {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  .hero-meta {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 2rem;
+  }
+  .volver {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--orange, #f97316);
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-right: auto;
+  }
+  .hero-jornada {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: rgba(255,255,255,0.35);
+  }
+  .hero-fecha {
+    font-size: 0.78rem;
+    color: rgba(255,255,255,0.4);
+  }
+
+  /* Marcador */
+  .marcador-wrap {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 1.5rem;
+  }
+  .equipo-marcador {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  .equipo-marcador.visitante {
+    align-items: flex-end;
+    text-align: right;
+  }
+  .escudo-wrap {
+    width: 52px;
+    height: 52px;
+  }
+  .escudo-img {
+    width: 52px;
+    height: 52px;
+    object-fit: contain;
+    border-radius: 6px;
+  }
+  .escudo-iniciales {
+    width: 52px;
+    height: 52px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: rgba(255,255,255,0.5);
+    letter-spacing: -0.5px;
+  }
+  .equipo-nombre {
+    font-size: clamp(0.85rem, 2vw, 1.1rem);
+    font-weight: 800;
+    line-height: 1.2;
+  }
+
+  .resultado-centro {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .marcador-numeros {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .pts {
+    font-size: clamp(2rem, 6vw, 3.5rem);
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .pts.ganador { color: white; }
+  .pts.perdedor { color: rgba(255,255,255,0.25); }
+  .separador {
+    font-size: 1.5rem;
+    color: rgba(255,255,255,0.2);
+    font-weight: 300;
+  }
+  .resultado-badge {
+    font-size: 0.72rem;
+    font-weight: 800;
+    padding: 3px 12px;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  
+  .pendiente {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: rgba(255,255,255,0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  /* ── Layout ── */
+  .contenido { max-width: 900px; margin: 0 auto; }
+  .seccion { padding: 3rem 2rem; }
+  .seccion-alt {
+    max-width: 100%;
+    background: var(--bg-clr-2, #0f172a);
+    padding: 3rem 2rem;
+  }
+  .seccion-alt > * { max-width: 900px; margin-left: auto; margin-right: auto; }
+  .seccion-titulo {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--orange, #f97316);
+    margin-bottom: 1.25rem;
+  }
+
+  /* ── Crónica ── */
+  .cronica-texto {
+    font-size: 1rem;
+    line-height: 1.8;
+    color: var(--texto, inherit);
+    max-width: 680px;
+  }
+  .cronica-texto p { margin-bottom: 1rem; }
+
+  /* ── Fotos ── */
+  .fotos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.6rem;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  .foto-wrap {
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--borde, rgba(255,255,255,0.07));
+    display: block;
+    aspect-ratio: 4/3;
+  }
+  .foto-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+  }
+  .foto-wrap:hover .foto-img { transform: scale(1.04); }
+
+  /* ── Boxscore ── */
+  .boxscore-bloque { margin-bottom: 2rem; }
+  .boxscore-label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted, #64748b);
+    margin-bottom: 0.6rem;
+  }
+  .boxscore-wrap { overflow-x: auto; }
+  .boxscore-tabla {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    min-width: 640px;
+  }
+  .boxscore-tabla thead tr {
+    border-bottom: 1px solid var(--orange, #f97316);
+  }
+  .boxscore-tabla th {
+    padding: 0.4rem 0.6rem;
+    text-align: center;
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted, #64748b);
+    white-space: nowrap;
+  }
+  .boxscore-tabla th.left { text-align: left; }
+  .boxscore-tabla tbody tr {
+    border-bottom: 1px solid var(--borde, rgba(255,255,255,0.05));
+  }
+  .boxscore-tabla tbody tr:hover { background: var(--card, #1e293b); }
+  .boxscore-tabla td {
+    padding: 0.5rem 0.6rem;
+    text-align: center;
+    color: var(--muted, #64748b);
+  }
+  .boxscore-tabla td.left { text-align: left; }
+  .dorsal-col {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--orange, #f97316) !important;
+    width: 28px;
+  }
+  .jugador-col { min-width: 130px; }
+  .jugador-link {
+    color: inherit;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--texto, white) !important;
+  }
+  .jugador-link:hover { color: var(--orange, #f97316) !important; }
+  .pts-col {
+    font-weight: 800;
+    font-size: 0.95rem;
+    color: var(--orange, #f97316) !important;
+  }
+  .tiro { font-size: 0.75rem; }
+  .totales-row {
+    border-top: 2px solid var(--borde, rgba(255,255,255,0.1));
+    background: var(--card, #1e293b);
+  }
+  .totales-row td {
+    font-weight: 700;
+    color: var(--texto, white) !important;
+    padding: 0.6rem;
+  }
+  .totales-row .pts-col { color: var(--orange, #f97316) !important; }
+
+  /* Totales globales */
+  .equipo-totales {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--borde, rgba(255,255,255,0.07));
+  }
+  .equipo-total-item {
+    background: var(--card, #1e293b);
+    border: 1px solid var(--borde, rgba(255,255,255,0.07));
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+    min-width: 70px;
+    flex: 1;
+  }
+  .equipo-total-val {
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: var(--orange, #f97316);
+  }
+  .equipo-total-label {
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted, #64748b);
+  }
+
+  @media (max-width: 640px) {
+    .partido-hero { padding: 1.5rem 1rem 2rem; }
+    .marcador-wrap { gap: 0.75rem; }
+    .escudo-wrap { width: 40px; height: 40px; }
+    .escudo-img, .escudo-iniciales { width: 40px; height: 40px; }
+    .equipo-nombre { font-size: 0.8rem; }
+    .seccion { padding: 2rem 1rem; }
+    .fotos-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>

@@ -70,7 +70,7 @@ export default function AdminPanel({
           marginBottom: "32px",
         }}
       >
-        {temporada.competiciones.nombre} · {temporada.temporadas.nombre}
+        {temporada.competiciones.nombre} · {temporada.nombre}
       </p>
 
       <div style={{ display: "flex", gap: "12px" }}>
