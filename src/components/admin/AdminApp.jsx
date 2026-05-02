@@ -11,6 +11,7 @@ import AdminCalendario from "./AdminCalendario.jsx";
 import AdminNoticias from "./AdminNoticias.jsx";
 import AdminJugadores from "./jugadores/AdminJugadores.jsx";
 import AdminEntrenadores from "./AdminEntrenadores.jsx";
+import AdminClasificacion from "./AdminClasificacion.jsx";
 import FormNuevoEquipo from "./FormNuevoEquipo.jsx";
 
 const supabase = createClient(
@@ -132,6 +133,11 @@ export default function AdminApp() {
               label="Calendario"
               activa={vista === "calendario"}
               onClick={() => setVista("calendario")}
+            />
+            <NavItem
+              label="Clasificación"
+              activa={vista === "clasificacion"}
+              onClick={() => setVista("clasificacion")}
             />
             <NavItem
               label="Noticias"
@@ -368,6 +374,15 @@ export default function AdminApp() {
               }}
             />
           )}
+
+          {vista === "clasificacion" && tieneEquipo && (
+            <AdminClasificacion
+              supabase={supabase}
+              equipo={equipoActual}
+              temporada={temporadaActual}
+            />
+          )}
+
           {vista === "noticias" && tieneEquipo && (
             <AdminNoticias
               supabase={supabase}
