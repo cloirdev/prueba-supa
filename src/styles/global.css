@@ -5,7 +5,7 @@
   --azul-oscuro: #1e3a5f;
   --color-background-secondary: #f1f5f9;
   --fondo: #ffffff;
-  --texto: #0f172a;
+  --texto: #2a0f0f;
   --card: #ffffff;
   --borde: #e2e8f0;
   --muted: #64748b;
@@ -39,59 +39,6 @@ body {
 a {
   color: inherit;
   text-decoration: none;
-}
-
-nav {
-  background: var(--azul-oscuro);
-  padding: 0 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 56px;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-.nav-logo {
-  font-size: 16px;
-  font-weight: 800;
-  color: white;
-  letter-spacing: 0.5px;
-}
-
-.nav-logo span {
-  color: var(--naranja);
-}
-
-.nav-links {
-  display: flex;
-  gap: 24px;
-}
-
-.nav-links a {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.7);
-  transition: color 0.2s;
-}
-
-.nav-links a:hover,
-.nav-links a.active {
-  color: white;
-}
-
-.theme-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
-  color: white;
-  padding: 6px 14px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.theme-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
 }
 
 main {

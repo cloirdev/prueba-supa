@@ -13,7 +13,6 @@ const { data: todosEquipos } = await supabase.from("equipos").select(`
     categorias (nombre, slug)
   `);
 
-// Agrupar por categoría y quedarnos con la temporada más reciente de cada una
 const equiposPorCategoria = new Map();
 (todosEquipos ?? []).forEach((e) => {
   const slug = e.categorias?.slug;
@@ -30,21 +29,127 @@ const equipos = Array.from(equiposPorCategoria.values()).sort((a, b) =>
 // ── Últimos 3 partidos disputados ─────────────────────────────────────────
 const { data: partidos } = await supabase
   .from("partidos")
-  .select(
-    `
+  .select(`
     id, rival, es_local, fecha, jornada, ronda,
     puntos_favor, puntos_contra,
-    equipos (
-      sponsor,
-      categorias (nombre, slug),
-      temporadas (nombre)
-    ),
+    equipos (sponsor, categorias (nombre, slug), temporadas (nombre)),
     equipos_rivales (nombre_equipo)
-  `,
-  )
+  `)
   .not("puntos_favor", "is", null)
   .order("fecha", { ascending: false })
   .limit(3);
+
+// ── Noticias destacadas (slider) ───────────────────────────────────────────
+const { data: noticiasDestacadas } = await supabase
+  .from("noticias")
+  .select("id, titulo, subtitulo, img_url, fecha_publicacion, slug, categorias(nombre, slug)")
+  .eq("publicada", true)
+  .eq("destacada", true)
+  .order("fecha_publicacion", { ascending: false })
+  .limit(5);
+
+// ── Crónicas destacadas ────────────────────────────────────────────────────
+const { data: cronicasDestacadas } = await supabase
+  .from("cronicas")
+  .select(`
+    id, titulo, img_url, destacada,
+    partidos (id, rival, fecha, equipos(categorias(nombre, slug)))
+  `)
+  .eq("publicada", true)
+  .eq("destacada", true)
+  .order("created_at", { ascending: false })
+  .limit(5);
+
+// Unificar y ordenar slider (máx 5)
+const slider = [
+  ...(noticiasDestacadas ?? []).map(n => ({
+    id: n.id,
+    tipo: "noticia",
+    titulo: n.titulo,
+    subtitulo: n.subtitulo,
+    img_url: n.img_url,
+    fecha: n.fecha_publicacion,
+    slug: n.slug,
+    categoria: n.categorias,
+  })),
+  ...(cronicasDestacadas ?? []).map(c => ({
+    id: c.id,
+    tipo: "cronica",
+    titulo: c.titulo ?? `Crónica vs ${c.partidos?.rival}`,
+    subtitulo: null,
+    img_url: c.img_url,
+    fecha: c.partidos?.fecha,
+    slug: null,
+    categoria: c.partidos?.equipos?.categorias,
+    partido_id: c.partidos?.id,
+  })),
+].sort((a, b) => new Date(b.fecha ?? 0) - new Date(a.fecha ?? 0)).slice(0, 5);
+
+// ── Grid de noticias (10 más recientes, no destacadas o todas) ─────────────
+const { data: noticiasGrid } = await supabase
+  .from("noticias")
+  .select("id, titulo, subtitulo, img_url, fecha_publicacion, slug, categorias(nombre, slug)")
+  .eq("publicada", true)
+  .order("fecha_publicacion", { ascending: false })
+  .limit(10);
+
+const { data: cronicasGrid } = await supabase
+  .from("cronicas")
+  .select(`
+    id, titulo, img_url,
+    partidos (id, rival, fecha, equipos(categorias(nombre, slug)))
+  `)
+  .eq("publicada", true)
+  .order("created_at", { ascending: false })
+  .limit(10);
+
+const grid = [
+  ...(noticiasGrid ?? []).map(n => ({
+    id: n.id, tipo: "noticia",
+    titulo: n.titulo, subtitulo: n.subtitulo,
+    img_url: n.img_url, fecha: n.fecha_publicacion,
+    href: urlNoticia(n), categoria: n.categorias,
+  })),
+  ...(cronicasGrid ?? []).map(c => ({
+    id: c.id, tipo: "cronica",
+    titulo: c.titulo ?? `Crónica vs ${c.partidos?.rival}`,
+    subtitulo: null, img_url: c.img_url,
+    fecha: c.partidos?.fecha,
+    href: `/partidos/${c.partidos?.id}`,
+    categoria: c.partidos?.equipos?.categorias,
+  })),
+].sort((a, b) => new Date(b.fecha ?? 0) - new Date(a.fecha ?? 0)).slice(0, 10);
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+// urlNoticia — para el grid
+function urlNoticia(n) {
+  if (!n.fecha_publicacion || !n.slug) return `/noticias/${n.id}`;
+  const d   = new Date(n.fecha_publicacion);
+  const y   = d.getFullYear();
+  const m   = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `/noticias/${y}/${m}/${day}/${n.slug}`;
+}
+
+// sliderHref — para el slider
+function sliderHref(item) {
+  if (item.tipo === "cronica") return `/partidos/${item.partido_id}`;
+  if (item.slug && item.fecha) {
+    const d   = new Date(item.fecha);
+    const y   = d.getFullYear();
+    const m   = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `/noticias/${y}/${m}/${day}/${item.slug}`;
+  }
+  return `/noticias/${item.id}`;
+}
+
+function formatFechaCorta(f) {
+  if (!f) return "";
+  const [y, m, d] = (f.toString()).split("T")[0].split("-");
+  const meses = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+  return `${parseInt(d)} ${meses[parseInt(m)-1]} ${y}`;
+}
 
 function nombreRival(p) {
   return p.equipos_rivales?.nombre_equipo ?? p.rival;
@@ -54,274 +159,440 @@ function etiquetaJornada(p) {
   if (p.ronda && p.ronda !== "Amistoso") return p.ronda;
   return "Amistoso";
 }
-function formatFecha(f) {
-  if (!f) return "";
-  return new Date(f).toLocaleDateString("es-ES", {
-    day: "numeric",
-    month: "short",
-  });
-}
 ---
 
 <Layout titulo="Inicio | CB Jaca">
-  <!-- Hero -->
+
+  <!-- ══ HERO CON SLIDER ══ -->
   <div class="hero">
     <div class="hero-deco"></div>
-    <p class="hero-tag">Bienvenido</p>
-    <h1>Club Baloncesto <span class="naranja">Jaca</span></h1>
-    <p class="hero-sub">Temporada 2025-26</p>
+
+    {slider.length === 0 ? (
+      <!-- Hero estático si no hay noticias destacadas -->
+      <div class="hero-static">
+        <p class="hero-tag">Bienvenido</p>
+        <h1>Club Baloncesto <span class="naranja">Jaca</span></h1>
+        <p class="hero-sub">Temporada 2025-26</p>
+      </div>
+    ) : (
+      <!-- Slider -->
+      <div class="slider" id="slider">
+        <ul class="slides" data-slides>
+          {slider.map((item, i) => (
+            <li class:list={["slide", i === 1 ? "center" : i === 0 ? "left" : i === 2 ? "right" : ""]}
+              data-index={i}>
+              {item.img_url && (
+                <div class="slide-bg" style={`background-image:url(${item.img_url})`} />
+              )}
+              <a href={sliderHref(item)} class="slide-content">
+                {item.img_url && (
+                  <img src={item.img_url} alt={item.titulo} class="slide-img" />
+                )}
+                <div class="slide-info">
+                  <div class="slide-meta">
+                    {item.tipo === "cronica" && (
+                      <span class="slide-badge cronica">Crónica</span>
+                    )}
+                    {item.categoria && (
+                      <span class="slide-badge categoria">{item.categoria.nombre}</span>
+                    )}
+                    <span class="slide-fecha">{formatFechaCorta(item.fecha)}</span>
+                  </div>
+                  <h2 class="slide-titulo">{item.titulo}</h2>
+                  {item.subtitulo && (
+                    <p class="slide-subtitulo">{item.subtitulo}</p>
+                  )}
+                </div>
+              </a>
+            </li>
+          ))}
+        </ul>
+        {slider.length > 1 && (
+          <>
+            <button class="carousel-btn prev" id="slider-prev" aria-label="Anterior">&#8592;</button>
+            <button class="carousel-btn next" id="slider-next" aria-label="Siguiente">&#8594;</button>
+          </>
+        )}
+      </div>
+    )}
   </div>
 
   <div class="contenido">
-    <!-- Equipos -->
+
+    <!-- ══ GRID DE NOTICIAS ══ -->
+    {grid.length > 0 && (
+      <section class="seccion">
+        <h2 class="seccion-titulo">Últimas noticias</h2>
+        <div class="noticias-grid">
+          {grid.map((item) => (
+            <a href={item.href} class="noticia-card">
+              {item.img_url ? (
+                <div class="noticia-img-wrap">
+                  <img src={item.img_url} alt={item.titulo} class="noticia-img" />
+                  {item.tipo === "cronica" && (
+                    <span class="noticia-badge">Crónica</span>
+                  )}
+                </div>
+              ) : (
+                <div class="noticia-img-placeholder">
+                  {item.tipo === "cronica" ? "📋" : "📰"}
+                </div>
+              )}
+              <div class="noticia-body">
+                {item.categoria && (
+                  <span class="noticia-cat">{item.categoria.nombre}</span>
+                )}
+                <h3 class="noticia-titulo">{item.titulo}</h3>
+                {item.subtitulo && (
+                  <p class="noticia-sub">{item.subtitulo}</p>
+                )}
+                <span class="noticia-fecha">{formatFechaCorta(item.fecha)}</span>
+              </div>
+            </a>
+          ))}
+        </div>
+        <div class="ver-mas-wrap">
+          <a href="/noticias" class="ver-mas">Ver todas las noticias →</a>
+        </div>
+      </section>
+    )}
+
+    <!-- ══ EQUIPOS ══ -->
     <section class="seccion">
       <h2 class="seccion-titulo">Equipos</h2>
       <div class="equipos-grid">
-        {
-          equipos.map((e) => {
-            const temporadaSlug = e.temporadas?.nombre ?? null;
-            const categoriaSlug = e.categorias?.slug ?? null;
-            const href =
-              temporadaSlug && categoriaSlug
-                ? `/equipos/${categoriaSlug}/${temporadaSlug}`
-                : null;
-            const nombrePublico = e.sponsor
-              ? `${e.sponsor} CB Jaca`
-              : `CB Jaca ${e.categorias?.nombre ?? ""}`;
-
-            return href ? (
-              <a href={href} class="equipo-card">
-                <div class="equipo-nombre">{nombrePublico}</div>
-                <div class="equipo-cat">{e.categorias?.nombre}</div>
-                <span class="equipo-temp">{e.temporadas?.nombre}</span>
-              </a>
-            ) : (
-              <div class="equipo-card equipo-card--inactivo">
-                <div class="equipo-nombre">{nombrePublico}</div>
-                <div class="equipo-cat">{e.categorias?.nombre}</div>
-              </div>
-            );
-          })
-        }
+        {equipos.map((e) => {
+          const temporadaSlug = e.temporadas?.nombre ?? null;
+          const categoriaSlug = e.categorias?.slug ?? null;
+          const href = temporadaSlug && categoriaSlug
+            ? `/equipos/${categoriaSlug}/${temporadaSlug}`
+            : null;
+          const nombrePublico = e.sponsor
+            ? `${e.sponsor} CB Jaca`
+            : `CB Jaca ${e.categorias?.nombre ?? ""}`;
+          return href ? (
+            <a href={href} class="equipo-card">
+              <div class="equipo-nombre">{nombrePublico}</div>
+              <div class="equipo-cat">{e.categorias?.nombre}</div>
+              <span class="equipo-temp">{e.temporadas?.nombre}</span>
+            </a>
+          ) : (
+            <div class="equipo-card equipo-card--inactivo">
+              <div class="equipo-nombre">{nombrePublico}</div>
+              <div class="equipo-cat">{e.categorias?.nombre}</div>
+            </div>
+          );
+        })}
       </div>
     </section>
 
-    <!-- Últimos resultados -->
+    <!-- ══ ÚLTIMOS RESULTADOS ══ -->
     <section class="seccion">
       <h2 class="seccion-titulo">Últimos resultados</h2>
-      {
-        !partidos || partidos.length === 0 ? (
-          <p class="vacio">No hay partidos registrados aún.</p>
-        ) : (
-          <div class="partidos-lista">
-            {partidos.map((p) => {
-              const victoria = p.puntos_favor > p.puntos_contra;
-              const nombreEquipo = p.equipos?.sponsor
-                ? `${p.equipos.sponsor} CB Jaca`
-                : `CB Jaca ${p.equipos?.categorias?.nombre ?? ""}`;
-
-              return (
-                <a
-                  href={`/partidos/${p.id}`}
-                  class:list={[
-                    "partido-card",
-                    victoria ? "victoria" : "derrota",
-                  ]}
-                >
-                  <div class="partido-info">
-                    <div class="partido-rival">
-                      {p.es_local ? "vs" : "@"} {nombreRival(p)}
-                    </div>
-                    <div class="partido-meta">
-                      <span class="partido-equipo">{nombreEquipo}</span>
-                      <span>·</span>
-                      <span>{etiquetaJornada(p)}</span>
-                      <span>·</span>
-                      <span>{formatFecha(p.fecha)}</span>
-                    </div>
+      {!partidos || partidos.length === 0 ? (
+        <p class="vacio">No hay partidos registrados aún.</p>
+      ) : (
+        <div class="partidos-lista">
+          {partidos.map((p) => {
+            const victoria = p.puntos_favor > p.puntos_contra;
+            const nombreEquipo = p.equipos?.sponsor
+              ? `${p.equipos.sponsor} CB Jaca`
+              : `CB Jaca ${p.equipos?.categorias?.nombre ?? ""}`;
+            return (
+              <a href={`/partidos/${p.id}`}
+                class:list={["partido-card", victoria ? "victoria" : "derrota"]}>
+                <div class="partido-info">
+                  <div class="partido-rival">{p.es_local ? "vs" : "@"} {nombreRival(p)}</div>
+                  <div class="partido-meta">
+                    <span class="partido-equipo">{nombreEquipo}</span>
+                    <span>·</span>
+                    <span>{etiquetaJornada(p)}</span>
+                    <span>·</span>
+                    <span>{formatFechaCorta(p.fecha)}</span>
                   </div>
-                  <div
-                    class:list={["marcador", victoria ? "victoria" : "derrota"]}
-                  >
-                    {p.puntos_favor} – {p.puntos_contra}
-                  </div>
-                </a>
-              );
-            })}
-          </div>
-        )
-      }
+                </div>
+                <div class:list={["marcador", victoria ? "victoria" : "derrota"]}>
+                  {p.puntos_favor} – {p.puntos_contra}
+                </div>
+              </a>
+            );
+          })}
+        </div>
+      )}
     </section>
+
   </div>
 </Layout>
 
+<!-- ══ JS SLIDER ══ -->
+<script>
+  function initSlider() {
+    const slides = Array.from(document.querySelectorAll(".slide"));
+    if (slides.length === 0) return;
+
+    let indices = slides.length === 1 ? [0, 0, 0]
+      : slides.length === 2 ? [1, 0, 1]
+      : [slides.length - 1, 0, 1];
+
+    function updateSlides() {
+      slides.forEach(s => s.classList.remove("left", "center", "right"));
+      slides[indices[0] % slides.length]?.classList.add("left");
+      slides[indices[1] % slides.length]?.classList.add("center");
+      slides[indices[2] % slides.length]?.classList.add("right");
+    }
+
+    updateSlides();
+
+    let timer = setInterval(next, 6000);
+
+    function next() {
+      indices = indices.map(i => (i + 1) % slides.length);
+      updateSlides();
+    }
+    function prev() {
+      indices = indices.map(i => (i - 1 + slides.length) % slides.length);
+      updateSlides();
+    }
+    function reset() { clearInterval(timer); timer = setInterval(next, 6000); }
+
+    document.getElementById("slider-prev")?.addEventListener("click", () => { prev(); reset(); });
+    document.getElementById("slider-next")?.addEventListener("click", () => { next(); reset(); });
+  }
+
+  initSlider();
+  document.addEventListener("astro:page-load", initSlider);
+</script>
+
 <style>
-  /* Hero */
+  /* ══ HERO / SLIDER ══ */
   .hero {
-    background: var(--bg-clr-2, #0f172a);
-    padding: 4rem 2rem 3rem;
-    position: relative;
-    overflow: hidden;
-    color: white;
+    position: relative; background: #0f172a;
+    overflow: hidden; color: white;
   }
   .hero-deco {
-    position: absolute;
-    right: -40px;
-    top: -40px;
-    width: 220px;
-    height: 220px;
-    border-radius: 50%;
-    background: var(--orange, #f97316);
-    opacity: 0.07;
+    position: absolute; right: -40px; top: -40px;
+    width: 220px; height: 220px; border-radius: 50%;
+    background: var(--orange, #f97316); opacity: 0.07; z-index: 0;
+  }
+  .hero-static {
+    padding: 4rem 2rem 3rem; z-index: 1;
+    display: flex; flex-direction: column; justify-content: flex-end;
+    min-height: 320px;
   }
   .hero-tag {
-    font-size: 0.75rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--orange, #f97316);
-    margin-bottom: 0.5rem;
+    font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--orange, #f97316); margin-bottom: 0.5rem;
   }
-  h1 {
-    font-size: clamp(1.8rem, 5vw, 3rem);
-    font-weight: 800;
-    margin-bottom: 0.4rem;
+  h1 { font-size: clamp(1.8rem, 5vw, 3rem); font-weight: 800; margin-bottom: 0.4rem; }
+  .naranja { color: var(--orange, #f97316); }
+  .hero-sub { font-size: 0.95rem; color: rgba(255,255,255,0.5); }
+
+  /* ── Coverflow Slider ── */
+  .slider {
+    padding: 2rem 0 3rem;
+    width: 100%; min-height: 420px;
+    position: relative;
+    overflow: hidden;
+    display: flex; align-items: center;
   }
-  .naranja {
-    color: var(--orange, #f97316);
+  .slides {
+    display: flex; justify-content: center; align-items: center;
+    position: relative; width: 100%; height: 380px;
+    list-style: none; margin: 0; padding: 0;
   }
-  .hero-sub {
-    font-size: 0.95rem;
-    color: rgba(255, 255, 255, 0.5);
+  .slide {
+    position: absolute;
+    width: 65%; height: 100%;
+    border-radius: 1rem; overflow: hidden;
+    transition: transform .6s cubic-bezier(.4,0,.2,1), opacity .6s ease, z-index 0s;
+    transform-origin: center;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+  }
+  .slide-bg {
+    position: absolute; inset: 0;
+    background-size: cover; background-position: center;
+    filter: blur(20px); transform: scale(1.2); z-index: 0;
+    background-color: #1e293b;
+  }
+  .slide-content {
+    position: relative; z-index: 1;
+    display: flex; flex-direction: column;
+    justify-content: flex-end; align-items: flex-start;
+    height: 100%; width: 100%;
+    text-decoration: none; color: white;
+    background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 60%, transparent 100%);
+    box-sizing: border-box;
+  }
+  .slide-img {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; z-index: 0;
+  }
+  .slide-info {
+    position: relative; z-index: 1; padding: 1.5rem;
+  }
+  .slide-meta {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 0.6rem; flex-wrap: wrap;
+  }
+  .slide-badge {
+    font-size: 0.65rem; font-weight: 800; text-transform: uppercase;
+    letter-spacing: .07em; padding: 3px 8px; border-radius: 4px;
+  }
+  .slide-badge.cronica { background: rgba(99,102,241,0.85); color: white; }
+  .slide-badge.categoria { background: rgba(249,115,22,0.9); color: white; }
+  .slide-fecha { font-size: 0.75rem; color: rgba(255,255,255,0.6); }
+  .slide-titulo {
+    font-size: clamp(1.1rem, 2.5vw, 1.6rem); font-weight: 800;
+    line-height: 1.25; margin: 0 0 0.4rem;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  }
+  .slide-subtitulo {
+    font-size: 0.85rem; color: rgba(255,255,255,0.75); margin: 0;
+    display: -webkit-box; -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical; overflow: hidden;
   }
 
-  /* Layout */
+  /* Posiciones coverflow */
+  .slide.left {
+    transform: translateX(-52%) scale(0.82);
+    z-index: 1; opacity: 0.7;
+    pointer-events: none;
+  }
+  .slide.center {
+    transform: translateX(0) scale(1);
+    z-index: 3; opacity: 1;
+    pointer-events: auto;
+  }
+  .slide.right {
+    transform: translateX(52%) scale(0.82);
+    z-index: 1; opacity: 0.7;
+    pointer-events: none;
+  }
+  /* Slides sin posición: ocultas */
+  .slide:not(.left):not(.center):not(.right) {
+    opacity: 0; pointer-events: none; z-index: 0;
+    transform: translateX(0) scale(0.6);
+  }
+
+  /* Botones */
+  .carousel-btn {
+    position: absolute; z-index: 5;
+    border: 2px solid rgba(255,255,255,0.3);
+    background: rgba(0,0,0,0.3);
+    color: white; font-size: 1.4rem;
+    width: 40px; height: 40px; border-radius: 50%;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: background .2s, border-color .2s;
+    backdrop-filter: blur(4px);
+    top: 50%; transform: translateY(-50%);
+  }
+  .carousel-btn:hover { background: rgba(249,115,22,0.7); border-color: var(--orange, #f97316); }
+  .carousel-btn.prev { left: 1rem; }
+  .carousel-btn.next { right: 1rem; }
+
+  /* ══ CONTENIDO ══ */
   .contenido {
-    max-width: 900px;
-    margin: 0 auto;
-    padding: 3rem 2rem;
-    display: flex;
-    flex-direction: column;
-    gap: 3rem;
+    max-width: 900px; margin: 0 auto;
+    padding: 3rem 2rem; display: flex; flex-direction: column; gap: 3rem;
   }
   .seccion-titulo {
-    font-size: 0.72rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--orange, #f97316);
-    margin-bottom: 1rem;
+    font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--orange, #f97316); margin-bottom: 1rem;
   }
-  .vacio {
-    color: var(--muted, #64748b);
-    font-size: 0.9rem;
-  }
+  .vacio { color: var(--muted, #64748b); font-size: 0.9rem; }
 
-  /* Equipos */
-  .equipos-grid {
+  /* ── Grid noticias ── */
+  .noticias-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1rem;
+  }
+  .noticia-card {
+    display: flex; flex-direction: column;
+    background: var(--card, #1e293b);
+    border: 1px solid var(--borde, rgba(255,255,255,0.08));
+    border-radius: 12px; overflow: hidden;
+    text-decoration: none; color: inherit;
+    transition: border-color .2s, transform .15s;
+  }
+  .noticia-card:hover { border-color: var(--orange, #f97316); transform: translateY(-2px); }
+
+  .noticia-img-wrap { position: relative; aspect-ratio: 16/9; overflow: hidden; }
+  .noticia-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .noticia-badge {
+    position: absolute; top: 8px; left: 8px;
+    font-size: 0.6rem; font-weight: 800; text-transform: uppercase;
+    letter-spacing: .06em; padding: 2px 7px; border-radius: 4px;
+    background: rgba(99,102,241,0.85); color: white;
+  }
+  .noticia-img-placeholder {
+    aspect-ratio: 16/9; background: rgba(255,255,255,0.04);
+    display: flex; align-items: center; justify-content: center; font-size: 2rem;
+  }
+  .noticia-body { padding: 0.9rem 1rem; display: flex; flex-direction: column; gap: 0.3rem; flex: 1; }
+  .noticia-cat {
+    font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .07em; color: var(--orange, #f97316);
+  }
+  .noticia-titulo { font-size: 0.88rem; font-weight: 700; line-height: 1.35; margin: 0; }
+  .noticia-sub {
+    font-size: 0.78rem; color: var(--muted, #64748b); margin: 0;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .noticia-fecha { font-size: 0.7rem; color: var(--muted, #64748b); margin-top: auto; padding-top: 0.4rem; }
+
+  .ver-mas-wrap { margin-top: 1rem; text-align: right; }
+  .ver-mas {
+    font-size: 0.8rem; font-weight: 700; color: var(--orange, #f97316);
+    text-decoration: none; letter-spacing: .03em;
+  }
+  .ver-mas:hover { text-decoration: underline; }
+
+  /* ── Equipos ── */
+  .equipos-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.75rem;
   }
   .equipo-card {
-    padding: 1.1rem 1.2rem;
-    background: var(--card, #1e293b);
-    border: 1px solid var(--borde, rgba(255, 255, 255, 0.08));
-    border-radius: 10px;
-    text-decoration: none;
-    color: inherit;
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    transition:
-      border-color 0.2s,
-      transform 0.15s;
+    padding: 1.1rem 1.2rem; background: var(--card, #1e293b);
+    border: 1px solid var(--borde, rgba(255,255,255,0.08));
+    border-radius: 10px; text-decoration: none; color: inherit;
+    display: flex; flex-direction: column; gap: 0.25rem;
+    transition: border-color .2s, transform .15s;
   }
-  .equipo-card:hover {
-    border-color: var(--orange, #f97316);
-    transform: translateY(-2px);
-  }
-  .equipo-card--inactivo {
-    opacity: 0.4;
-    cursor: default;
-  }
-  .equipo-nombre {
-    font-weight: 700;
-    font-size: 0.88rem;
-  }
-  .equipo-cat {
-    font-size: 0.75rem;
-    color: var(--muted, #64748b);
-  }
-  .equipo-temp {
-    font-size: 0.68rem;
-    font-weight: 700;
-    color: var(--orange, #f97316);
-    margin-top: 0.25rem;
-  }
+  .equipo-card:hover { border-color: var(--orange, #f97316); transform: translateY(-2px); }
+  .equipo-card--inactivo { opacity: 0.4; cursor: default; }
+  .equipo-nombre { font-weight: 700; font-size: 0.88rem; }
+  .equipo-cat { font-size: 0.75rem; color: var(--muted, #64748b); }
+  .equipo-temp { font-size: 0.68rem; font-weight: 700; color: var(--orange, #f97316); margin-top: 0.25rem; }
 
-  /* Partidos */
-  .partidos-lista {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
+  /* ── Partidos ── */
+  .partidos-lista { display: flex; flex-direction: column; gap: 0.5rem; }
   .partido-card {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 0.9rem 1.1rem;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 1rem; padding: 0.9rem 1.1rem;
     background: var(--card, #1e293b);
-    border: 1px solid var(--borde, rgba(255, 255, 255, 0.08));
-    border-left: 3px solid transparent;
-    border-radius: 10px;
+    border: 1px solid var(--borde, rgba(255,255,255,0.08));
+    border-left: 3px solid transparent; border-radius: 10px;
+    text-decoration: none; color: inherit;
   }
-  .partido-card.victoria {
-    border-left-color: #22c55e;
-  }
-  .partido-card.derrota {
-    border-left-color: #3b82f6;
-  }
+  .partido-card.victoria { border-left-color: #22c55e; }
+  .partido-card.derrota  { border-left-color: #3b82f6; }
+  .partido-rival { font-weight: 700; font-size: 0.9rem; margin-bottom: 0.2rem; }
+  .partido-meta { display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; color: var(--muted, #64748b); }
+  .partido-equipo { color: var(--orange, #f97316); font-weight: 600; }
+  .marcador { font-size: 1.2rem; font-weight: 800; flex-shrink: 0; }
+  .marcador.victoria { color: #22c55e; }
+  .marcador.derrota  { color: #3b82f6; }
 
-  .partido-rival {
-    font-weight: 700;
-    font-size: 0.9rem;
-    margin-bottom: 0.2rem;
-  }
-  .partido-meta {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    font-size: 0.75rem;
-    color: var(--muted, #64748b);
-  }
-  .partido-equipo {
-    color: var(--orange, #f97316);
-    text-decoration: none;
-    font-weight: 600;
-  }
-  .marcador {
-    font-size: 1.2rem;
-    font-weight: 800;
-    flex-shrink: 0;
-  }
-  .marcador.victoria {
-    color: #22c55e;
-  }
-  .marcador.derrota {
-    color: #3b82f6;
-  }
-
+  /* ── Responsive ── */
   @media (max-width: 640px) {
-    .hero {
-      padding: 2.5rem 1rem 2rem;
-    }
-    .contenido {
-      padding: 2rem 1rem;
-    }
-    .equipos-grid {
-      grid-template-columns: 1fr 1fr;
-    }
+    .slides { height: 280px; }
+    .slide { width: 80%; }
+    .slide-info { padding: 1rem; }
+    .slide-titulo { font-size: 1rem; }
+    .carousel-btn { width: 32px; height: 32px; font-size: 1rem; }
+    .contenido { padding: 2rem 1rem; }
+    .equipos-grid { grid-template-columns: 1fr 1fr; }
+    .noticias-grid { grid-template-columns: 1fr; }
   }
 </style>
