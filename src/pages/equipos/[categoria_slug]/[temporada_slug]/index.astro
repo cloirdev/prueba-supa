@@ -53,7 +53,7 @@ const { data: equipos } = await supabase
 // ── Plantilla ──────────────────────────────────────────────────────────────
 const { data: convocatorias } = await supabase
   .from("convocatorias_temporada")
-  .select(`dorsal, equipo_id, jugadores(id, nombre, apellido, posicion)`)
+  .select(`dorsal, equipo_id, jugadores(*)`)
   .in("equipo_id", equipoIds)
   .order("dorsal", { ascending: true });
 
@@ -148,6 +148,24 @@ function etiquetaJornada(p) {
   if (p.ronda && p.ronda !== "Amistoso") return p.ronda;
   return "Amistoso";
 }
+function fotoJugador(jugador, preferida = "accion") {
+  const accionFields = [
+    "foto_accion_url",
+    "foto_dinamica_url",
+    "foto_juego_url",
+    "foto_url",
+    "imagen_url",
+  ];
+  const seriaFields = [
+    "foto_dni_url",
+    "foto_seria_url",
+    "foto_perfil_url",
+  ];
+  const prioridad = preferida === "seria"
+    ? [...seriaFields, ...accionFields]
+    : [...accionFields, ...seriaFields];
+  return prioridad.map((field) => jugador?.[field]).find(Boolean) ?? null;
+}
 const posicionLabel = {
   base: "Base", escolta: "Escolta", alero: "Alero",
   ala_pivot: "Ala-Pívot", pivot: "Pívot",
@@ -216,15 +234,40 @@ const posicionLabel = {
               <p class="vacio">Sin jugadores registrados.</p>
             ) : (
               <div class="plantilla-grid">
-                {plantilla.map((c) => (
-                  <a href={`/jugadores/${c.jugadores?.id}`} class="jugador-card">
-                    <span class="dorsal">{c.dorsal ?? "—"}</span>
-                    <div class="jugador-info">
-                      <span class="jugador-nombre">{c.jugadores?.nombre} {c.jugadores?.apellido}</span>
-                      <span class="jugador-posicion">{posicionLabel[c.jugadores?.posicion] ?? c.jugadores?.posicion ?? "—"}</span>
-                    </div>
-                  </a>
-                ))}
+                {plantilla.map((c) => {
+                  const foto = fotoJugador(c.jugadores, "accion");
+                  const posicion =
+                    posicionLabel[c.jugadores?.posicion] ??
+                    c.jugadores?.posicion ??
+                    "—";
+                  return (
+                    <a href={`/jugadores/${c.jugadores?.id}`} class="jugador-card">
+                      {foto ? (
+  <img
+    src={foto}
+    alt={`Foto de ${c.jugadores?.nombre ?? ""} ${c.jugadores?.apellido ?? ""}`}
+    class="jugador-img"
+    loading="lazy"
+  />
+) : (
+  /* Si no hay foto, cargamos el SVG desde la carpeta public */
+  <img 
+    src="/avatar.svg" 
+    alt="Avatar por defecto" 
+    class="jugador-img avatar-placeholder" 
+  />
+)}
+                      <div class="card-content">
+                        <span class="dorsal-pill">{c.dorsal ?? "—"}</span>
+                        <h3>
+                          <span class="nombre">{c.jugadores?.nombre}</span>
+                          <span class="apellido">{c.jugadores?.apellido}</span>
+                        </h3>
+                        <span class="position">{posicion}</span>
+                      </div>
+                    </a>
+                  );
+                })}
               </div>
             )}
           </section>
@@ -381,7 +424,6 @@ const posicionLabel = {
                                       </span>
                                     </td>
                                     <td class="col-nombre">
-                                      {esMiEquipo && <span class="nosotros-badge">▶</span>}
                                       <span class:list={[esMiEquipo && "nombre-destacado"]}>{nombre}</span>
                                     </td>
                                     <td>{c?.partidos_jugados ?? 0}</td>
@@ -503,7 +545,8 @@ const posicionLabel = {
   }
   .seccion { padding: 3rem 2rem; max-width: 900px; margin: 0 auto; }
   .seccion-alt {
-    max-width: 100%; background: var(--bg-clr-2, #0f172a); padding: 3rem 2rem;
+    max-width: 100%;
+    padding: 3rem 2rem;
   }
   .seccion-alt > * { max-width: 900px; margin-left: auto; margin-right: auto; }
   .seccion-titulo { font-size: 1.4rem; font-weight: 800; margin-bottom: 1.5rem; }
@@ -515,24 +558,128 @@ const posicionLabel = {
 
   /* ── Plantilla ── */
   .plantilla-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 0.6rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.9rem;
   }
   .jugador-card {
-    display: flex; align-items: center; gap: 0.85rem;
-    padding: 0.75rem 1rem; background: var(--card, #1e293b);
-    border: 1px solid var(--borde, rgba(255,255,255,0.07));
-    border-radius: 10px; text-decoration: none; color: inherit;
-    transition: border-color 0.2s, transform 0.15s;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    width: 100%;
+    min-height: 500px;
+    padding-bottom: 1rem;
+    background-image: linear-gradient(
+      180deg,
+      var(--myColor1) 50%,
+      var(--myColor2)
+    );
+    --myColor1: transparent;
+    --myColor2: #ff6c0e;
+    transition: --myColor1 0.3s, --myColor2 0.3s, transform 0.2s ease;
+    border-radius: 1rem;
+    color: white;
+    text-decoration: none;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.08);
   }
-  .jugador-card:hover { border-color: var(--orange, #f97316); transform: translateY(-2px); }
-  .dorsal {
-    width: 34px; height: 34px; border-radius: 50%;
-    background: var(--orange, #f97316); color: white; font-weight: 800;
-    font-size: 0.8rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  .jugador-card:hover {
+    --myColor1: var(--orange, #f97316);
+    --myColor2: var(--orange, #f97316);
+    transform: translateY(-3px);
   }
-  .jugador-info { display: flex; flex-direction: column; gap: 0.1rem; }
-  .jugador-nombre { font-weight: 700; font-size: 0.88rem; }
-  .jugador-posicion { font-size: 0.72rem; color: var(--muted, #64748b); }
+  @property --myColor1 {
+    syntax: "<color>";
+    initial-value: transparent;
+    inherits: false;
+  }
+  @property --myColor2 {
+    syntax: "<color>";
+    initial-value: #ff6c0e;
+    inherits: false;
+  }
+  .jugador-card:hover .jugador-img {
+    transform: scale(1.05) translate(-50%, -50%);
+  }
+  .jugador-img {
+    position: absolute;
+    object-fit: contain;
+    -webkit-mask-image: linear-gradient(180deg, black 30%, transparent 85%);
+    mask-image: linear-gradient(180deg, black 30%, transparent 85%);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    height: 100%;
+    width: 100%;
+    padding: 1rem;
+    transition: transform 0.3s ease-in-out;
+    z-index: 0;
+  }
+  .jugador-img-fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at 30% 20%, #fb923c, #ea580c 70%);
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  .jugador-img-fallback span {
+    font-size: 3rem;
+    font-weight: 900;
+    opacity: 0.7;
+  }
+  .card-content {
+    z-index: 2;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1rem;
+    gap: 0.2rem;
+  }
+  .dorsal-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 38px;
+    height: 28px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.16);
+    border: 1px solid rgba(255,255,255,0.25);
+    color: white;
+    font-weight: 800;
+    font-size: 0.85rem;
+    padding: 0 0.7rem;
+    margin-bottom: 0.45rem;
+    backdrop-filter: blur(3px);
+  }
+  .card-content h3 {
+    display: flex;
+    justify-content: center;
+    gap: 0.4rem;
+    text-align: center;
+    font-size: 1.2rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08rem;
+    margin: 0;
+    line-height: 1.1;
+  }
+  .nombre {
+    font-weight: 300;
+    opacity: 0.9;
+  }
+  .apellido {
+    font-weight: 600;
+  }
+  .position {
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    opacity: 0.95;
+  }
 
   /* ── Partidos ── */
   .partidos-columnas { display: flex; flex-direction: column; gap: 2.5rem; }
@@ -622,7 +769,7 @@ const posicionLabel = {
   .tabla-clasificacion td.col-dif.neg { color: #f6603b; }
 
   .tabla-clasificacion tr.mi-equipo {
-    background: rgba(249,115,22,0.06);
+    background: rgba(249,115,22,0.26);
   }
   .tabla-clasificacion tr.mi-equipo td { border-bottom-color: rgba(249,115,22,0.1); }
 
@@ -643,6 +790,9 @@ const posicionLabel = {
     .header-top { flex-direction: column; align-items: flex-start; }
     .tabs-nav { gap: 0; }
     .tab-btn { padding: 0.75rem 0.9rem; font-size: 0.75rem; }
+    .plantilla-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+    .jugador-card { min-height: 360px; }
+    .card-content h3 { font-size: 1rem; }
     .partido-vs { flex-wrap: wrap; }
     .rival-nombre { flex: unset; max-width: 120px; }
     .tabla-clasificacion th, .tabla-clasificacion td { padding: 8px 6px; font-size: 0.78rem; }

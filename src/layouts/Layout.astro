@@ -16,121 +16,125 @@ const { titulo } = Astro.props;
         <a href="/noticias">Noticias</a>
         <a href="/equipos">Equipos</a>
       </div>
-<button class="theme-btn" id="theme-btn" aria-label="Cambiar tema">
-  <svg id="sunmoon" width="40" height="40" viewBox="0 0 200 200">
-    <defs>
-      <mask id="hole">
-        <rect width="100%" height="100%" fill="white" />
-        <circle id="overlay" r="80" cx="230" cy="-30" fill="black" />
-      </mask>
-      <filter id="blur">
-        <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="white" />
-      </filter>
-    </defs>
-    <g filter="url(#blur)">
-      <circle
-        fill="white"
-        id="donut"
-        r="80"
-        cx="100"
-        cy="100"  
-        mask="url(#hole)"
-      />
-    </g>
-  </svg>
-</button>    </nav>
+      <button class="theme-btn" id="theme-btn" aria-label="Cambiar tema">
+        <svg id="sunmoon" width="40" height="40" viewBox="0 0 200 200">
+          <defs>
+            <mask id="hole">
+              <rect width="100%" height="100%" fill="white"></rect>
+              <circle id="overlay" r="80" cx="230" cy="-30" fill="black"
+              ></circle>
+            </mask>
+            <filter id="blur">
+              <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="white"
+              ></feDropShadow>
+            </filter>
+          </defs>
+          <g filter="url(#blur)">
+            <circle
+              fill="white"
+              id="donut"
+              r="80"
+              cx="100"
+              cy="100"
+              mask="url(#hole)"></circle>
+          </g>
+        </svg>
+      </button>
+    </nav>
     <main>
       <slot />
     </main>
   </body>
   <script>
-  const btn = document.getElementById("theme-btn");
-  const html = document.documentElement;
+    const btn = document.getElementById("theme-btn");
+    const html = document.documentElement;
 
-  // 1. Cargar tema guardado
-  const saved = localStorage.getItem("tema") || "light";
-  html.setAttribute("data-theme", saved);
+    // 1. Cargar tema guardado
+    const saved = localStorage.getItem("tema") || "light";
+    html.setAttribute("data-theme", saved);
 
-  // 2. Evento de clic
-  btn.addEventListener("click", () => {
-    const actual = html.getAttribute("data-theme");
-    const nuevo = actual === "dark" ? "light" : "dark";
-    
-    html.setAttribute("data-theme", nuevo);
-    localStorage.setItem("tema", nuevo);
-  });
-</script>
+    // 2. Evento de clic
+    btn.addEventListener("click", () => {
+      const actual = html.getAttribute("data-theme");
+      const nuevo = actual === "dark" ? "light" : "dark";
+
+      html.setAttribute("data-theme", nuevo);
+      localStorage.setItem("tema", nuevo);
+    });
+  </script>
 </html>
 
 <style is:global>
   /* Estilos para el botón contenedor */
-.theme-btn {
-  background: transparent; /* Fondo transparente */
-  border: none;             /* Sin bordes */
-  padding: 0;              /* Sin espaciado interno */
-  cursor: pointer;         /* Cursor de mano */
-  display: flex;           /* Para alinear el SVG perfectamente */
-  outline: none;           /* Quitar el recuadro de enfoque (puedes añadir uno customizado por accesibilidad) */
-}
+  .theme-btn {
+    background: transparent; /* Fondo transparente */
+    border: none; /* Sin bordes */
+    padding: 0; /* Sin espaciado interno */
+    cursor: pointer; /* Cursor de mano */
+    display: flex; /* Para alinear el SVG perfectamente */
+    outline: none; /* Quitar el recuadro de enfoque (puedes añadir uno customizado por accesibilidad) */
+  }
 
-/* Estilos para el SVG */
-#sunmoon {
-  width: 24px;             /* Tamaño del sol/luna */
-  height: 24px;
-  overflow: visible;      /* Crucial: permite que el brillo salga del recuadro del SVG */
-}
+  /* Estilos para el SVG */
+  #sunmoon {
+    width: 24px; /* Tamaño del sol/luna */
+    height: 24px;
+    overflow: visible; /* Crucial: permite que el brillo salga del recuadro del SVG */
+  }
 
-#overlay {
-  transition: cx 0.5s ease, cy 0.5s ease;
-}
+  #overlay {
+    transition:
+      cx 0.5s ease,
+      cy 0.5s ease;
+  }
 
-/* Animaciones de estado (igual que antes) */
-[data-theme="dark"] #overlay {
-  cx: 140px;
-  cy: 60px;
-}
+  /* Animaciones de estado (igual que antes) */
+  [data-theme="dark"] #overlay {
+    cx: 140px;
+    cy: 60px;
+  }
 
-[data-theme="light"] #overlay {
-  cx: 230px;
-  cy: -30px;
-}
+  [data-theme="light"] #overlay {
+    cx: 230px;
+    cy: -30px;
+  }
 
-.main-nav {
-  background: var(--azul-oscuro);
-  padding: 0 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 56px;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
+  .main-nav {
+    background: var(--azul-oscuro);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
 
-.nav-logo {
-  font-size: 16px;
-  font-weight: 800;
-  color: white;
-  letter-spacing: 0.5px;
-}
+  .nav-logo {
+    font-size: 16px;
+    font-weight: 800;
+    color: white;
+    letter-spacing: 0.5px;
+  }
 
-.nav-logo span {
-  color: var(--naranja);
-}
+  .nav-logo span {
+    color: var(--naranja);
+  }
 
-.nav-links {
-  display: flex;
-  gap: 24px;
-}
+  .nav-links {
+    display: flex;
+    gap: 24px;
+  }
 
-.nav-links a {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.7);
-  transition: color 0.2s;
-}
+  .nav-links a {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.7);
+    transition: color 0.2s;
+  }
 
-.nav-links a:hover,
-.nav-links a.active {
-  color: white;
-}
+  .nav-links a:hover,
+  .nav-links a.active {
+    color: white;
+  }
 </style>

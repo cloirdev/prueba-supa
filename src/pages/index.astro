@@ -165,7 +165,6 @@ function etiquetaJornada(p) {
 
   <!-- ══ HERO CON SLIDER ══ -->
   <div class="hero">
-    <div class="hero-deco"></div>
 
     {slider.length === 0 ? (
       <!-- Hero estático si no hay noticias destacadas -->
@@ -366,13 +365,8 @@ function etiquetaJornada(p) {
 <style>
   /* ══ HERO / SLIDER ══ */
   .hero {
-    position: relative; background: #0f172a;
+    position: relative;
     overflow: hidden; color: white;
-  }
-  .hero-deco {
-    position: absolute; right: -40px; top: -40px;
-    width: 220px; height: 220px; border-radius: 50%;
-    background: var(--orange, #f97316); opacity: 0.07; z-index: 0;
   }
   .hero-static {
     padding: 4rem 2rem 3rem; z-index: 1;

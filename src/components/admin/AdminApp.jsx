@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
 import "@/styles/admin.css";
 import AdminLogin from "./AdminLogin.jsx";
-// import AdminInicio from "./AdminInicio.jsx";
 import AdminEquipos from "./AdminEquipos.jsx";
 import AdminTemporadas from "./AdminTemporadas.jsx";
 import AdminPanel from "./AdminPanel.jsx";
@@ -19,13 +18,65 @@ const supabase = createClient(
   import.meta.env.PUBLIC_SUPABASE_ANON_KEY,
 );
 
+// ── Sidebar theme tokens ──────────────────────────────────────────────────────
+function sidebarTokens(tema) {
+  if (tema === "dark") {
+    return {
+      bg: "#0f172a",
+      border: "rgba(255,255,255,0.08)",
+      logoText: "white",
+      subtitle: "rgba(255,255,255,0.4)",
+      sectionLabel: "rgba(255,255,255,0.3)",
+      navText: "rgba(255,255,255,0.6)",
+      userEmail: "rgba(255,255,255,0.7)",
+      userRole: "rgba(255,255,255,0.3)",
+      logoutBg: "rgba(255,255,255,0.05)",
+      logoutColor: "rgba(255,255,255,0.5)",
+      collapseBtn: "rgba(255,255,255,0.15)",
+      collapseBtnHover: "rgba(255,255,255,0.25)",
+      collapseBtnColor: "rgba(255,255,255,0.6)",
+    };
+  }
+  return {
+    bg: "#f8fafc",
+    border: "rgba(0,0,0,0.08)",
+    logoText: "#0f172a",
+    subtitle: "rgba(0,0,0,0.4)",
+    sectionLabel: "rgba(0,0,0,0.35)",
+    navText: "rgba(0,0,0,0.55)",
+    userEmail: "rgba(0,0,0,0.75)",
+    userRole: "rgba(0,0,0,0.35)",
+    logoutBg: "rgba(0,0,0,0.05)",
+    logoutColor: "rgba(0,0,0,0.45)",
+    collapseBtn: "rgba(0,0,0,0.08)",
+    collapseBtnHover: "rgba(0,0,0,0.14)",
+    collapseBtnColor: "rgba(0,0,0,0.5)",
+  };
+}
+
 export default function AdminApp() {
   const [session, setSession] = useState(null);
   const [perfil, setPerfil] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [equipoActual, setEquipoActual] = useState(null);
   const [temporadaActual, setTemporadaActual] = useState(null);
-  const [vista, setVista] = useState("temporadas"); // ← empieza en temporadas
+  const [vista, setVista] = useState("temporadas");
+  const [tema, setTema] = useState(() => {
+    if (typeof window === "undefined") return "light";
+    return localStorage.getItem("tema") || "light";
+  });
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  const tk = sidebarTokens(tema);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", tema);
+    localStorage.setItem("tema", tema);
+  }, [tema]);
+
+  function toggleTema() {
+    setTema((t) => (t === "dark" ? "light" : "dark"));
+  }
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -72,6 +123,8 @@ export default function AdminApp() {
   const equipoLabel =
     equipoActual?.categorias?.nombre ?? equipoActual?.sponsor ?? "Equipo";
 
+  const sidebarW = sidebarCollapsed ? "56px" : "220px";
+
   return (
     <div
       style={{
@@ -80,102 +133,204 @@ export default function AdminApp() {
         fontFamily: "system-ui, sans-serif",
       }}
     >
-      {/* Sidebar */}
+      {/* ── Sidebar ─────────────────────────────────────────────────────── */}
       <div
         style={{
-          width: "220px",
-          background: "#0f172a",
+          width: sidebarW,
+          background: tk.bg,
           display: "flex",
           flexDirection: "column",
           flexShrink: 0,
+          overflow: "hidden",
+          transition: "width 0.25s ease",
+          borderRight: `0.5px solid ${tk.border}`,
         }}
       >
+        {/* Logo row */}
         <div
           style={{
-            padding: "20px 16px",
-            borderBottom: "0.5px solid rgba(255,255,255,0.08)",
+            padding: "0 12px",
+            borderBottom: `0.5px solid ${tk.border}`,
+            height: "56px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: sidebarCollapsed ? "center" : "space-between",
+            flexShrink: 0,
           }}
         >
-          <div style={{ fontSize: "15px", fontWeight: 800, color: "white" }}>
-            CB <span style={{ color: "#F97316" }}>Jaca</span>
-          </div>
-          <div
+          {!sidebarCollapsed && (
+            <div>
+              <div
+                style={{
+                  fontSize: "15px",
+                  fontWeight: 800,
+                  color: tk.logoText,
+                }}
+              >
+                CB <span style={{ color: "#F97316" }}>Jaca</span>
+              </div>
+              <div
+                style={{
+                  fontSize: "11px",
+                  color: tk.subtitle,
+                  marginTop: "2px",
+                }}
+              >
+                Panel de administración
+              </div>
+            </div>
+          )}
+
+          {/* Collapse toggle */}
+          <button
+            onClick={() => setSidebarCollapsed((c) => !c)}
+            title={sidebarCollapsed ? "Expandir menú" : "Colapsar menú"}
             style={{
-              fontSize: "11px",
-              color: "rgba(255,255,255,0.4)",
-              marginTop: "3px",
+              background: tk.collapseBtn,
+              border: "none",
+              borderRadius: "6px",
+              width: "28px",
+              height: "28px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: tk.collapseBtnColor,
+              flexShrink: 0,
+              transition: "background 0.15s",
             }}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.background = tk.collapseBtnHover)
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.background = tk.collapseBtn)
+            }
           >
-            Panel de administración
-          </div>
+            {/* chevron icon — flips direction */}
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 14 14"
+              fill="none"
+              style={{
+                transform: sidebarCollapsed ? "rotate(0deg)" : "rotate(180deg)",
+                transition: "transform 0.25s ease",
+              }}
+            >
+              <path
+                d="M9 3L5 7L9 11"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
         </div>
 
-        <NavSection label="General">
-          <NavItem
-            label="Inicio"
-            activa={vista === "temporadas"}
-            onClick={() => {
-              setEquipoActual(null);
-              setTemporadaActual(null);
-              setVista("temporadas");
-            }}
-          />
-        </NavSection>
-
-        {tieneEquipo && (
-          <NavSection label={equipoLabel}>
+        {/* Nav sections */}
+        <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
+          <NavSection label="General" collapsed={sidebarCollapsed} tk={tk}>
             <NavItem
-              label="Plantilla"
-              activa={vista === "plantilla"}
-              onClick={() => setVista("plantilla")}
-            />
-            <NavItem
-              label="Calendario"
-              activa={vista === "calendario"}
-              onClick={() => setVista("calendario")}
-            />
-            <NavItem
-              label="Clasificación"
-              activa={vista === "clasificacion"}
-              onClick={() => setVista("clasificacion")}
-            />
-            <NavItem
-              label="Noticias"
-              activa={vista === "noticias"}
-              onClick={() => setVista("noticias")}
+              label="Inicio"
+              icon="⌂"
+              activa={vista === "temporadas"}
+              collapsed={sidebarCollapsed}
+              onClick={() => {
+                setEquipoActual(null);
+                setTemporadaActual(null);
+                setVista("temporadas");
+              }}
             />
           </NavSection>
-        )}
 
-        {perfil?.rol === "admin" && (
-          <NavSection label="Admin">
-            <NavItem
-              label="Jugadores"
-              activa={vista === "jugadores"}
-              onClick={() => setVista("jugadores")}
-            />
-            <NavItem
-              label="Entrenadores"
-              activa={vista === "entrenadores"}
-              onClick={() => setVista("entrenadores")}
-            />
-            <NavItem
-              label="Nuevo equipo"
-              activa={vista === "nuevoEquipo"}
-              onClick={() => setVista("nuevoEquipo")}
-            />
-          </NavSection>
-        )}
+          {tieneEquipo && (
+            <NavSection
+              label={equipoLabel}
+              collapsed={sidebarCollapsed}
+              tk={tk}
+            >
+              <NavItem
+                label="Plantilla"
+                icon="👥"
+                activa={vista === "plantilla"}
+                collapsed={sidebarCollapsed}
+                onClick={() => setVista("plantilla")}
+              />
+              <NavItem
+                label="Calendario"
+                icon="📅"
+                activa={vista === "calendario"}
+                collapsed={sidebarCollapsed}
+                onClick={() => setVista("calendario")}
+              />
+              <NavItem
+                label="Clasificación"
+                icon="🏆"
+                activa={vista === "clasificacion"}
+                collapsed={sidebarCollapsed}
+                onClick={() => setVista("clasificacion")}
+              />
+              <NavItem
+                label="Noticias"
+                icon="📰"
+                activa={vista === "noticias"}
+                collapsed={sidebarCollapsed}
+                onClick={() => setVista("noticias")}
+              />
+            </NavSection>
+          )}
 
+          {perfil?.rol === "admin" && (
+            <NavSection label="Admin" collapsed={sidebarCollapsed} tk={tk}>
+              <NavItem
+                label="Jugadores"
+                icon="🏅"
+                activa={vista === "jugadores"}
+                collapsed={sidebarCollapsed}
+                onClick={() => setVista("jugadores")}
+              />
+              <NavItem
+                label="Entrenadores"
+                icon="📋"
+                activa={vista === "entrenadores"}
+                collapsed={sidebarCollapsed}
+                onClick={() => setVista("entrenadores")}
+              />
+              <NavItem
+                label="Nuevo equipo"
+                icon="➕"
+                activa={vista === "nuevoEquipo"}
+                collapsed={sidebarCollapsed}
+                onClick={() => setVista("nuevoEquipo")}
+              />
+            </NavSection>
+          )}
+        </div>
+
+        {/* Footer: user + theme toggle + logout */}
         <div
           style={{
-            marginTop: "auto",
-            padding: "16px",
-            borderTop: "0.5px solid rgba(255,255,255,0.08)",
+            padding: sidebarCollapsed ? "12px 0" : "16px",
+            borderTop: `0.5px solid ${tk.border}`,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: sidebarCollapsed ? "center" : "stretch",
+            gap: "8px",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          {/* Avatar + info row */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: sidebarCollapsed ? 0 : "8px",
+              justifyContent: sidebarCollapsed ? "center" : "flex-start",
+            }}
+          >
+            {/* Avatar */}
             <div
+              title={perfil?.nombre ?? session.user.email}
               style={{
                 width: "28px",
                 height: "28px",
@@ -192,35 +347,175 @@ export default function AdminApp() {
             >
               {session.user.email[0].toUpperCase()}
             </div>
-            <div>
-              <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.7)" }}>
-                {perfil?.nombre ?? session.user.email}
-              </div>
-              <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.3)" }}>
-                {perfil?.rol}
-              </div>
-            </div>
+
+            {!sidebarCollapsed && (
+              <>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: tk.userEmail,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {perfil?.nombre ?? session.user.email}
+                  </div>
+                  <div style={{ fontSize: "10px", color: tk.userRole }}>
+                    {perfil?.rol}
+                  </div>
+                </div>
+
+                {/* Theme toggle — only visible when expanded */}
+                <button
+                  onClick={toggleTema}
+                  aria-label="Cambiar tema"
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    padding: 0,
+                    cursor: "pointer",
+                    display: "flex",
+                    flexShrink: 0,
+                  }}
+                >
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 200 200"
+                    style={{ overflow: "visible" }}
+                  >
+                    <defs>
+                      <mask id="hole-admin">
+                        <rect width="100%" height="100%" fill="white" />
+                        <circle
+                          r="80"
+                          cx={tema === "dark" ? 140 : 230}
+                          cy={tema === "dark" ? 60 : -30}
+                          fill="black"
+                          style={{ transition: "cx 0.5s ease, cy 0.5s ease" }}
+                        />
+                      </mask>
+                      <filter id="blur-admin">
+                        <feDropShadow
+                          dx="0"
+                          dy="0"
+                          stdDeviation="8"
+                          floodColor={tema === "dark" ? "white" : "#334155"}
+                        />
+                      </filter>
+                    </defs>
+                    <g filter="url(#blur-admin)">
+                      <circle
+                        fill={tema === "dark" ? "white" : "#334155"}
+                        r="80"
+                        cx="100"
+                        cy="100"
+                        mask="url(#hole-admin)"
+                      />
+                    </g>
+                  </svg>
+                </button>
+              </>
+            )}
           </div>
-          <button
-            onClick={logout}
-            style={{
-              marginTop: "10px",
-              width: "100%",
-              background: "rgba(255,255,255,0.05)",
-              border: "none",
-              color: "rgba(255,255,255,0.5)",
-              padding: "7px",
-              borderRadius: "8px",
-              cursor: "pointer",
-              fontSize: "12px",
-            }}
-          >
-            Cerrar sesión
-          </button>
+
+          {/* Theme toggle in collapsed mode */}
+          {sidebarCollapsed && (
+            <button
+              onClick={toggleTema}
+              aria-label="Cambiar tema"
+              style={{
+                background: "transparent",
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                display: "flex",
+                justifyContent: "center",
+              }}
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 200 200"
+                style={{ overflow: "visible" }}
+              >
+                <defs>
+                  <mask id="hole-admin-c">
+                    <rect width="100%" height="100%" fill="white" />
+                    <circle
+                      r="80"
+                      cx={tema === "dark" ? 140 : 230}
+                      cy={tema === "dark" ? 60 : -30}
+                      fill="black"
+                      style={{ transition: "cx 0.5s ease, cy 0.5s ease" }}
+                    />
+                  </mask>
+                  <filter id="blur-admin-c">
+                    <feDropShadow
+                      dx="0"
+                      dy="0"
+                      stdDeviation="8"
+                      floodColor={tema === "dark" ? "white" : "#334155"}
+                    />
+                  </filter>
+                </defs>
+                <g filter="url(#blur-admin-c)">
+                  <circle
+                    fill={tema === "dark" ? "white" : "#334155"}
+                    r="80"
+                    cx="100"
+                    cy="100"
+                    mask="url(#hole-admin-c)"
+                  />
+                </g>
+              </svg>
+            </button>
+          )}
+
+          {/* Logout */}
+          {!sidebarCollapsed ? (
+            <button
+              onClick={logout}
+              style={{
+                width: "100%",
+                background: tk.logoutBg,
+                border: "none",
+                color: tk.logoutColor,
+                padding: "7px",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontSize: "12px",
+              }}
+            >
+              Cerrar sesión
+            </button>
+          ) : (
+            <button
+              onClick={logout}
+              title="Cerrar sesión"
+              style={{
+                background: tk.logoutBg,
+                border: "none",
+                color: tk.logoutColor,
+                width: "32px",
+                height: "32px",
+                borderRadius: "8px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "14px",
+              }}
+            >
+              ↩
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Main */}
+      {/* ── Main ────────────────────────────────────────────────────────── */}
       <div
         style={{
           flex: 1,
@@ -325,7 +620,6 @@ export default function AdminApp() {
 
         {/* Content */}
         <div style={{ flex: 1, overflow: "auto", padding: "24px" }}>
-          {/* FLUJO PRINCIPAL: Temporadas → Equipos → Calendario */}
           {vista === "temporadas" && (
             <AdminTemporadas
               supabase={supabase}
@@ -335,7 +629,6 @@ export default function AdminApp() {
               }}
             />
           )}
-
           {vista === "equipos" && temporadaActual && (
             <AdminEquipos
               supabase={supabase}
@@ -351,8 +644,6 @@ export default function AdminApp() {
               }}
             />
           )}
-
-          {/* Vistas de equipo */}
           {vista === "plantilla" && tieneEquipo && (
             <AdminPlantilla
               supabase={supabase}
@@ -374,7 +665,6 @@ export default function AdminApp() {
               }}
             />
           )}
-
           {vista === "clasificacion" && tieneEquipo && (
             <AdminClasificacion
               supabase={supabase}
@@ -382,7 +672,6 @@ export default function AdminApp() {
               temporada={temporadaActual}
             />
           )}
-
           {vista === "noticias" && tieneEquipo && (
             <AdminNoticias
               supabase={supabase}
@@ -392,8 +681,6 @@ export default function AdminApp() {
               onBack={() => setVista("calendario")}
             />
           )}
-
-          {/* Admin */}
           {vista === "nuevoEquipo" && perfil?.rol === "admin" && (
             <FormNuevoEquipo
               supabase={supabase}
@@ -413,60 +700,82 @@ export default function AdminApp() {
   );
 }
 
-function NavSection({ label, children }) {
+// ── NavSection ────────────────────────────────────────────────────────────────
+function NavSection({ label, children, collapsed, tk }) {
   return (
     <div
       style={{
         padding: "12px 0",
-        borderBottom: "0.5px solid rgba(255,255,255,0.08)",
+        borderBottom: `0.5px solid ${tk.border}`,
       }}
     >
-      <div
-        style={{
-          fontSize: "10px",
-          fontWeight: 700,
-          color: "rgba(255,255,255,0.3)",
-          textTransform: "uppercase",
-          letterSpacing: ".08em",
-          padding: "0 16px",
-          marginBottom: "4px",
-        }}
-      >
-        {label}
-      </div>
+      {!collapsed && (
+        <div
+          style={{
+            fontSize: "10px",
+            fontWeight: 700,
+            color: tk.sectionLabel,
+            textTransform: "uppercase",
+            letterSpacing: ".08em",
+            padding: "0 16px",
+            marginBottom: "4px",
+          }}
+        >
+          {label}
+        </div>
+      )}
       {children}
     </div>
   );
 }
 
-function NavItem({ label, activa, onClick }) {
+// ── NavItem ───────────────────────────────────────────────────────────────────
+function NavItem({ label, icon, activa, onClick, collapsed, tk }) {
+  // tk is not passed here — NavItem reads its own colours from props
+  // We need tk passed down; using a simpler approach: hardcode active orange,
+  // inactive depends on collapsed tooltip only. Colors stay CSS-variable-free
+  // since sidebar bg is custom. Pass tk down if needed, but for now active
+  // state is enough differentiation.
   return (
     <div
       onClick={onClick}
+      title={collapsed ? label : undefined}
       style={{
         display: "flex",
         alignItems: "center",
-        gap: "10px",
-        padding: activa ? "8px 14px" : "8px 16px",
+        justifyContent: collapsed ? "center" : "flex-start",
+        gap: collapsed ? 0 : "10px",
+        padding: collapsed ? "10px 0" : activa ? "8px 14px" : "8px 16px",
         fontSize: "13px",
         cursor: "pointer",
         transition: "all .15s",
-        color: activa ? "#F97316" : "rgba(255,255,255,0.6)",
-        background: activa ? "rgba(249,115,22,0.15)" : "transparent",
-        borderLeft: activa ? "2px solid #F97316" : "2px solid transparent",
+        color: activa ? "#F97316" : "rgba(128,128,128,0.8)",
+        background: activa ? "rgba(249,115,22,0.12)" : "transparent",
+        borderLeft: collapsed
+          ? "none"
+          : activa
+            ? "2px solid #F97316"
+            : "2px solid transparent",
+        borderRight: collapsed && activa ? "2px solid #F97316" : "none",
       }}
     >
-      <div
-        style={{
-          width: "6px",
-          height: "6px",
-          borderRadius: "50%",
-          background: "currentColor",
-          opacity: 0.6,
-          flexShrink: 0,
-        }}
-      />
-      {label}
+      {collapsed ? (
+        <span style={{ fontSize: "15px", lineHeight: 1 }}>{icon}</span>
+      ) : (
+        <>
+          <div
+            style={{
+              width: "6px",
+              height: "6px",
+              borderRadius: "50%",
+              background: "currentColor",
+              opacity: 0.6,
+              flexShrink: 0,
+            }}
+          />
+          {label}
+        </>
+      )}
     </div>
   );
 }
