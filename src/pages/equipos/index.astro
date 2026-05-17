@@ -3,7 +3,6 @@
 import { supabase } from "@/lib/supabase.js";
 import Layout from "@/layouts/Layout.astro";
 
-// Traemos categorías con su slug y el equipo más reciente de cada una
 const { data: categorias, error } = await supabase
   .from("categorias")
   .select("id, nombre, slug, orden, genero")
@@ -11,14 +10,13 @@ const { data: categorias, error } = await supabase
 
 if (error) console.error("Error cargando categorías:", error);
 
-// Para cada categoría, buscamos el equipo de la temporada más reciente
 const categoriasConEquipo = await Promise.all(
   (categorias ?? [])
     .filter((cat) => cat.slug)
     .map(async (cat) => {
       const { data: equipos } = await supabase
         .from("equipos")
-        .select("id, sponsor, temporada_id, temporadas (nombre)")
+        .select("id, sponsor, temporada_id, foto_url, temporadas (nombre)")
         .eq("categoria_id", cat.id);
 
       const equipo =
@@ -33,11 +31,7 @@ const categoriasConEquipo = await Promise.all(
     }),
 );
 
-const iconoGenero = {
-  masculino: "♂",
-  femenino: "♀",
-  mixto: "⚥",
-};
+const iconoGenero = { masculino: "♂", femenino: "♀", mixto: "⚥" };
 ---
 
 <Layout titulo="Equipos - CB Jaca">
@@ -58,33 +52,54 @@ const iconoGenero = {
           const nombreEquipo = cat.equipo?.sponsor
             ? `${cat.equipo.sponsor} CB Jaca`
             : `CB Jaca ${cat.nombre}`;
+          const foto = cat.equipo?.foto_url;
 
           return href ? (
-            <a href={href} class="equipo-card">
-              <div class="card-top">
-                <span class="genero-badge">
-                  {iconoGenero[cat.genero] ?? ""} {cat.nombre}
-                </span>
-                {cat.equipo?.temporadas?.nombre && (
-                  <span class="temporada-badge">
-                    {cat.equipo.temporadas.nombre}
+            <a
+              href={href}
+              class="equipo-card"
+              style={foto ? `--bg-img: url('${foto}')` : ""}
+              data-tiene-foto={foto ? "true" : "false"}
+            >
+              <div class="card-inner">
+                <div class="card-top">
+                  <span class="genero-badge">
+                    {iconoGenero[cat.genero] ?? ""} {cat.nombre}
                   </span>
-                )}
-              </div>
-              <h2 class="card-nombre">{nombreEquipo}</h2>
-              <div class="card-footer">
-                <span class="ver-mas">Ver equipo →</span>
+                  {cat.equipo?.temporadas?.nombre && (
+                    <span class="temporada-badge">
+                      {cat.equipo.temporadas.nombre}
+                    </span>
+                  )}
+                </div>
+                <div class="card-bottom">
+                  <div class="card-logos">
+                    <img
+                      src="/escudo-naranja.png"
+                      alt="CB Jaca"
+                      class="escudo-card"
+                    />
+                  </div>
+                  <div>
+                    <h2 class="card-nombre">{nombreEquipo}</h2>
+                    <span class="ver-mas">Ver equipo →</span>
+                  </div>
+                </div>
               </div>
             </a>
           ) : (
             <div class="equipo-card equipo-card--inactivo">
-              <div class="card-top">
-                <span class="genero-badge">
-                  {iconoGenero[cat.genero] ?? ""} {cat.nombre}
-                </span>
+              <div class="card-inner">
+                <div class="card-top">
+                  <span class="genero-badge">
+                    {iconoGenero[cat.genero] ?? ""} {cat.nombre}
+                  </span>
+                </div>
+                <div class="card-bottom">
+                  <h2 class="card-nombre">{cat.nombre}</h2>
+                  <p class="sin-datos">Sin temporada activa</p>
+                </div>
               </div>
-              <h2 class="card-nombre">{cat.nombre}</h2>
-              <p class="sin-datos">Sin temporada activa</p>
             </div>
           );
         })
@@ -101,7 +116,7 @@ const iconoGenero = {
 
 <style>
   .equipos-section {
-    max-width: 1100px;
+    max-width: 1200px;
     margin: 0 auto;
     padding: 4rem 2rem;
   }
@@ -115,11 +130,9 @@ const iconoGenero = {
     font-weight: 800;
     margin-bottom: 0.5rem;
   }
-
   .highlight {
-    color: var(--orange, #f97316);
+    color: var(--naranja, #f97316);
   }
-
   .subtitulo {
     font-size: 1rem;
     color: var(--muted, #64748b);
@@ -127,87 +140,137 @@ const iconoGenero = {
 
   .equipos-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-    gap: 1.75rem;
+    grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+    gap: 1.5rem;
   }
 
+  /* ── Card ── */
   .equipo-card {
+    position: relative;
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
-    padding: 1.5rem;
-    background: var(--card, #1e293b);
-    border: 1px solid var(--borde, rgba(255, 255, 255, 0.08));
-    border-radius: 12px;
+    height: clamp(220px, 28vw, 340px);
+    border-radius: 14px;
+    overflow: hidden;
     text-decoration: none;
-    color: inherit;
-    transition:
-      transform 0.2s ease,
-      border-color 0.2s ease;
+    color: white;
+    border: 1px solid var(--borde, rgba(255, 255, 255, 0.08));
+    background-color: #0f172a;
+    transition: border-color 0.2s;
   }
-
   .equipo-card:hover {
-    transform: translateY(-4px);
-    border-color: var(--orange, #f97316);
+    border-color: var(--naranja, #f97316);
   }
 
-  .equipo-card--inactivo {
-    opacity: 0.5;
-    cursor: default;
+  /* Fondo con foto */
+  .equipo-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background-image:
+      linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0.55) 0%,
+        rgba(0, 0, 0, 0.1) 40%,
+        rgba(0, 0, 0, 0.75) 100%
+      ),
+      var(--bg-img, none);
+    background-position: center;
+    background-size: cover;
+    transform: scale(1.02);
+    transition:
+      transform 0.6s ease,
+      filter 0.6s ease;
+    filter: grayscale(0.6);
+  }
+  .equipo-card:hover::before {
+    transform: scale(1.07);
+    filter: grayscale(0);
+  }
+
+  /* Sin foto: fondo sólido con acento naranja */
+  .equipo-card[data-tiene-foto="false"]::before {
+    background-image: linear-gradient(
+      135deg,
+      #0f172a 60%,
+      rgba(242, 130, 65, 0.15) 100%
+    );
+  }
+
+  .card-inner {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 100%;
+    padding: 1.25rem 1.5rem;
   }
 
   .card-top {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    gap: 0.5rem;
+    align-items: flex-start;
   }
 
   .genero-badge {
-    font-size: 0.75rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--orange, #f97316);
-  }
-
-  .temporada-badge {
     font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--naranja, #f97316);
+    background: rgba(0, 0, 0, 0.4);
+    padding: 3px 10px;
+    border-radius: 20px;
+    backdrop-filter: blur(4px);
+  }
+  .temporada-badge {
+    font-size: 0.7rem;
     font-weight: 700;
     padding: 2px 10px;
     border-radius: 20px;
-    background: rgba(249, 115, 22, 0.12);
-    color: var(--orange, #f97316);
-    border: 1px solid rgba(249, 115, 22, 0.25);
+    background: rgba(0, 0, 0, 0.4);
+    color: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(4px);
   }
 
+  .card-bottom {
+    display: flex;
+    align-items: flex-end;
+    gap: 1rem;
+  }
+  .escudo-card {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+    flex-shrink: 0;
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5));
+  }
   .card-nombre {
-    font-size: 1.1rem;
+    font-size: clamp(1rem, 2vw, 1.3rem);
     font-weight: 800;
-    margin: 0;
-    line-height: 1.3;
+    margin: 0 0 0.3rem;
+    line-height: 1.2;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
   }
-
-  .card-footer {
-    margin-top: auto;
-    padding-top: 0.5rem;
-    border-top: 1px solid var(--borde, rgba(255, 255, 255, 0.08));
-  }
-
   .ver-mas {
-    font-size: 0.82rem;
+    font-size: 0.75rem;
     font-weight: 700;
-    color: var(--muted, #64748b);
-    transition: color 0.2s;
+    color: var(--naranja, #f97316);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 
-  .equipo-card:hover .ver-mas {
-    color: var(--orange, #f97316);
+  .equipo-card--inactivo {
+    opacity: 0.45;
+    cursor: default;
   }
-
   .sin-datos {
     font-size: 0.82rem;
-    color: var(--muted, #64748b);
+    color: rgba(255, 255, 255, 0.5);
+    margin: 0;
   }
 
   .vacio {
@@ -219,6 +282,12 @@ const iconoGenero = {
   @media (max-width: 640px) {
     .equipos-section {
       padding: 2rem 1rem;
+    }
+    .equipos-grid {
+      grid-template-columns: 1fr;
+    }
+    .equipo-card {
+      height: 200px;
     }
   }
 </style>

@@ -19,7 +19,7 @@ const { id } = Astro.params;
 // ── Datos del jugador ──────────────────────────────────────────────────────
 const { data: jugador } = await supabase
   .from("jugadores")
-  .select("id, nombre, apellido, posicion, genero")
+  .select("id, nombre, apellido, posicion, genero, foto_dni_url")  // ← añadir
   .eq("id", id)
   .single();
 
@@ -133,7 +133,15 @@ const iniciales = `${jugador.nombre?.[0] ?? ""}${jugador.apellido?.[0] ?? ""}`.t
     <div class="jugador-hero-inner">
       <a href="javascript:history.back()" class="volver">← Volver</a>
       <div class="jugador-hero-content">
-        <div class="avatar">{iniciales}</div>
+        {jugador.foto_dni_url ? (
+  <img
+    src={jugador.foto_dni_url}
+    alt={`${jugador.nombre} ${jugador.apellido}`}
+    class="avatar avatar-foto"
+  />
+) : (
+  <div class="avatar">{iniciales}</div>
+)}
         <div class="jugador-info">
           <p class="posicion-label">{posicionLabel[jugador.posicion] ?? jugador.posicion ?? "Sin posición"}</p>
           <h1>{jugador.nombre} <span class="apellido">{jugador.apellido}</span></h1>
@@ -326,6 +334,11 @@ const iniciales = `${jugador.nombre?.[0] ?? ""}${jugador.apellido?.[0] ?? ""}`.t
     color: white;
     flex-shrink: 0;
   }
+
+  .avatar-foto {
+  object-fit: cover;
+  object-position: top center;
+}
   .posicion-label {
     font-size: 0.75rem;
     font-weight: 700;

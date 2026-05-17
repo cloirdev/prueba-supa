@@ -1,0 +1,261 @@
+---
+// src/components/Footer.astro
+import Echeto from "@/assets/sponsors/echeto.svg";
+import Fiscon from "@/assets/sponsors/fiscon.svg";
+import Hoscafrost from "@/assets/sponsors/hoscafrost.svg";
+import LosSitios from "@/assets/sponsors/grupo-los-sitios.svg";
+import FranciscaVizcarra from "@/assets/sponsors/francisca-vizcarra.svg";
+import Jaca from "@/assets/sponsors/jaca.svg";
+import Asemval from "@/assets/sponsors/asemval.svg";
+import Lookme from "@/assets/sponsors/lookme.svg";
+import Transerrablo from "@/assets/sponsors/transerrablo.svg";
+import Mercury from "@/assets/sponsors/mercury.svg";
+
+const anyo = new Date().getFullYear();
+---
+
+<footer>
+  <div class="sponsors-wrap">
+    <h3>Patrocinadores Federados</h3>
+    <div class="sponsors-row main-sponsors">
+      <a
+        href="http://hoscafrost.es/"
+        target="_blank"
+        rel="noopener"
+        title="Hoscafrost"
+      >
+        <Hoscafrost />
+      </a>
+      <a
+        href="https://www.asemval.es/"
+        target="_blank"
+        rel="noopener"
+        title="Asemval"
+      >
+        <Asemval />
+      </a>
+      <a
+        href="https://www.grupolossitios.com/"
+        target="_blank"
+        rel="noopener"
+        title="Grupo Los Sitios"
+      >
+        <LosSitios />
+      </a>
+    </div>
+
+    <h3>Colaboradores</h3>
+    <div class="sponsors-row colaboradores">
+      <a href="" title="Transerrablo"><Transerrablo /></a>
+      <a
+        href="https://confiteriaecheto.es/"
+        target="_blank"
+        rel="noopener"
+        title="Echeto"
+      >
+        <Echeto />
+      </a>
+      <a
+        href="https://fisconpirineos.es/"
+        target="_blank"
+        rel="noopener"
+        title="Fiscon"
+      >
+        <Fiscon />
+      </a>
+      <a
+        href="https://www.jaca.es/"
+        target="_blank"
+        rel="noopener"
+        title="Jaca"
+      >
+        <Jaca />
+      </a>
+      <a
+        href="http://www.lookmefotos.com/"
+        target="_blank"
+        rel="noopener"
+        title="Lookme"
+      >
+        <Lookme />
+      </a>
+      <a href="" title="Francisca Vizcarra"><FranciscaVizcarra /></a>
+    </div>
+  </div>
+
+  <div class="footer-inferior">
+    <div class="proveedor-oficial">
+      <img src="/escudo-naranja.png" alt="CB Jaca" class="escudo" />
+      <span class="divisor"></span>
+      <Mercury />
+    </div>
+
+    <nav class="footer-nav">
+      <a href="/">Inicio</a>
+      <a href="/noticias">Noticias</a>
+      <a href="/equipos">Equipos</a>
+    </nav>
+  </div>
+
+  <small>&copy; Club Baloncesto Jaca {anyo}.</small>
+</footer>
+
+<style>
+  footer {
+    background-color: var(--footer-bg);
+    color: var(--texto, #cbd5e1);
+    transition: background-color 0.3s ease;
+  }
+
+  /* ── Patrocinadores ── */
+  .sponsors-wrap {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 3rem 2rem;
+  }
+
+  h3 {
+    text-align: center;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--footer-h3);
+    margin: 2rem 0 1.5rem;
+    transition: color 0.3s ease;
+  }
+  h3:first-child {
+    margin-top: 0;
+  }
+
+  .sponsors-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 2rem;
+  }
+
+  .sponsors-row a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.6;
+    transition: opacity 0.3s ease;
+  }
+  .sponsors-row a:hover {
+    opacity: 1;
+  }
+
+  .main-sponsors :global(svg) {
+    width: 140px;
+    height: 80px;
+    filter: var(--footer-svg-filter);
+    transition: filter 0.3s ease;
+  }
+  .main-sponsors a:hover :global(svg) {
+    filter: var(--footer-svg-filter-hover);
+  }
+
+  .colaboradores :global(svg) {
+    width: 110px;
+    height: 60px;
+    filter: var(--footer-svg-filter);
+    transition: filter 0.3s ease;
+  }
+  .colaboradores a:hover :global(svg) {
+    filter: var(--footer-svg-filter-hover);
+  }
+
+  /* ── Sección inferior ── */
+  .footer-inferior {
+    background-color: var(--footer-inferior-bg);
+    border-top: 1px solid var(--footer-borde);
+    padding: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 2rem;
+    transition: background-color 0.3s ease;
+  }
+
+  .proveedor-oficial {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+  }
+  .escudo {
+    width: 52px;
+    height: auto;
+  }
+  .divisor {
+    width: 1px;
+    height: 48px;
+    background: var(--footer-divisor);
+    transition: background 0.3s ease;
+  }
+  .proveedor-oficial :global(svg) {
+    width: 120px;
+    height: 56px;
+    filter: var(--footer-svg-filter);
+    opacity: 0.7;
+    transition:
+      opacity 0.3s ease,
+      filter 0.3s ease;
+  }
+  .proveedor-oficial:hover :global(svg) {
+    filter: var(--footer-svg-filter-hover);
+    opacity: 1;
+  }
+
+  .footer-nav {
+    display: flex;
+    gap: 1.5rem;
+  }
+  .footer-nav a {
+    font-size: 0.78rem;
+    color: var(--footer-nav);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+  .footer-nav a:hover {
+    color: var(--naranja, #f97316);
+  }
+
+  /* ── Copyright ── */
+  small {
+    display: flex;
+    justify-content: center;
+    padding: 1rem;
+    font-size: 0.72rem;
+    color: var(--footer-small);
+    background-color: var(--footer-inferior-bg);
+    border-top: 1px solid var(--footer-borde);
+    transition:
+      background-color 0.3s ease,
+      color 0.3s ease;
+  }
+
+  @media (max-width: 640px) {
+    .sponsors-wrap {
+      padding: 2rem 1rem;
+    }
+    .footer-inferior {
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+    .footer-nav {
+      justify-content: center;
+    }
+    .main-sponsors :global(svg) {
+      width: 110px;
+      height: 60px;
+    }
+    .colaboradores :global(svg) {
+      width: 90px;
+      height: 50px;
+    }
+  }
+</style>

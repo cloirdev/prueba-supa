@@ -1,6 +1,495 @@
 import { useState, useEffect } from "react";
 import FormPartido from "./FormPartido.jsx";
 
+// ── Helpers globales ───────────────────────────────────────────────────────
+function minutosASegundos(val) {
+  const str = String(val ?? "0");
+  if (str.includes(":")) {
+    const [mm, ss] = str.split(":");
+    return (parseInt(mm) || 0) * 60 + (parseInt(ss) || 0);
+  }
+  return (parseInt(str) || 0) * 60;
+}
+
+function segundosADisplay(totalSegs) {
+  const mm = Math.floor(totalSegs / 60);
+  const ss = totalSegs % 60;
+  return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+}
+
+// ── Función de valoración reutilizable ────────────────────────────────────
+function calcularValoracion(s) {
+  const pts =
+    parseInt(s.tiros_libres_anotados ?? 0) * 1 +
+    parseInt(s.tiros_campo_anotados ?? 0) * 2 +
+    parseInt(s.triples_anotados ?? 0) * 3;
+  const rt =
+    parseInt(s.rebotes_ofensivos ?? 0) + parseInt(s.rebotes_defensivos ?? 0);
+  const tcAn =
+    parseInt(s.tiros_campo_anotados ?? 0) + parseInt(s.triples_anotados ?? 0);
+  const tcInt =
+    parseInt(s.tiros_campo_intentados ?? 0) +
+    parseInt(s.triples_intentados ?? 0);
+  return (
+    pts +
+    rt +
+    parseInt(s.asistencias ?? 0) +
+    parseInt(s.robos ?? 0) +
+    parseInt(s.tapones ?? 0) +
+    parseInt(s.faltas_recibidas ?? 0) +
+    (parseInt(s.tiros_libres_anotados ?? 0) -
+      parseInt(s.tiros_libres_intentados ?? 0)) +
+    (tcAn - tcInt) -
+    parseInt(s.faltas_cometidas ?? 0) -
+    parseInt(s.perdidas ?? 0)
+  );
+}
+
+// ── FilaJugador — FUERA del componente padre para evitar pérdida de foco ──
+function FilaJugador({ c, stats, setStats, toggleConvocado }) {
+  const s = stats[c.jugadores.id] ?? {};
+  const esTitular = s.titular ?? false;
+
+  // Puntos calculados automáticamente
+  const ptsTotal =
+    parseInt(s.tiros_libres_anotados ?? 0) * 1 +
+    parseInt(s.tiros_campo_anotados ?? 0) * 2 +
+    parseInt(s.triples_anotados ?? 0) * 3;
+
+  // FG total (T2 + triples)
+  const tcAnotados =
+    parseInt(s.tiros_campo_anotados ?? 0) + parseInt(s.triples_anotados ?? 0);
+  const tcIntentados =
+    parseInt(s.tiros_campo_intentados ?? 0) +
+    parseInt(s.triples_intentados ?? 0);
+
+  // Rebotes totales
+  const rt =
+    parseInt(s.rebotes_ofensivos ?? 0) + parseInt(s.rebotes_defensivos ?? 0);
+
+  // Valoración
+  const val = calcularValoracion(s);
+
+  function update(campo, val) {
+    setStats((prev) => ({
+      ...prev,
+      [c.jugadores.id]: { ...prev[c.jugadores.id], [campo]: val },
+    }));
+  }
+
+  const inputBase = {
+    padding: "4px",
+    borderRadius: "4px",
+    border: "none",
+    borderBottom: "1px solid var(--borde)",
+    background: "transparent",
+    color: "var(--texto)",
+    fontSize: "13px",
+    textAlign: "center",
+  };
+
+  const celda = (campo, width = "38px") => (
+    <td style={{ padding: "6px 8px", textAlign: "center" }}>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={s[campo] ?? ""}
+        onChange={(e) => update(campo, e.target.value.replace(/[^0-9-]/g, ""))}
+        style={{ ...inputBase, width }}
+      />
+    </td>
+  );
+
+  const celdaMinutos = () => (
+    <td style={{ padding: "6px 8px", textAlign: "center" }}>
+      <input
+        type="text"
+        inputMode="numeric"
+        placeholder="00:00"
+        value={s.minutos ?? ""}
+        onChange={(e) => {
+          const val = e.target.value.replace(/[^0-9:]/g, "").slice(0, 5);
+          update("minutos", val);
+        }}
+        onBlur={(e) => {
+          const raw = e.target.value;
+          if (!raw) return;
+          let normalizado;
+          if (!raw.includes(":")) {
+            const mins = parseInt(raw) || 0;
+            normalizado = `${String(mins).padStart(2, "0")}:00`;
+          } else {
+            const [mm, ss] = raw.split(":");
+            const mins = parseInt(mm) || 0;
+            const secs = Math.min(parseInt(ss) || 0, 59);
+            normalizado = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+          }
+          update("minutos", normalizado);
+        }}
+        style={{ ...inputBase, width: "48px", fontFamily: "monospace" }}
+      />
+    </td>
+  );
+
+  const celdaTiro = (an, int_) => (
+    <td style={{ padding: "6px 8px", textAlign: "center" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "1px",
+          justifyContent: "center",
+        }}
+      >
+        {[an, int_].map((campo, i) => (
+          <span key={campo} style={{ display: "flex", alignItems: "center" }}>
+            {i === 1 && (
+              <span
+                style={{
+                  color: "var(--muted)",
+                  fontSize: "12px",
+                  margin: "0 1px",
+                }}
+              >
+                -
+              </span>
+            )}
+            <input
+              type="text"
+              inputMode="numeric"
+              value={s[campo] ?? ""}
+              onChange={(e) =>
+                update(campo, e.target.value.replace(/[^0-9]/g, ""))
+              }
+              style={{ ...inputBase, width: "26px", padding: "4px 2px" }}
+            />
+          </span>
+        ))}
+      </div>
+    </td>
+  );
+
+  // FG calculado — solo lectura
+  const celdaTCCalc = () => (
+    <td style={{ padding: "6px 8px", textAlign: "center" }}>
+      <div
+        style={{
+          fontSize: "13px",
+          fontWeight: 700,
+          color: "var(--muted)",
+          fontFamily: "monospace",
+          letterSpacing: "0.02em",
+        }}
+      >
+        {tcAnotados}-{tcIntentados}
+      </div>
+    </td>
+  );
+
+  // PTS calculado — solo lectura
+  const celdaPuntos = () => (
+    <td
+      style={{
+        padding: "6px 8px",
+        textAlign: "center",
+        fontWeight: 800,
+        fontSize: "14px",
+        color: "var(--texto)",
+      }}
+    >
+      {ptsTotal || "0"}
+    </td>
+  );
+
+  // VAL calculado — solo lectura, con color
+  const celdaVal = () => (
+    <td
+      style={{
+        padding: "6px 8px",
+        textAlign: "center",
+        fontWeight: 800,
+        fontSize: "13px",
+        color: val > 0 ? "#0baa3b" : val < 0 ? "#ef4444" : "var(--muted)",
+      }}
+    >
+      {val > 0 ? `+${val}` : val}
+    </td>
+  );
+
+  return (
+    <tr style={{ borderBottom: "0.5px solid var(--borde)" }}>
+      {/* Nombre + titular */}
+      <td style={{ padding: "10px 8px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div
+            onClick={() => update("titular", !esTitular)}
+            style={{
+              width: "28px",
+              height: "28px",
+              borderRadius: "50%",
+              background: esTitular ? "#1e3a5f" : "transparent",
+              border: esTitular ? "none" : "1px solid var(--borde)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "11px",
+              fontWeight: 800,
+              color: esTitular ? "#F97316" : "var(--muted)",
+              flexShrink: 0,
+              cursor: "pointer",
+            }}
+          >
+            {c.dorsal}
+          </div>
+          <div>
+            <span style={{ fontWeight: 700, fontSize: "13px" }}>
+              {c.jugadores.nombre[0]}. {c.jugadores.apellido}
+            </span>
+            <span
+              style={{
+                fontSize: "10px",
+                color: "var(--muted)",
+                marginLeft: "6px",
+              }}
+            >
+              {c.jugadores.posicion?.[0]}
+            </span>
+          </div>
+        </div>
+      </td>
+      {celdaMinutos()}
+      {celdaPuntos()}
+      {celdaTCCalc()}
+      {celdaTiro("tiros_campo_anotados", "tiros_campo_intentados")}
+      {celdaTiro("triples_anotados", "triples_intentados")}
+      {celdaTiro("tiros_libres_anotados", "tiros_libres_intentados")}
+      {celda("rebotes_ofensivos", "36px")}
+      {celda("rebotes_defensivos", "36px")}
+      <td
+        style={{
+          padding: "6px 8px",
+          textAlign: "center",
+          fontWeight: 700,
+          fontSize: "13px",
+        }}
+      >
+        {rt || "0"}
+      </td>
+      {celda("asistencias", "36px")}
+      {celda("robos", "36px")}
+      {celda("perdidas", "36px")}
+      {celda("tapones", "36px")}
+      {celda("faltas_cometidas", "36px")}
+      {celda("faltas_recibidas", "36px")}
+      {celdaVal()}
+      {/* +/- */}
+      <td style={{ padding: "6px 8px", textAlign: "center" }}>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={s.mas_menos ?? ""}
+          onChange={(e) =>
+            update("mas_menos", e.target.value.replace(/[^0-9-]/g, ""))
+          }
+          style={{
+            ...inputBase,
+            width: "36px",
+            fontWeight: 700,
+            color:
+              parseInt(s.mas_menos ?? 0) > 0
+                ? "#0baa3b"
+                : parseInt(s.mas_menos ?? 0) < 0
+                  ? "#ef4444"
+                  : "var(--muted)",
+          }}
+        />
+      </td>
+      {/* Botón quitar */}
+      <td style={{ padding: "6px 8px", textAlign: "center" }}>
+        <button
+          onClick={() => toggleConvocado(c.jugadores.id)}
+          style={{
+            background: "transparent",
+            border: "1px solid var(--borde)",
+            borderRadius: "6px",
+            padding: "3px 8px",
+            cursor: "pointer",
+            fontSize: "11px",
+            color: "var(--muted)",
+          }}
+        >
+          ✕
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+// ── FilaTotales — también fuera ────────────────────────────────────────────
+function FilaTotales({ lista, stats }) {
+  const sum = (campo) =>
+    lista.reduce(
+      (a, c) => a + parseInt(stats[c.jugadores.id]?.[campo] ?? 0),
+      0,
+    );
+
+  const sumMinutos = () => {
+    const totalSegs = lista.reduce((a, c) => {
+      return a + minutosASegundos(stats[c.jugadores.id]?.minutos ?? "0");
+    }, 0);
+    return segundosADisplay(totalSegs);
+  };
+
+  const sumPuntos = () =>
+    lista.reduce((a, c) => {
+      const s = stats[c.jugadores.id] ?? {};
+      return (
+        a +
+        parseInt(s.tiros_libres_anotados ?? 0) * 1 +
+        parseInt(s.tiros_campo_anotados ?? 0) * 2 +
+        parseInt(s.triples_anotados ?? 0) * 3
+      );
+    }, 0);
+
+  const sumVal = () =>
+    lista.reduce(
+      (a, c) => a + calcularValoracion(stats[c.jugadores.id] ?? {}),
+      0,
+    );
+
+  const st = {
+    padding: "8px",
+    textAlign: "center",
+    fontWeight: 700,
+    fontSize: "12px",
+    color: "var(--muted)",
+  };
+
+  const valTotal = sumVal();
+
+  return (
+    <tr
+      style={{
+        borderBottom: "2px solid var(--texto)",
+        background: "var(--fondo)",
+      }}
+    >
+      <td style={{ padding: "8px" }} />
+      <td style={{ ...st, fontFamily: "monospace" }}>{sumMinutos()}</td>
+      <td style={st}>{sumPuntos()}</td>
+      <td style={st}>
+        {sum("tiros_campo_anotados") + sum("triples_anotados")}-
+        {sum("tiros_campo_intentados") + sum("triples_intentados")}
+      </td>
+      <td style={st}>
+        {sum("tiros_campo_anotados")}-{sum("tiros_campo_intentados")}
+      </td>
+      <td style={st}>
+        {sum("triples_anotados")}-{sum("triples_intentados")}
+      </td>
+      <td style={st}>
+        {sum("tiros_libres_anotados")}-{sum("tiros_libres_intentados")}
+      </td>
+      <td style={st}>{sum("rebotes_ofensivos")}</td>
+      <td style={st}>{sum("rebotes_defensivos")}</td>
+      <td style={st}>{sum("rebotes_ofensivos") + sum("rebotes_defensivos")}</td>
+      <td style={st}>{sum("asistencias")}</td>
+      <td style={st}>{sum("robos")}</td>
+      <td style={st}>{sum("perdidas")}</td>
+      <td style={st}>{sum("tapones")}</td>
+      <td style={st}>{sum("faltas_cometidas")}</td>
+      <td style={st}>{sum("faltas_recibidas")}</td>
+      <td
+        style={{
+          ...st,
+          color:
+            valTotal > 0
+              ? "#0baa3b"
+              : valTotal < 0
+                ? "#ef4444"
+                : "var(--muted)",
+        }}
+      >
+        {valTotal > 0 ? `+${valTotal}` : valTotal}
+      </td>
+      <td />
+      <td />
+    </tr>
+  );
+}
+
+// ── CabeceraSeccion — también fuera ───────────────────────────────────────
+const HEADERS = [
+  "MIN",
+  "PTS",
+  "FG",
+  "T2",
+  "3PT",
+  "FT",
+  "OREB",
+  "DREB",
+  "REB",
+  "AST",
+  "STL",
+  "PER",
+  "BLK",
+  "PF",
+  "FR",
+  "VAL",
+  "+/-",
+  "",
+];
+
+function CabeceraSeccion({ titulo }) {
+  return (
+    <>
+      <tr>
+        <td
+          colSpan={17}
+          style={{
+            padding: "16px 8px 6px",
+            fontWeight: 800,
+            fontSize: "11px",
+            letterSpacing: ".1em",
+            color: "var(--texto)",
+            borderBottom: "2px solid var(--texto)",
+          }}
+        >
+          {titulo}
+        </td>
+      </tr>
+      <tr style={{ borderBottom: "0.5px solid var(--borde)" }}>
+        <th
+          style={{
+            textAlign: "left",
+            padding: "8px",
+            fontSize: "11px",
+            fontWeight: 700,
+            color: "var(--muted)",
+            minWidth: "160px",
+          }}
+        />
+        {HEADERS.map((h) => (
+          <th
+            key={h}
+            style={{
+              padding: "8px",
+              fontSize: "11px",
+              fontWeight: 700,
+              color: "var(--muted)",
+              textAlign: "center",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {h}
+          </th>
+        ))}
+      </tr>
+    </>
+  );
+}
+
+// ── AdminPartido ───────────────────────────────────────────────────────────
 export default function AdminPartido({
   supabase,
   perfil,
@@ -19,8 +508,6 @@ export default function AdminPartido({
       ? (partido.puntos_contra ?? "")
       : (partido.puntos_favor ?? ""),
   });
-
-  // Form de edición del partido (reutiliza FormPartido)
   const [formEditar, setFormEditar] = useState({
     rival_id: partido.equipo_rival_id ?? "",
     tipo:
@@ -98,9 +585,16 @@ export default function AdminPartido({
       statsMap[c.jugadores.id] = { convocado: true };
     });
     (statsData ?? []).forEach((s) => {
+      const segs = parseInt(s.minutos ?? 0);
+      const minDisplay = segundosADisplay(segs);
       statsMap[s.jugador_id] = {
         ...statsMap[s.jugador_id],
         ...s,
+        // Los inputs de T2 leen tiros_2_*, no tiros_campo_* (que es el FG total)
+        tiros_campo_anotados: s.tiros_2_anotados ?? s.tiros_campo_anotados ?? 0,
+        tiros_campo_intentados:
+          s.tiros_2_intentados ?? s.tiros_campo_intentados ?? 0,
+        minutos: minDisplay,
         convocado: true,
       };
     });
@@ -134,7 +628,6 @@ export default function AdminPartido({
     setError("");
     setMsg("");
     const f = formEditar;
-
     if (!f.rival_id) {
       setError("Selecciona un rival");
       return;
@@ -215,6 +708,27 @@ export default function AdminPartido({
 
   async function guardarStats(jugadorId) {
     const s = stats[jugadorId] ?? {};
+
+    // Puntos calculados desde tiros
+    const ptsTotal =
+      parseInt(s.tiros_libres_anotados ?? 0) * 1 +
+      parseInt(s.tiros_campo_anotados ?? 0) * 2 +
+      parseInt(s.triples_anotados ?? 0) * 3;
+
+    // FG total = T2 + triples
+    const tcAnotados =
+      parseInt(s.tiros_campo_anotados ?? 0) + parseInt(s.triples_anotados ?? 0);
+    const tcIntentados =
+      parseInt(s.tiros_campo_intentados ?? 0) +
+      parseInt(s.triples_intentados ?? 0);
+
+    // Rebotes totales
+    const rebTotales =
+      parseInt(s.rebotes_ofensivos ?? 0) + parseInt(s.rebotes_defensivos ?? 0);
+
+    // Valoración
+    const valoracion = calcularValoracion(s);
+
     const { data: existing } = await supabase
       .from("convocatorias_partido")
       .select("id")
@@ -227,22 +741,27 @@ export default function AdminPartido({
       jugador_id: jugadorId,
       equipo_id: equipo.id,
       titular: s.titular ?? false,
-      minutos: parseInt(s.minutos ?? 0),
-      puntos: parseInt(s.puntos ?? 0),
+      minutos: minutosASegundos(s.minutos),
+      puntos: ptsTotal,
       triples_intentados: parseInt(s.triples_intentados ?? 0),
       triples_anotados: parseInt(s.triples_anotados ?? 0),
-      tiros_campo_intentados: parseInt(s.tiros_campo_intentados ?? 0),
-      tiros_campo_anotados: parseInt(s.tiros_campo_anotados ?? 0),
+      tiros_2_intentados: parseInt(s.tiros_campo_intentados ?? 0),
+      tiros_2_anotados: parseInt(s.tiros_campo_anotados ?? 0),
+      tiros_campo_intentados: tcIntentados,
+      tiros_campo_anotados: tcAnotados,
       tiros_libres_intentados: parseInt(s.tiros_libres_intentados ?? 0),
       tiros_libres_anotados: parseInt(s.tiros_libres_anotados ?? 0),
       rebotes_ofensivos: parseInt(s.rebotes_ofensivos ?? 0),
       rebotes_defensivos: parseInt(s.rebotes_defensivos ?? 0),
+      rebotes_totales: rebTotales,
       asistencias: parseInt(s.asistencias ?? 0),
       robos: parseInt(s.robos ?? 0),
       tapones: parseInt(s.tapones ?? 0),
       perdidas: parseInt(s.perdidas ?? 0),
       faltas_cometidas: parseInt(s.faltas_cometidas ?? 0),
+      faltas_recibidas: parseInt(s.faltas_recibidas ?? 0),
       mas_menos: parseInt(s.mas_menos ?? 0),
+      valoracion,
     };
 
     if (existing) {
@@ -286,14 +805,14 @@ export default function AdminPartido({
   function toggleConvocado(jugadorId) {
     const s = stats[jugadorId] ?? {};
     const eraConvocado = s.convocado !== false;
-    setStats({
-      ...stats,
+    setStats((prev) => ({
+      ...prev,
       [jugadorId]: {
         ...s,
         convocado: !eraConvocado,
         titular: eraConvocado ? false : s.titular,
       },
-    });
+    }));
   }
 
   const convocados = jugadores.filter(
@@ -310,288 +829,6 @@ export default function AdminPartido({
   const pConActual = partido.es_local
     ? partido.puntos_contra
     : partido.puntos_favor;
-
-  function FilaJugador({ c }) {
-    const s = stats[c.jugadores.id] ?? {};
-    const rt =
-      parseInt(s.rebotes_ofensivos ?? 0) + parseInt(s.rebotes_defensivos ?? 0);
-    const esTitular = s.titular ?? false;
-
-    const celda = (campo, width = "38px") => (
-      <td style={{ padding: "6px 8px", textAlign: "center" }}>
-        <input
-          type="text"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          value={s[campo] ?? ""}
-          onChange={(e) => {
-            const val = e.target.value.replace(/[^0-9-]/g, "");
-            setStats({ ...stats, [c.jugadores.id]: { ...s, [campo]: val } });
-          }}
-          style={{
-            width,
-            padding: "4px",
-            borderRadius: "4px",
-            border: "none",
-            borderBottom: "1px solid var(--borde)",
-            background: "transparent",
-            color: "var(--texto)",
-            fontSize: "13px",
-            textAlign: "center",
-          }}
-        />
-      </td>
-    );
-
-    const celdaTiro = (an, int_) => (
-      <td style={{ padding: "6px 8px", textAlign: "center" }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "1px",
-            justifyContent: "center",
-          }}
-        >
-          {[an, int_].map((campo, i) => (
-            <span key={campo} style={{ display: "flex", alignItems: "center" }}>
-              {i === 1 && (
-                <span
-                  style={{
-                    color: "var(--muted)",
-                    fontSize: "12px",
-                    margin: "0 1px",
-                  }}
-                >
-                  -
-                </span>
-              )}
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={s[campo] ?? ""}
-                onChange={(e) => {
-                  const val = e.target.value.replace(/[^0-9]/g, "");
-                  setStats({
-                    ...stats,
-                    [c.jugadores.id]: { ...s, [campo]: val },
-                  });
-                }}
-                style={{
-                  width: "26px",
-                  padding: "4px 2px",
-                  borderRadius: "4px",
-                  border: "none",
-                  borderBottom: "1px solid var(--borde)",
-                  background: "transparent",
-                  color: "var(--texto)",
-                  fontSize: "13px",
-                  textAlign: "center",
-                }}
-              />
-            </span>
-          ))}
-        </div>
-      </td>
-    );
-
-    return (
-      <tr style={{ borderBottom: "0.5px solid var(--borde)" }}>
-        <td style={{ padding: "10px 8px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <div
-              onClick={() =>
-                setStats({
-                  ...stats,
-                  [c.jugadores.id]: { ...s, titular: !esTitular },
-                })
-              }
-              style={{
-                width: "28px",
-                height: "28px",
-                borderRadius: "50%",
-                background: esTitular ? "#1e3a5f" : "transparent",
-                border: esTitular ? "none" : "1px solid var(--borde)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "11px",
-                fontWeight: 800,
-                color: esTitular ? "#F97316" : "var(--muted)",
-                flexShrink: 0,
-                cursor: "pointer",
-              }}
-            >
-              {c.dorsal}
-            </div>
-            <div>
-              <span style={{ fontWeight: 700, fontSize: "13px" }}>
-                {c.jugadores.nombre[0]}. {c.jugadores.apellido}
-              </span>
-              <span
-                style={{
-                  fontSize: "10px",
-                  color: "var(--muted)",
-                  marginLeft: "6px",
-                }}
-              >
-                {c.jugadores.posicion?.[0]}
-              </span>
-            </div>
-          </div>
-        </td>
-        {celda("minutos", "36px")}
-        {celda("puntos", "36px")}
-        {celdaTiro("tiros_campo_anotados", "tiros_campo_intentados")}
-        {celdaTiro("triples_anotados", "triples_intentados")}
-        <td
-          style={{
-            padding: "6px 8px",
-            textAlign: "center",
-            fontWeight: 700,
-            fontSize: "13px",
-          }}
-        >
-          {rt || "0"}
-        </td>
-        {celda("asistencias", "36px")}
-        {celda("faltas_cometidas", "36px")}
-        {celdaTiro("tiros_libres_anotados", "tiros_libres_intentados")}
-        {celda("rebotes_ofensivos", "36px")}
-        {celda("rebotes_defensivos", "36px")}
-        {celda("robos", "36px")}
-        {celda("tapones", "36px")}
-        <td style={{ padding: "6px 8px", textAlign: "center" }}>
-          <button
-            onClick={() => toggleConvocado(c.jugadores.id)}
-            style={{
-              background: "transparent",
-              border: "1px solid var(--borde)",
-              borderRadius: "6px",
-              padding: "3px 8px",
-              cursor: "pointer",
-              fontSize: "11px",
-              color: "var(--muted)",
-            }}
-          >
-            ✕
-          </button>
-        </td>
-      </tr>
-    );
-  }
-
-  function FilaTotales({ lista }) {
-    const sum = (campo) =>
-      lista.reduce(
-        (a, c) => a + parseInt(stats[c.jugadores.id]?.[campo] ?? 0),
-        0,
-      );
-    const st = {
-      padding: "8px",
-      textAlign: "center",
-      fontWeight: 700,
-      fontSize: "12px",
-      color: "var(--muted)",
-    };
-    return (
-      <tr
-        style={{
-          borderBottom: "2px solid var(--texto)",
-          background: "var(--fondo)",
-        }}
-      >
-        <td style={{ padding: "8px" }} />
-        <td style={st}>{sum("minutos")}</td>
-        <td style={st}>{sum("puntos")}</td>
-        <td style={st}>
-          {sum("tiros_campo_anotados")}-{sum("tiros_campo_intentados")}
-        </td>
-        <td style={st}>
-          {sum("triples_anotados")}-{sum("triples_intentados")}
-        </td>
-        <td style={st}>
-          {sum("rebotes_ofensivos") + sum("rebotes_defensivos")}
-        </td>
-        <td style={st}>{sum("asistencias")}</td>
-        <td style={st}>{sum("faltas_cometidas")}</td>
-        <td style={st}>
-          {sum("tiros_libres_anotados")}-{sum("tiros_libres_intentados")}
-        </td>
-        <td style={st}>{sum("rebotes_ofensivos")}</td>
-        <td style={st}>{sum("rebotes_defensivos")}</td>
-        <td style={st}>{sum("robos")}</td>
-        <td style={st}>{sum("tapones")}</td>
-        <td />
-      </tr>
-    );
-  }
-
-  const HEADERS = [
-    "MIN",
-    "PTS",
-    "FG",
-    "3PT",
-    "REB",
-    "AST",
-    "PF",
-    "FT",
-    "OREB",
-    "DREB",
-    "STL",
-    "BLK",
-    "",
-  ];
-
-  function CabeceraSeccion({ titulo }) {
-    return (
-      <>
-        <tr>
-          <td
-            colSpan={14}
-            style={{
-              padding: "16px 8px 6px",
-              fontWeight: 800,
-              fontSize: "11px",
-              letterSpacing: ".1em",
-              color: "var(--texto)",
-              borderBottom: "2px solid var(--texto)",
-            }}
-          >
-            {titulo}
-          </td>
-        </tr>
-        <tr style={{ borderBottom: "0.5px solid var(--borde)" }}>
-          <th
-            style={{
-              textAlign: "left",
-              padding: "8px",
-              fontSize: "11px",
-              fontWeight: 700,
-              color: "var(--muted)",
-              minWidth: "160px",
-            }}
-          />
-          {HEADERS.map((h) => (
-            <th
-              key={h}
-              style={{
-                padding: "8px",
-                fontSize: "11px",
-                fontWeight: 700,
-                color: "var(--muted)",
-                textAlign: "center",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {h}
-            </th>
-          ))}
-        </tr>
-      </>
-    );
-  }
 
   const SECCIONES = [
     "resultado",
@@ -851,76 +1088,143 @@ export default function AdminPartido({
                 width: "100%",
                 borderCollapse: "collapse",
                 fontSize: "13px",
-                minWidth: "900px",
+                minWidth: "1000px",
               }}
             >
               <tbody>
                 <CabeceraSeccion titulo="TITULARES" />
                 {titulares.map((c) => (
-                  <FilaJugador key={c.jugadores.id} c={c} />
+                  <FilaJugador
+                    key={c.jugadores.id}
+                    c={c}
+                    stats={stats}
+                    setStats={setStats}
+                    toggleConvocado={toggleConvocado}
+                  />
                 ))}
-                <FilaTotales lista={titulares} />
+                <FilaTotales lista={titulares} stats={stats} />
                 <CabeceraSeccion titulo="SUPLENTES" />
                 {suplentes.map((c) => (
-                  <FilaJugador key={c.jugadores.id} c={c} />
+                  <FilaJugador
+                    key={c.jugadores.id}
+                    c={c}
+                    stats={stats}
+                    setStats={setStats}
+                    toggleConvocado={toggleConvocado}
+                  />
                 ))}
-                <FilaTotales lista={suplentes} />
-                <tr style={{ borderTop: "2px solid var(--texto)" }}>
-                  <td
-                    style={{
-                      padding: "10px 8px",
-                      fontWeight: 800,
-                      fontSize: "12px",
-                      letterSpacing: ".08em",
-                    }}
-                  >
-                    TOTALES
-                  </td>
-                  {(() => {
-                    const sum = (campo) =>
-                      convocados.reduce(
-                        (a, c) =>
-                          a + parseInt(stats[c.jugadores.id]?.[campo] ?? 0),
-                        0,
-                      );
-                    const st = {
-                      padding: "10px 8px",
-                      textAlign: "center",
-                      fontWeight: 800,
-                    };
-                    return (
-                      <>
-                        <td style={st}>{sum("minutos")}</td>
-                        <td
-                          style={{ ...st, color: "#F97316", fontSize: "15px" }}
-                        >
-                          {sum("puntos")}
-                        </td>
-                        <td style={st}>
-                          {sum("tiros_campo_anotados")}-
-                          {sum("tiros_campo_intentados")}
-                        </td>
-                        <td style={st}>
-                          {sum("triples_anotados")}-{sum("triples_intentados")}
-                        </td>
-                        <td style={st}>
-                          {sum("rebotes_ofensivos") + sum("rebotes_defensivos")}
-                        </td>
-                        <td style={st}>{sum("asistencias")}</td>
-                        <td style={st}>{sum("faltas_cometidas")}</td>
-                        <td style={st}>
-                          {sum("tiros_libres_anotados")}-
-                          {sum("tiros_libres_intentados")}
-                        </td>
-                        <td style={st}>{sum("rebotes_ofensivos")}</td>
-                        <td style={st}>{sum("rebotes_defensivos")}</td>
-                        <td style={st}>{sum("robos")}</td>
-                        <td style={st}>{sum("tapones")}</td>
-                        <td />
-                      </>
+                <FilaTotales lista={suplentes} stats={stats} />
+
+                {/* Totales globales */}
+                {(() => {
+                  const sum = (campo) =>
+                    convocados.reduce(
+                      (a, c) =>
+                        a + parseInt(stats[c.jugadores.id]?.[campo] ?? 0),
+                      0,
                     );
-                  })()}
-                </tr>
+                  const totalSegs = convocados.reduce(
+                    (a, c) =>
+                      a +
+                      minutosASegundos(stats[c.jugadores.id]?.minutos ?? "0"),
+                    0,
+                  );
+                  const totalPts = convocados.reduce((a, c) => {
+                    const s = stats[c.jugadores.id] ?? {};
+                    return (
+                      a +
+                      parseInt(s.tiros_libres_anotados ?? 0) * 1 +
+                      parseInt(s.tiros_campo_anotados ?? 0) * 2 +
+                      parseInt(s.triples_anotados ?? 0) * 3
+                    );
+                  }, 0);
+                  const totalVal = convocados.reduce(
+                    (a, c) =>
+                      a + calcularValoracion(stats[c.jugadores.id] ?? {}),
+                    0,
+                  );
+                  const st = {
+                    padding: "10px 8px",
+                    textAlign: "center",
+                    fontWeight: 800,
+                  };
+                  return (
+                    <tr style={{ borderTop: "2px solid var(--texto)" }}>
+                      <td
+                        style={{
+                          padding: "10px 8px",
+                          fontWeight: 800,
+                          fontSize: "12px",
+                          letterSpacing: ".08em",
+                        }}
+                      >
+                        TOTALES
+                      </td>
+                      <td style={{ ...st, fontFamily: "monospace" }}>
+                        {segundosADisplay(totalSegs)}
+                      </td>
+                      {/* PTS */}
+                      <td style={{ ...st, color: "#F97316", fontSize: "15px" }}>
+                        {totalPts}
+                      </td>
+                      {/* FG calculado */}
+                      <td style={st}>
+                        {sum("tiros_campo_anotados") + sum("triples_anotados")}-
+                        {sum("tiros_campo_intentados") +
+                          sum("triples_intentados")}
+                      </td>
+                      {/* T2 en bruto */}
+                      <td style={st}>
+                        {sum("tiros_campo_anotados")}-
+                        {sum("tiros_campo_intentados")}
+                      </td>
+                      {/* 3PT */}
+                      <td style={st}>
+                        {sum("triples_anotados")}-{sum("triples_intentados")}
+                      </td>
+                      {/* FT */}
+                      <td style={st}>
+                        {sum("tiros_libres_anotados")}-
+                        {sum("tiros_libres_intentados")}
+                      </td>
+                      {/* OREB */}
+                      <td style={st}>{sum("rebotes_ofensivos")}</td>
+                      {/* DREB */}
+                      <td style={st}>{sum("rebotes_defensivos")}</td>
+                      {/* REB total */}
+                      <td style={st}>
+                        {sum("rebotes_ofensivos") + sum("rebotes_defensivos")}
+                      </td>
+                      {/* AST */}
+                      <td style={st}>{sum("asistencias")}</td>
+                      {/* STL */}
+                      <td style={st}>{sum("robos")}</td>
+                      {/* PER */}
+                      <td style={st}>{sum("perdidas")}</td>
+                      {/* BLK */}
+                      <td style={st}>{sum("tapones")}</td>
+                      {/* PF */}
+                      <td style={st}>{sum("faltas_cometidas")}</td>
+                      {/* FR */}
+                      <td style={st}>{sum("faltas_recibidas")}</td>
+                      {/* VAL */}
+                      <td
+                        style={{
+                          ...st,
+                          color:
+                            totalVal > 0
+                              ? "#0baa3b"
+                              : totalVal < 0
+                                ? "#ef4444"
+                                : "var(--muted)",
+                        }}
+                      >
+                        {totalVal > 0 ? `+${totalVal}` : totalVal}
+                      </td>
+                      <td />
+                    </tr>
+                  );
+                })()}
               </tbody>
             </table>
           </div>
@@ -976,114 +1280,125 @@ export default function AdminPartido({
             </div>
           )}
 
-          <div
-            style={{
-              marginTop: "16px",
-              display: "flex",
-              alignItems: "center",
-              gap: "16px",
-              flexWrap: "wrap",
-            }}
-          >
-            {(() => {
-              const totalMinutos = convocados.reduce(
-                (a, c) => a + parseInt(stats[c.jugadores.id]?.minutos ?? 0),
-                0,
-              );
-              const totalTitulares = titulares.length;
-              const minutosOk = totalMinutos === 200;
-              const titularesOk = totalTitulares === 5;
-              const todoOk = minutosOk && titularesOk;
-              return (
-                <>
+          {/* Contador minutos + guardar */}
+          {(() => {
+            const totalSegs = convocados.reduce(
+              (a, c) =>
+                a + minutosASegundos(stats[c.jugadores.id]?.minutos ?? "0"),
+              0,
+            );
+            const OBJETIVO = 200 * 60;
+            const totalTitulares = titulares.length;
+            const minutosOk = totalSegs === OBJETIVO;
+            const titularesOk = totalTitulares === 5;
+            const todoOk = minutosOk && titularesOk;
+            const diff = Math.abs(totalSegs - OBJETIVO);
+            const diffDisplay = segundosADisplay(diff);
+
+            return (
+              <div
+                style={{
+                  marginTop: "16px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "16px",
+                  flexWrap: "wrap",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "16px",
+                    alignItems: "center",
+                  }}
+                >
                   <div
                     style={{
-                      display: "flex",
-                      gap: "16px",
-                      alignItems: "center",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: "13px",
-                        fontWeight: 700,
-                        color: minutosOk
-                          ? "green"
-                          : totalMinutos > 200
-                            ? "red"
-                            : "var(--muted)",
-                      }}
-                    >
-                      {totalMinutos} / 200 min
-                      {!minutosOk && (
-                        <span style={{ fontWeight: 400, marginLeft: "6px" }}>
-                          {200 - totalMinutos > 0
-                            ? `(faltan ${200 - totalMinutos})`
-                            : `(sobran ${totalMinutos - 200})`}
-                        </span>
-                      )}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "13px",
-                        fontWeight: 700,
-                        color: titularesOk
-                          ? "green"
-                          : totalTitulares > 5
-                            ? "red"
-                            : "var(--muted)",
-                      }}
-                    >
-                      {totalTitulares} / 5 titulares
-                      {!titularesOk && (
-                        <span style={{ fontWeight: 400, marginLeft: "6px" }}>
-                          {totalTitulares > 5
-                            ? `(${totalTitulares - 5} de más)`
-                            : `(faltan ${5 - totalTitulares})`}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    onClick={async () => {
-                      const errores = [];
-                      if (!minutosOk)
-                        errores.push(
-                          `Los minutos suman ${totalMinutos} en lugar de 200`,
-                        );
-                      if (!titularesOk)
-                        errores.push(
-                          `Hay ${totalTitulares} titulares en lugar de 5`,
-                        );
-                      if (
-                        errores.length > 0 &&
-                        !confirm(
-                          `Atención:\n${errores.join("\n")}\n\n¿Guardar igualmente?`,
-                        )
-                      )
-                        return;
-                      await Promise.all(
-                        convocados.map((c) => guardarStats(c.jugadores.id)),
-                      );
-                      setMsg("Estadísticas guardadas correctamente");
-                    }}
-                    style={{
-                      background: todoOk ? "var(--naranja)" : "var(--azul)",
-                      color: "white",
-                      border: "none",
-                      padding: "10px 24px",
-                      borderRadius: "8px",
                       fontSize: "13px",
                       fontWeight: 700,
-                      cursor: "pointer",
+                      fontFamily: "monospace",
+                      color: minutosOk
+                        ? "green"
+                        : totalSegs > OBJETIVO
+                          ? "red"
+                          : "var(--muted)",
                     }}
                   >
-                    {todoOk ? "Guardar estadísticas" : "Guardar igualmente"}
-                  </button>
-                </>
-              );
-            })()}
-          </div>
+                    {segundosADisplay(totalSegs)} / 200:00
+                    {!minutosOk && (
+                      <span
+                        style={{
+                          fontWeight: 400,
+                          marginLeft: "6px",
+                          fontFamily: "system-ui",
+                        }}
+                      >
+                        {totalSegs < OBJETIVO
+                          ? `(faltan ${diffDisplay})`
+                          : `(sobran ${diffDisplay})`}
+                      </span>
+                    )}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "13px",
+                      fontWeight: 700,
+                      color: titularesOk
+                        ? "green"
+                        : totalTitulares > 5
+                          ? "red"
+                          : "var(--muted)",
+                    }}
+                  >
+                    {totalTitulares} / 5 titulares
+                    {!titularesOk && (
+                      <span style={{ fontWeight: 400, marginLeft: "6px" }}>
+                        {totalTitulares > 5
+                          ? `(${totalTitulares - 5} de más)`
+                          : `(faltan ${5 - totalTitulares})`}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={async () => {
+                    const errores = [];
+                    if (!minutosOk)
+                      errores.push(
+                        `Los minutos suman ${segundosADisplay(totalSegs)} en lugar de 200:00`,
+                      );
+                    if (!titularesOk)
+                      errores.push(
+                        `Hay ${totalTitulares} titulares en lugar de 5`,
+                      );
+                    if (
+                      errores.length > 0 &&
+                      !confirm(
+                        `Atención:\n${errores.join("\n")}\n\n¿Guardar igualmente?`,
+                      )
+                    )
+                      return;
+                    await Promise.all(
+                      convocados.map((c) => guardarStats(c.jugadores.id)),
+                    );
+                    setMsg("Estadísticas guardadas correctamente");
+                  }}
+                  style={{
+                    background: todoOk ? "var(--naranja)" : "var(--azul)",
+                    color: "white",
+                    border: "none",
+                    padding: "10px 24px",
+                    borderRadius: "8px",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  {todoOk ? "Guardar estadísticas" : "Guardar igualmente"}
+                </button>
+              </div>
+            );
+          })()}
         </div>
       )}
 

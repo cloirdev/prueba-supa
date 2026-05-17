@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 export default function FormNuevoEquipo({ supabase, onCreado, onCancelar }) {
   const [categorias, setCategorias] = useState([]);
@@ -14,6 +14,42 @@ export default function FormNuevoEquipo({ supabase, onCreado, onCancelar }) {
     competicion_id: "",
     sponsor: "",
   });
+
+  // ── Foto ──────────────────────────────────────────────────────────────────
+  const [fotoFile, setFotoFile] = useState(null);
+  const [fotoPreview, setFotoPreview] = useState(null);
+  const [subiendoFoto, setSubiendoFoto] = useState(false);
+  const inputFotoRef = useRef(null);
+
+  function onFotoChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFotoFile(file);
+    setFotoPreview(URL.createObjectURL(file));
+  }
+
+  function quitarFoto() {
+    setFotoFile(null);
+    setFotoPreview(null);
+    if (inputFotoRef.current) inputFotoRef.current.value = "";
+  }
+
+  async function subirFoto(equipoId) {
+    if (!fotoFile) return null;
+    setSubiendoFoto(true);
+    const ext = fotoFile.name.split(".").pop();
+    const path = `equipos/${equipoId}.${ext}`;
+    const { error: uploadError } = await supabase.storage
+      .from("equipos")
+      .upload(`${equipoId}.${ext}`, file, { upsert: true });
+    setSubiendoFoto(false);
+    if (uploadError) throw new Error(uploadError.message);
+    const { data } = supabase.storage
+      .from("equipos")
+      .getPublicUrl(`${equipoId}.${ext}`);
+    return data.publicUrl;
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     async function cargarOpciones() {
@@ -54,28 +90,38 @@ export default function FormNuevoEquipo({ supabase, onCreado, onCancelar }) {
     }
 
     setGuardando(true);
+    try {
+      // 1. Crear el equipo sin foto primero
+      const payload = {
+        temporada_id: form.temporada_id,
+        categoria_id: form.categoria_id,
+        competicion_id: form.competicion_id,
+        sponsor: form.sponsor.trim() || null,
+      };
 
-    const payload = {
-      temporada_id: form.temporada_id,
-      categoria_id: form.categoria_id,
-      competicion_id: form.competicion_id,
-      sponsor: form.sponsor.trim() || null,
-    };
+      const { data, error: err } = await supabase
+        .from("equipos")
+        .insert(payload)
+        .select("id, temporada_id, categoria_id, competicion_id, sponsor")
+        .single();
 
-    const { data, error: err } = await supabase
-      .from("equipos")
-      .insert(payload)
-      .select("id, temporada_id, categoria_id, competicion_id, sponsor")
-      .single();
+      if (err) throw new Error(err.message ?? "Error al crear el equipo");
 
-    setGuardando(false);
+      // 2. Si hay foto, subirla y actualizar el registro
+      if (fotoFile) {
+        const foto_url = await subirFoto(data.id);
+        if (foto_url) {
+          await supabase.from("equipos").update({ foto_url }).eq("id", data.id);
+          data.foto_url = foto_url;
+        }
+      }
 
-    if (err) {
-      setError(err.message ?? "Error al crear el equipo");
-      return;
+      onCreado(data);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setGuardando(false);
     }
-
-    onCreado(data);
   }
 
   if (cargando)
@@ -118,7 +164,6 @@ export default function FormNuevoEquipo({ supabase, onCreado, onCancelar }) {
         </p>
       )}
 
-      {/* Temporada */}
       <Field label="Temporada *">
         <select
           value={form.temporada_id}
@@ -134,7 +179,6 @@ export default function FormNuevoEquipo({ supabase, onCreado, onCancelar }) {
         </select>
       </Field>
 
-      {/* Categoría */}
       <Field label="Categoría *">
         <select
           value={form.categoria_id}
@@ -150,7 +194,6 @@ export default function FormNuevoEquipo({ supabase, onCreado, onCancelar }) {
         </select>
       </Field>
 
-      {/* Competición */}
       <Field label="Competición *">
         <select
           value={form.competicion_id}
@@ -166,7 +209,6 @@ export default function FormNuevoEquipo({ supabase, onCreado, onCancelar }) {
         </select>
       </Field>
 
-      {/* Sponsor (opcional) */}
       <Field
         label="Sponsor"
         hint="Nombre comercial del equipo esta temporada (ej. «Aloha Jaca»)"
@@ -180,7 +222,99 @@ export default function FormNuevoEquipo({ supabase, onCreado, onCancelar }) {
         />
       </Field>
 
-      {/* Preview del nombre resultante */}
+      {/* ── Foto de equipo ── */}
+      <Field
+        label="Foto del equipo"
+        hint="Se mostrará como fondo en la página de equipos"
+      >
+        {fotoPreview ? (
+          <div
+            style={{
+              position: "relative",
+              borderRadius: "10px",
+              overflow: "hidden",
+            }}
+          >
+            <img
+              src={fotoPreview}
+              alt="Preview"
+              style={{
+                width: "100%",
+                height: "160px",
+                objectFit: "cover",
+                display: "block",
+                borderRadius: "10px",
+              }}
+            />
+            <button
+              onClick={quitarFoto}
+              style={{
+                position: "absolute",
+                top: "8px",
+                right: "8px",
+                background: "rgba(0,0,0,0.6)",
+                color: "white",
+                border: "none",
+                borderRadius: "6px",
+                padding: "4px 10px",
+                fontSize: "12px",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Quitar
+            </button>
+          </div>
+        ) : (
+          <div
+            onClick={() => inputFotoRef.current?.click()}
+            style={{
+              border: "2px dashed var(--borde)",
+              borderRadius: "10px",
+              padding: "28px",
+              textAlign: "center",
+              cursor: "pointer",
+              transition: "border-color 0.2s",
+            }}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.borderColor = "var(--naranja)")
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.borderColor = "var(--borde)")
+            }
+          >
+            <div style={{ fontSize: "24px", marginBottom: "6px" }}>🖼️</div>
+            <p
+              style={{
+                margin: 0,
+                fontSize: "13px",
+                color: "var(--muted)",
+                fontWeight: 600,
+              }}
+            >
+              Haz clic para subir una foto
+            </p>
+            <p
+              style={{
+                margin: "4px 0 0",
+                fontSize: "11px",
+                color: "var(--muted)",
+              }}
+            >
+              JPG, PNG o WEBP · Recomendado 1200×600px
+            </p>
+          </div>
+        )}
+        <input
+          ref={inputFotoRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={onFotoChange}
+          style={{ display: "none" }}
+        />
+      </Field>
+
+      {/* Vista previa nombre */}
       {(form.categoria_id || form.sponsor) && (
         <div
           style={{
@@ -229,18 +363,21 @@ export default function FormNuevoEquipo({ supabase, onCreado, onCancelar }) {
         </div>
       )}
 
-      {/* Acciones */}
       <div style={{ display: "flex", gap: "10px", paddingTop: "4px" }}>
         <button
           onClick={guardar}
-          disabled={guardando}
+          disabled={guardando || subiendoFoto}
           style={{
             ...btnPrimaryStyle,
-            opacity: guardando ? 0.6 : 1,
-            cursor: guardando ? "not-allowed" : "pointer",
+            opacity: guardando || subiendoFoto ? 0.6 : 1,
+            cursor: guardando || subiendoFoto ? "not-allowed" : "pointer",
           }}
         >
-          {guardando ? "Creando..." : "Crear equipo"}
+          {subiendoFoto
+            ? "Subiendo foto..."
+            : guardando
+              ? "Creando..."
+              : "Crear equipo"}
         </button>
         <button onClick={onCancelar} style={btnSecondaryStyle}>
           Cancelar
@@ -273,7 +410,6 @@ const labelStyle = {
   textTransform: "uppercase",
   letterSpacing: ".05em",
 };
-
 const inputStyle = {
   width: "100%",
   padding: "10px 12px",
@@ -284,7 +420,6 @@ const inputStyle = {
   fontSize: "13px",
   boxSizing: "border-box",
 };
-
 const btnPrimaryStyle = {
   background: "var(--naranja)",
   color: "white",
@@ -295,7 +430,6 @@ const btnPrimaryStyle = {
   fontWeight: 700,
   cursor: "pointer",
 };
-
 const btnSecondaryStyle = {
   background: "transparent",
   color: "var(--muted)",

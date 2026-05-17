@@ -12,6 +12,8 @@ import AdminJugadores from "./jugadores/AdminJugadores.jsx";
 import AdminEntrenadores from "./AdminEntrenadores.jsx";
 import AdminClasificacion from "./AdminClasificacion.jsx";
 import FormNuevoEquipo from "./FormNuevoEquipo.jsx";
+import AdminClubes from "./AdminClubes.jsx";
+import AdminEquiposRivales from "./AdminEquiposRivales.jsx";
 
 const supabase = createClient(
   import.meta.env.PUBLIC_SUPABASE_URL,
@@ -251,6 +253,13 @@ export default function AdminApp() {
               tk={tk}
             >
               <NavItem
+                label="Equipo"
+                icon="🏀"
+                activa={vista === "equipo"}
+                collapsed={sidebarCollapsed}
+                onClick={() => setVista("equipo")}
+              />
+              <NavItem
                 label="Plantilla"
                 icon="👥"
                 activa={vista === "plantilla"}
@@ -296,6 +305,20 @@ export default function AdminApp() {
                 activa={vista === "entrenadores"}
                 collapsed={sidebarCollapsed}
                 onClick={() => setVista("entrenadores")}
+              />
+              <NavItem
+                label="Clubes"
+                icon="🏛️"
+                activa={vista === "clubes"}
+                collapsed={sidebarCollapsed}
+                onClick={() => setVista("clubes")}
+              />
+              <NavItem
+                label="Equipos rivales"
+                icon="⚔️"
+                activa={vista === "rivales"}
+                collapsed={sidebarCollapsed}
+                onClick={() => setVista("rivales")}
               />
               <NavItem
                 label="Nuevo equipo"
@@ -636,7 +659,7 @@ export default function AdminApp() {
               temporada={temporadaActual}
               onSelect={(equipo) => {
                 setEquipoActual(equipo);
-                setVista("calendario");
+                setVista("equipo");
               }}
               onBack={() => {
                 setTemporadaActual(null);
@@ -651,6 +674,19 @@ export default function AdminApp() {
               equipo={equipoActual}
               temporada={temporadaActual}
               onBack={() => setVista("calendario")}
+            />
+          )}
+          {vista === "equipo" && tieneEquipo && (
+            <AdminPanel
+              supabase={supabase}
+              perfil={perfil}
+              equipo={equipoActual}
+              temporada={temporadaActual}
+              onBack={() => {
+                setEquipoActual(null);
+                setVista("equipos");
+              }}
+              onIrA={(seccion) => setVista(seccion)}
             />
           )}
           {vista === "calendario" && tieneEquipo && (
@@ -693,6 +729,12 @@ export default function AdminApp() {
           )}
           {vista === "entrenadores" && perfil?.rol === "admin" && (
             <AdminEntrenadores supabase={supabase} perfil={perfil} />
+          )}
+          {vista === "clubes" && perfil?.rol === "admin" && (
+            <AdminClubes supabase={supabase} perfil={perfil} />
+          )}
+          {vista === "rivales" && perfil?.rol === "admin" && (
+            <AdminEquiposRivales supabase={supabase} perfil={perfil} />
           )}
         </div>
       </div>

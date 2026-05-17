@@ -6,7 +6,10 @@ import Layout from "@/layouts/Layout.astro";
 
 // ── Parámetros de paginación ───────────────────────────────────────────────
 const POR_PAGINA = 12;
-const pagina = Math.max(1, parseInt(Astro.url.searchParams.get("pagina") ?? "1"));
+const pagina = Math.max(
+  1,
+  parseInt(Astro.url.searchParams.get("pagina") ?? "1"),
+);
 const desde = (pagina - 1) * POR_PAGINA;
 
 // ── Categorías para el filtro ──────────────────────────────────────────────
@@ -20,7 +23,9 @@ const categoriaFiltro = Astro.url.searchParams.get("categoria") ?? null;
 // ── Noticia destacada (hero) ───────────────────────────────────────────────
 const { data: destacada } = await supabase
   .from("noticias")
-  .select("id, titulo, subtitulo, img_url, fecha_publicacion, slug, categorias(nombre, slug)")
+  .select(
+    "id, titulo, subtitulo, img_url, fecha_publicacion, slug, categorias(nombre, slug)",
+  )
   .eq("publicada", true)
   .eq("destacada", true)
   .order("fecha_publicacion", { ascending: false })
@@ -30,7 +35,10 @@ const { data: destacada } = await supabase
 // ── Query base de noticias ─────────────────────────────────────────────────
 let query = supabase
   .from("noticias")
-  .select("id, titulo, subtitulo, img_url, fecha_publicacion, slug, categorias(nombre, slug)", { count: "exact" })
+  .select(
+    "id, titulo, subtitulo, img_url, fecha_publicacion, slug, categorias(nombre, slug)",
+    { count: "exact" },
+  )
   .eq("publicada", true)
   .order("fecha_publicacion", { ascending: false })
   .range(desde, desde + POR_PAGINA - 1);
@@ -40,7 +48,7 @@ if (destacada?.id) query = query.neq("id", destacada.id);
 
 // Filtrar por categoría si viene en la URL
 if (categoriaFiltro) {
-  const cat = (categorias ?? []).find(c => c.slug === categoriaFiltro);
+  const cat = (categorias ?? []).find((c) => c.slug === categoriaFiltro);
   if (cat) query = query.eq("categoria_id", cat.id);
 }
 
@@ -51,9 +59,9 @@ const totalPaginas = Math.ceil((count ?? 0) / POR_PAGINA);
 // ── Helpers ────────────────────────────────────────────────────────────────
 function urlNoticia(n) {
   if (!n.fecha_publicacion || !n.slug) return `/noticias/${n.id}`;
-  const d   = new Date(n.fecha_publicacion);
-  const y   = d.getFullYear();
-  const m   = String(d.getMonth() + 1).padStart(2, "0");
+  const d = new Date(n.fecha_publicacion);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `/noticias/${y}/${m}/${day}/${n.slug}`;
 }
@@ -61,14 +69,18 @@ function urlNoticia(n) {
 function formatFecha(f) {
   if (!f) return "";
   return new Date(f).toLocaleDateString("es-ES", {
-    day: "numeric", month: "long", year: "numeric",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
   });
 }
 
 function formatFechaCorta(f) {
   if (!f) return "";
   return new Date(f).toLocaleDateString("es-ES", {
-    day: "numeric", month: "short", year: "numeric",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
   });
 }
 
@@ -85,10 +97,12 @@ function categoriaUrl(slug) {
   return `/noticias?categoria=${slug}`;
 }
 
-const paginasAMostrar = Array.from({ length: totalPaginas }, (_, i) => i + 1)
-  .filter(p => {
-    return p === 1 || p === totalPaginas || Math.abs(p - pagina) <= 1;
-  });
+const paginasAMostrar = Array.from(
+  { length: totalPaginas },
+  (_, i) => i + 1,
+).filter((p) => {
+  return p === 1 || p === totalPaginas || Math.abs(p - pagina) <= 1;
+});
 
 // Creamos una lista con elipsis donde falten números
 const itemsPaginacion = [];
@@ -96,160 +110,202 @@ let ultimaP = 0;
 
 for (const p of paginasAMostrar) {
   if (ultimaP !== 0 && p - ultimaP > 1) {
-    itemsPaginacion.push({ tipo: 'elipsis' });
+    itemsPaginacion.push({ tipo: "elipsis" });
   }
-  itemsPaginacion.push({ tipo: 'pagina', valor: p });
+  itemsPaginacion.push({ tipo: "pagina", valor: p });
   ultimaP = p;
 }
 
-const catActual = (categorias ?? []).find(c => c.slug === categoriaFiltro);
+const catActual = (categorias ?? []).find((c) => c.slug === categoriaFiltro);
 ---
 
 <Layout titulo="Noticias | CB Jaca">
-
   <!-- ── CABECERA ── -->
   <div class="page-header">
     <div class="page-header-inner">
       <div class="header-text">
         <p class="header-eyebrow">Club Baloncesto Jaca</p>
         <h1 class="header-titulo">Noticias</h1>
-        {catActual && (
-          <p class="header-filtro-activo">
-            Filtrando por: <strong>{catActual.nombre}</strong>
-            <a href="/noticias" class="quitar-filtro">✕ quitar filtro</a>
-          </p>
-        )}
+        {
+          catActual && (
+            <p class="header-filtro-activo">
+              Filtrando por: <strong>{catActual.nombre}</strong>
+              <a href="/noticias" class="quitar-filtro">
+                ✕ quitar filtro
+              </a>
+            </p>
+          )
+        }
       </div>
 
       <!-- Filtro de categorías -->
-      {categorias && categorias.length > 0 && (
-        <nav class="filtros" aria-label="Filtrar por categoría">
-          <a
-            href="/noticias"
-            class:list={["filtro-btn", !categoriaFiltro ? "activo" : ""]}
-          >
-            Todas
-          </a>
-          {categorias.map((c) => (
+      {
+        categorias && categorias.length > 0 && (
+          <nav class="filtros" aria-label="Filtrar por categoría">
             <a
-              href={categoriaUrl(c.slug)}
-              class:list={["filtro-btn", categoriaFiltro === c.slug ? "activo" : ""]}
+              href="/noticias"
+              class:list={["filtro-btn", !categoriaFiltro ? "activo" : ""]}
             >
-              {c.nombre}
+              Todas
             </a>
-          ))}
-        </nav>
-      )}
+            {categorias.map((c) => (
+              <a
+                href={categoriaUrl(c.slug)}
+                class:list={[
+                  "filtro-btn",
+                  categoriaFiltro === c.slug ? "activo" : "",
+                ]}
+              >
+                {c.nombre}
+              </a>
+            ))}
+          </nav>
+        )
+      }
     </div>
   </div>
 
   <div class="contenido">
-
     <!-- ── NOTICIA DESTACADA ── -->
-    {destacada && !categoriaFiltro && (
-      <section class="destacada-section">
-        <a href={urlNoticia(destacada)} class="destacada-card">
-          <div class="destacada-img-wrap">
-            {destacada.img_url
-              ? <img src={destacada.img_url} alt={destacada.titulo} class="destacada-img" />
-              : <div class="destacada-placeholder"></div>
-            }
-            <div class="destacada-overlay"></div>
-          </div>
-          <div class="destacada-info">
-            <div class="destacada-meta">
-              <span class="pill-destacada">Destacada</span>
-              {destacada.categorias && (
-                <span class="pill-cat">{destacada.categorias.nombre}</span>
+    {
+      destacada && !categoriaFiltro && (
+        <section class="destacada-section">
+          <a href={urlNoticia(destacada)} class="destacada-card">
+            <div class="destacada-img-wrap">
+              {destacada.img_url ? (
+                <img
+                  src={destacada.img_url}
+                  alt={destacada.titulo}
+                  class="destacada-img"
+                />
+              ) : (
+                <div class="destacada-placeholder" />
               )}
-              <time class="destacada-fecha">{formatFecha(destacada.fecha_publicacion)}</time>
+              <div class="destacada-overlay" />
             </div>
-            <h2 class="destacada-titulo">{destacada.titulo}</h2>
-            {destacada.subtitulo && (
-              <p class="destacada-sub">{destacada.subtitulo}</p>
-            )}
-            <span class="destacada-leer">Leer noticia →</span>
-          </div>
-        </a>
-      </section>
-    )}
+            <div class="destacada-info">
+              <div class="destacada-meta">
+                <span class="pill-destacada">Destacada</span>
+                {destacada.categorias && (
+                  <span class="pill-cat">{destacada.categorias.nombre}</span>
+                )}
+                <time class="destacada-fecha">
+                  {formatFecha(destacada.fecha_publicacion)}
+                </time>
+              </div>
+              <h2 class="destacada-titulo">{destacada.titulo}</h2>
+              {destacada.subtitulo && (
+                <p class="destacada-sub">{destacada.subtitulo}</p>
+              )}
+              <span class="destacada-leer">Leer noticia →</span>
+            </div>
+          </a>
+        </section>
+      )
+    }
 
     <!-- ── GRID DE NOTICIAS ── -->
-    {noticias && noticias.length > 0 ? (
-      <section class="grid-section">
-        {!categoriaFiltro && destacada && (
-          <h2 class="grid-titulo">Últimas noticias</h2>
-        )}
-        <div class="noticias-grid">
-          {noticias.map((n, i) => (
-            <a href={urlNoticia(n)} class:list={["noticia-card", i === 0 ? "card-grande" : ""]}>
-              <div class="card-img-wrap">
-                {n.img_url
-                  ? <img src={n.img_url} alt={n.titulo} class="card-img" loading="lazy" />
-                  : <div class="card-placeholder">
+    {
+      noticias && noticias.length > 0 ? (
+        <section class="grid-section">
+          {!categoriaFiltro && destacada && (
+            <h2 class="grid-titulo">Últimas noticias</h2>
+          )}
+          <div class="noticias-grid">
+            {noticias.map((n, i) => (
+              <a
+                href={urlNoticia(n)}
+                class:list={["noticia-card", i === 0 ? "card-grande" : ""]}
+              >
+                <div class="card-img-wrap">
+                  {n.img_url ? (
+                    <img
+                      src={n.img_url}
+                      alt={n.titulo}
+                      class="card-img"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div class="card-placeholder">
                       <span>CB Jaca</span>
                     </div>
-                }
-              </div>
-              <div class="card-body">
-                <div class="card-meta">
-                  {n.categorias && (
-                    <span class="card-cat">{n.categorias.nombre}</span>
                   )}
-                  <time class="card-fecha">{formatFechaCorta(n.fecha_publicacion)}</time>
                 </div>
-                <h3 class="card-titulo">{n.titulo}</h3>
-                {n.subtitulo && (
-                  <p class="card-sub">{n.subtitulo}</p>
-                )}
-              </div>
+                <div class="card-body">
+                  <div class="card-meta">
+                    {n.categorias && (
+                      <span class="card-cat">{n.categorias.nombre}</span>
+                    )}
+                    <time class="card-fecha">
+                      {formatFechaCorta(n.fecha_publicacion)}
+                    </time>
+                  </div>
+                  <h3 class="card-titulo">{n.titulo}</h3>
+                  {n.subtitulo && <p class="card-sub">{n.subtitulo}</p>}
+                </div>
+              </a>
+            ))}
+          </div>
+        </section>
+      ) : (
+        <div class="vacio">
+          <p>
+            No hay noticias
+            {catActual ? ` en la categoría "${catActual.nombre}"` : ""} todavía.
+          </p>
+          {catActual && (
+            <a href="/noticias" class="vacio-link">
+              Ver todas las noticias
             </a>
-          ))}
+          )}
         </div>
-      </section>
-    ) : (
-      <div class="vacio">
-        <p>No hay noticias{catActual ? ` en la categoría "${catActual.nombre}"` : ""} todavía.</p>
-        {catActual && <a href="/noticias" class="vacio-link">Ver todas las noticias</a>}
-      </div>
-    )}
+      )
+    }
 
     <!-- ── PAGINACIÓN ── -->
-    {totalPaginas > 1 && (
-      <nav class="paginacion" aria-label="Paginación">
-        {pagina > 1 && (
-          <a href={paginaUrl(pagina - 1)} class="pag-btn pag-prev">← Anterior</a>
-        )}
+    {
+      totalPaginas > 1 && (
+        <nav class="paginacion" aria-label="Paginación">
+          {pagina > 1 && (
+            <a href={paginaUrl(pagina - 1)} class="pag-btn pag-prev">
+              ← Anterior
+            </a>
+          )}
 
-        <div class="pag-nums">
-  {itemsPaginacion.map((item) => (
-    item.tipo === 'elipsis' ? (
-      <span class="pag-elipsis">…</span>
-    ) : (
-      <a
-        href={paginaUrl(item.valor)}
-        class:list={["pag-num", item.valor === pagina ? "activo" : ""]}
-        aria-current={item.valor === pagina ? "page" : undefined}
-      >
-        {item.valor}
-      </a>
-    )
-  ))}
-</div>
+          <div class="pag-nums">
+            {itemsPaginacion.map((item) =>
+              item.tipo === "elipsis" ? (
+                <span class="pag-elipsis">…</span>
+              ) : (
+                <a
+                  href={paginaUrl(item.valor)}
+                  class:list={[
+                    "pag-num",
+                    item.valor === pagina ? "activo" : "",
+                  ]}
+                  aria-current={item.valor === pagina ? "page" : undefined}
+                >
+                  {item.valor}
+                </a>
+              ),
+            )}
+          </div>
 
-        {pagina < totalPaginas && (
-          <a href={paginaUrl(pagina + 1)} class="pag-btn pag-next">Siguiente →</a>
-        )}
-      </nav>
-    )}
-
+          {pagina < totalPaginas && (
+            <a href={paginaUrl(pagina + 1)} class="pag-btn pag-next">
+              Siguiente →
+            </a>
+          )}
+        </nav>
+      )
+    }
   </div>
 </Layout>
 
 <style>
   /* ── Cabecera ─────────────────────────────────────────────────────────── */
   .page-header {
-    border-bottom: 1px solid rgba(255,255,255,0.06);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     padding: 3rem 2rem 2rem;
   }
   .page-header-inner {
@@ -276,23 +332,30 @@ const catActual = (categorias ?? []).find(c => c.slug === categoriaFiltro);
   }
   .header-filtro-activo {
     font-size: 0.82rem;
-    color: rgba(255,255,255,0.5);
+    color: rgba(255, 255, 255, 0.5);
     margin: 0.5rem 0 0;
     display: flex;
     align-items: center;
     gap: 0.75rem;
   }
-  .header-filtro-activo strong { color: white; }
+  .header-filtro-activo strong {
+    color: white;
+  }
   .quitar-filtro {
     font-size: 0.72rem;
     color: var(--muted, #64748b);
     text-decoration: none;
-    border: 1px solid rgba(255,255,255,0.1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     padding: 2px 8px;
     border-radius: 4px;
-    transition: color 0.15s, border-color 0.15s;
+    transition:
+      color 0.15s,
+      border-color 0.15s;
   }
-  .quitar-filtro:hover { color: white; border-color: rgba(255,255,255,0.3); }
+  .quitar-filtro:hover {
+    color: white;
+    border-color: rgba(255, 255, 255, 0.3);
+  }
 
   /* Filtros */
   .filtros {
@@ -308,12 +371,12 @@ const catActual = (categorias ?? []).find(c => c.slug === categoriaFiltro);
     padding: 5px 14px;
     border-radius: 20px;
     text-decoration: none;
-    border: 1px solid rgba(255,255,255,0.12);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     background: transparent;
     transition: all 0.15s;
   }
   .filtro-btn:hover {
-    border-color: rgba(249,115,22,0.5);
+    border-color: rgba(249, 115, 22, 0.5);
     color: var(--orange, #f97316);
   }
   .filtro-btn.activo {
@@ -339,9 +402,11 @@ const catActual = (categorias ?? []).find(c => c.slug === categoriaFiltro);
     border-radius: 14px;
     overflow: hidden;
     text-decoration: none;
-    border: 1px solid var(--borde, rgba(255,255,255,0.07));
+    border: 1px solid var(--borde, rgba(255, 255, 255, 0.07));
     background: var(--card, #1e293b);
-    transition: border-color 0.2s, transform 0.2s;
+    transition:
+      border-color 0.2s,
+      transform 0.2s;
     min-height: 320px;
   }
   .destacada-card:hover {
@@ -359,14 +424,23 @@ const catActual = (categorias ?? []).find(c => c.slug === categoriaFiltro);
     display: block;
     transition: transform 0.4s ease;
   }
-  .destacada-card:hover .destacada-img { transform: scale(1.04); }
+  .destacada-card:hover .destacada-img {
+    transform: scale(1.04);
+  }
   .destacada-placeholder {
-    width: 100%; height: 100%; min-height: 280px;
+    width: 100%;
+    height: 100%;
+    min-height: 280px;
     background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
   }
   .destacada-overlay {
-    position: absolute; inset: 0;
-    background: linear-gradient(to right, transparent 60%, var(--card, #1e293b) 100%);
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to right,
+      transparent 60%,
+      var(--card, #1e293b) 100%
+    );
     pointer-events: none;
   }
   .destacada-info {
@@ -389,9 +463,9 @@ const catActual = (categorias ?? []).find(c => c.slug === categoriaFiltro);
     letter-spacing: 0.08em;
     padding: 3px 8px;
     border-radius: 4px;
-    background: rgba(234,179,8,0.15);
+    background: rgba(234, 179, 8, 0.15);
     color: #eab308;
-    border: 1px solid rgba(234,179,8,0.25);
+    border: 1px solid rgba(234, 179, 8, 0.25);
   }
   .pill-cat {
     font-size: 0.62rem;
@@ -400,9 +474,9 @@ const catActual = (categorias ?? []).find(c => c.slug === categoriaFiltro);
     letter-spacing: 0.08em;
     padding: 3px 8px;
     border-radius: 4px;
-    background: rgba(249,115,22,0.12);
+    background: rgba(249, 115, 22, 0.12);
     color: var(--orange, #f97316);
-    border: 1px solid rgba(249,115,22,0.2);
+    border: 1px solid rgba(249, 115, 22, 0.2);
   }
   .destacada-fecha {
     font-size: 0.72rem;
@@ -469,12 +543,14 @@ const catActual = (categorias ?? []).find(c => c.slug === categoriaFiltro);
     display: flex;
     flex-direction: column;
     background: var(--card, #1e293b);
-    border: 1px solid var(--borde, rgba(255,255,255,0.07));
+    border: 1px solid var(--borde, rgba(255, 255, 255, 0.07));
     border-radius: 12px;
     overflow: hidden;
     text-decoration: none;
     color: inherit;
-    transition: border-color 0.2s, transform 0.15s;
+    transition:
+      border-color 0.2s,
+      transform 0.15s;
   }
   .noticia-card:hover {
     border-color: var(--orange, #f97316);
@@ -484,22 +560,36 @@ const catActual = (categorias ?? []).find(c => c.slug === categoriaFiltro);
   .card-img-wrap {
     aspect-ratio: 4/3;
     overflow: hidden;
-    background: rgba(255,255,255,0.03);
+    background: rgba(255, 255, 255, 0.03);
   }
   .card-img {
-    width: 100%; height: 100%;
-    object-fit: cover; display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
     transition: transform 0.3s ease;
   }
-  .noticia-card:hover .card-img { transform: scale(1.05); }
+  .noticia-card:hover .card-img {
+    transform: scale(1.05);
+  }
   .card-placeholder {
-    width: 100%; height: 100%;
-    display: flex; align-items: center; justify-content: center;
-    background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, transparent 100%);
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.03) 0%,
+      transparent 100%
+    );
   }
   .card-placeholder span {
-    font-size: 0.65rem; font-weight: 800; text-transform: uppercase;
-    letter-spacing: 0.12em; color: rgba(255,255,255,0.1);
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: rgba(255, 255, 255, 0.1);
   }
 
   .card-body {
@@ -565,7 +655,9 @@ const catActual = (categorias ?? []).find(c => c.slug === categoriaFiltro);
     color: var(--orange, #f97316);
     text-decoration: none;
   }
-  .vacio-link:hover { text-decoration: underline; }
+  .vacio-link:hover {
+    text-decoration: underline;
+  }
 
   /* ── Paginación ───────────────────────────────────────────────────────── */
   .paginacion {
@@ -574,7 +666,7 @@ const catActual = (categorias ?? []).find(c => c.slug === categoriaFiltro);
     justify-content: center;
     gap: 0.5rem;
     padding-top: 1rem;
-    border-top: 1px solid var(--borde, rgba(255,255,255,0.07));
+    border-top: 1px solid var(--borde, rgba(255, 255, 255, 0.07));
     flex-wrap: wrap;
   }
   .pag-btn {
@@ -584,19 +676,25 @@ const catActual = (categorias ?? []).find(c => c.slug === categoriaFiltro);
     text-decoration: none;
     padding: 0.5rem 1rem;
     border-radius: 8px;
-    border: 1px solid rgba(249,115,22,0.25);
+    border: 1px solid rgba(249, 115, 22, 0.25);
     transition: background 0.15s;
   }
-  .pag-btn:hover { background: rgba(249,115,22,0.08); }
+  .pag-btn:hover {
+    background: rgba(249, 115, 22, 0.08);
+  }
   .pag-nums {
     display: flex;
     align-items: center;
     gap: 0.25rem;
   }
   .pag-num {
-    width: 36px; height: 36px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 0.82rem; font-weight: 700;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.82rem;
+    font-weight: 700;
     text-decoration: none;
     border-radius: 8px;
     color: var(--muted, #64748b);
@@ -604,7 +702,7 @@ const catActual = (categorias ?? []).find(c => c.slug === categoriaFiltro);
     transition: all 0.15s;
   }
   .pag-num:hover {
-    border-color: rgba(255,255,255,0.1);
+    border-color: rgba(255, 255, 255, 0.1);
     color: white;
   }
   .pag-num.activo {
@@ -624,12 +722,22 @@ const catActual = (categorias ?? []).find(c => c.slug === categoriaFiltro);
       grid-template-columns: 1fr;
       min-height: auto;
     }
-    .destacada-img-wrap { aspect-ratio: 16/9; }
-    .destacada-overlay {
-      background: linear-gradient(to top, var(--card, #1e293b) 0%, transparent 60%);
+    .destacada-img-wrap {
+      aspect-ratio: 16/9;
     }
-    .destacada-info { padding: 1.25rem; }
-    .destacada-fecha { margin-left: 0; }
+    .destacada-overlay {
+      background: linear-gradient(
+        to top,
+        var(--card, #1e293b) 0%,
+        transparent 60%
+      );
+    }
+    .destacada-info {
+      padding: 1.25rem;
+    }
+    .destacada-fecha {
+      margin-left: 0;
+    }
 
     .noticias-grid {
       grid-template-columns: 1fr 1fr;
@@ -637,15 +745,29 @@ const catActual = (categorias ?? []).find(c => c.slug === categoriaFiltro);
     .noticia-card.card-grande {
       grid-column: span 2;
     }
-    .card-img-wrap { aspect-ratio: 16/9; }
+    .card-img-wrap {
+      aspect-ratio: 16/9;
+    }
   }
 
   @media (max-width: 480px) {
-    .page-header { padding: 2rem 1rem 1.5rem; }
-    .contenido { padding: 2rem 1rem; }
-    .noticias-grid { grid-template-columns: 1fr; }
-    .noticia-card.card-grande { grid-column: span 1; }
-    .card-img-wrap { aspect-ratio: 16/9; }
-    .card-sub { display: -webkit-box; }
+    .page-header {
+      padding: 2rem 1rem 1.5rem;
+    }
+    .contenido {
+      padding: 2rem 1rem;
+    }
+    .noticias-grid {
+      grid-template-columns: 1fr;
+    }
+    .noticia-card.card-grande {
+      grid-column: span 1;
+    }
+    .card-img-wrap {
+      aspect-ratio: 16/9;
+    }
+    .card-sub {
+      display: -webkit-box;
+    }
   }
 </style>

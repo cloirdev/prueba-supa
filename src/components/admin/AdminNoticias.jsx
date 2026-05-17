@@ -45,6 +45,33 @@ export default function AdminNoticias({
   const [form, setForm] = useState(formInicial());
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
+  const [subiendoImagen, setSubiendoImagen] = useState(false);
+
+  async function handleImagenFile(file) {
+    if (!file) return;
+    setSubiendoImagen(true);
+    setError("");
+
+    // Nombre único: timestamp + nombre original saneado
+    const ext = file.name.split(".").pop();
+    const nombreArchivo = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const ruta = `portadas/${nombreArchivo}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("noticias")
+      .upload(ruta, file, { contentType: file.type, upsert: false });
+
+    if (uploadError) {
+      setError("Error al subir la imagen: " + uploadError.message);
+      setSubiendoImagen(false);
+      return;
+    }
+
+    // Obtener URL pública
+    const { data } = supabase.storage.from("noticias").getPublicUrl(ruta);
+    setForm((f) => ({ ...f, img_url: data.publicUrl }));
+    setSubiendoImagen(false);
+  }
 
   function formInicial() {
     return {
@@ -445,29 +472,80 @@ export default function AdminNoticias({
           </div>
 
           <div className="adm-field">
-            <label className="adm-label">URL de imagen de portada</label>
+            <label className="adm-label">Imagen de portada</label>
+
+            {/* Input archivo */}
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => handleImagenFile(e.target.files[0])}
+              className="adm-input"
+              style={{ padding: "6px" }}
+            />
+
+            {/* O pegar URL directamente */}
             <input
               type="text"
               value={form.img_url}
               onChange={(e) =>
                 setForm((f) => ({ ...f, img_url: e.target.value }))
               }
-              placeholder="https://..."
+              placeholder="O pega una URL externa: https://..."
               className="adm-input"
+              style={{ marginTop: "6px" }}
             />
+
+            {/* Preview */}
             {form.img_url && (
-              <img
-                src={form.img_url}
-                alt=""
+              <div
                 style={{
                   marginTop: "8px",
-                  width: "100%",
-                  maxHeight: "180px",
-                  objectFit: "cover",
-                  borderRadius: "8px",
+                  position: "relative",
+                  display: "inline-block",
                 }}
-                onError={(e) => (e.target.style.display = "none")}
-              />
+              >
+                <img
+                  src={form.img_url}
+                  alt=""
+                  style={{
+                    width: "100%",
+                    maxHeight: "180px",
+                    objectFit: "cover",
+                    borderRadius: "8px",
+                  }}
+                  onError={(e) => (e.target.style.display = "none")}
+                />
+                <button
+                  onClick={() => setForm((f) => ({ ...f, img_url: "" }))}
+                  style={{
+                    position: "absolute",
+                    top: "6px",
+                    right: "6px",
+                    background: "rgba(0,0,0,0.6)",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "50%",
+                    width: "24px",
+                    height: "24px",
+                    cursor: "pointer",
+                    fontSize: "12px",
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {subiendoImagen && (
+              <p
+                style={{
+                  fontSize: "12px",
+                  color: "var(--muted)",
+                  marginTop: "4px",
+                }}
+              >
+                Subiendo imagen...
+              </p>
             )}
           </div>
 
@@ -595,10 +673,15 @@ export default function AdminNoticias({
             <button
               onClick={() => guardar(false)}
               className="adm-btn-secondary"
+              disabled={subiendoImagen}
             >
               Guardar borrador
             </button>
-            <button onClick={() => guardar(true)} className="adm-btn-primary">
+            <button
+              onClick={() => guardar(true)}
+              className="adm-btn-primary"
+              disabled={subiendoImagen}
+            >
               {form.publicada ? "Guardar cambios" : "Publicar"}
             </button>
           </div>

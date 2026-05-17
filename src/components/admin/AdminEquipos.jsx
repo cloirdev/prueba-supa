@@ -1,5 +1,45 @@
 import { useState, useEffect } from "react";
 
+const ORDEN_CATEGORIAS = [
+  "sénior masculino",
+  "sénior femenino",
+  "junior masculino",
+  "junior femenino",
+  "cadete masculino",
+  "cadete femenino",
+  "infantil masculino",
+  "infantil femenino",
+  "alevín masculino",
+  "alevín femenino",
+  "benjamín masculino",
+  "benjamín femenino",
+  "prebenjamín masculino",
+  "prebenjamín femenino",
+];
+
+function ordenCategoria(nombre) {
+  if (!nombre) return 999;
+  const norm = nombre.toLowerCase().trim();
+  // Búsqueda exacta primero
+  const exacto = ORDEN_CATEGORIAS.indexOf(norm);
+  if (exacto !== -1) return exacto;
+  // Si no hay exacta, buscar por base (senior, junior, cadete…)
+  const bases = [
+    "senior",
+    "junior",
+    "cadete",
+    "infantil",
+    "alevín",
+    "benjamín",
+    "prebenjamín",
+  ];
+  for (let i = 0; i < bases.length; i++) {
+    if (norm.startsWith(bases[i]))
+      return i * 10 + (norm.includes("femenino") ? 1 : 0);
+  }
+  return 999;
+}
+
 function normalizarIdsEquipo(perfil) {
   const ids = [];
   if (Array.isArray(perfil?.equipo_ids)) {
@@ -51,7 +91,6 @@ export default function AdminEquipos({
           .eq("temporada_id", temporada.id)
           .order("sponsor", { ascending: true, nullsFirst: false });
 
-        // Si no es admin, filtrar por los equipos del perfil
         if (perfil?.rol !== "admin") {
           const ids = normalizarIdsEquipo(perfil);
           if (ids.length) {
@@ -65,7 +104,17 @@ export default function AdminEquipos({
 
         const { data, error } = await query;
         if (error) throw error;
-        setEquipos(data ?? []);
+
+        // Ordenar por categoría con prioridad personalizada
+        const ordenados = (data ?? []).sort((a, b) => {
+          const oa = ordenCategoria(a.categorias?.nombre);
+          const ob = ordenCategoria(b.categorias?.nombre);
+          if (oa !== ob) return oa - ob;
+          // Dentro de la misma categoría, ordenar por sponsor alfabéticamente
+          return (a.sponsor ?? "").localeCompare(b.sponsor ?? "", "es");
+        });
+
+        setEquipos(ordenados);
       } catch (e) {
         console.error("Error cargando equipos:", e);
       } finally {

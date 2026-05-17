@@ -1,5 +1,6 @@
 ---
 import "@/styles/global.css";
+import Footer from "@/components/Footer.astro";
 const { titulo } = Astro.props;
 ---
 
@@ -8,6 +9,7 @@ const { titulo } = Astro.props;
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{titulo} · CB Jaca</title>
+    <link rel="shortcut icon" href="/escudo-naranja.png" type="image/x-icon" />
   </head>
   <body>
     <nav class="main-nav">
@@ -44,6 +46,7 @@ const { titulo } = Astro.props;
     <main>
       <slot />
     </main>
+    <Footer />
   </body>
   <script>
     const btn = document.getElementById("theme-btn");

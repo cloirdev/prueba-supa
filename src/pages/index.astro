@@ -6,11 +6,9 @@ import Layout from "@/layouts/Layout.astro";
 
 // ── Equipos con su temporada más reciente ─────────────────────────────────
 const { data: todosEquipos } = await supabase.from("equipos").select(`
-    id,
-    sponsor,
-    categoria_id,
+    id, sponsor, categoria_id,
     temporadas (nombre),
-    categorias (nombre, slug)
+    categorias (nombre, slug, orden)
   `);
 
 const equiposPorCategoria = new Map();
@@ -22,47 +20,64 @@ const equiposPorCategoria = new Map();
     equiposPorCategoria.set(slug, e);
   }
 });
-const equipos = Array.from(equiposPorCategoria.values()).sort((a, b) =>
-  (a.categorias?.nombre ?? "").localeCompare(b.categorias?.nombre ?? ""),
+const equipos = Array.from(equiposPorCategoria.values()).sort(
+  (a, b) => (a.categorias?.orden ?? 999) - (b.categorias?.orden ?? 999),
 );
 
-// ── Últimos 3 partidos disputados ─────────────────────────────────────────
-const { data: partidos } = await supabase
+// ── Últimos resultados ────────────────────────────────────────────────────
+const { data: ultimosResultados } = await supabase
   .from("partidos")
-  .select(`
+  .select(
+    `
     id, rival, es_local, fecha, jornada, ronda,
     puntos_favor, puntos_contra,
     equipos (sponsor, categorias (nombre, slug), temporadas (nombre)),
-    equipos_rivales (nombre_equipo)
-  `)
+    equipos_rivales (nombre_equipo, clubes(logo_url))
+  `,
+  )
   .not("puntos_favor", "is", null)
   .order("fecha", { ascending: false })
-  .limit(3);
+  .limit(5);
 
-// ── Noticias destacadas (slider) ───────────────────────────────────────────
+// ── Próximos partidos ─────────────────────────────────────────────────────
+const hoy = new Date().toISOString().split("T")[0];
+const { data: proximosPartidos } = await supabase
+  .from("partidos")
+  .select(
+    `
+    id, rival, es_local, fecha, jornada, ronda,
+    equipos (sponsor, categorias (nombre, slug)),
+    equipos_rivales (nombre_equipo, clubes(logo_url))
+  `,
+  )
+  .is("puntos_favor", null)
+  .gte("fecha", hoy)
+  .order("fecha", { ascending: true })
+  .limit(5);
+
+// ── Noticias destacadas (slider) ──────────────────────────────────────────
 const { data: noticiasDestacadas } = await supabase
   .from("noticias")
-  .select("id, titulo, subtitulo, img_url, fecha_publicacion, slug, categorias(nombre, slug)")
+  .select(
+    "id, titulo, subtitulo, img_url, fecha_publicacion, slug, categorias(nombre, slug)",
+  )
   .eq("publicada", true)
   .eq("destacada", true)
   .order("fecha_publicacion", { ascending: false })
-  .limit(5);
+  .limit(6);
 
-// ── Crónicas destacadas ────────────────────────────────────────────────────
 const { data: cronicasDestacadas } = await supabase
   .from("cronicas")
-  .select(`
-    id, titulo, img_url, destacada,
-    partidos (id, rival, fecha, equipos(categorias(nombre, slug)))
-  `)
+  .select(
+    `id, titulo, img_url, destacada, partidos (id, rival, fecha, equipos(categorias(nombre, slug)))`,
+  )
   .eq("publicada", true)
   .eq("destacada", true)
   .order("created_at", { ascending: false })
-  .limit(5);
+  .limit(3);
 
-// Unificar y ordenar slider (máx 5)
 const slider = [
-  ...(noticiasDestacadas ?? []).map(n => ({
+  ...(noticiasDestacadas ?? []).map((n) => ({
     id: n.id,
     tipo: "noticia",
     titulo: n.titulo,
@@ -72,7 +87,7 @@ const slider = [
     slug: n.slug,
     categoria: n.categorias,
   })),
-  ...(cronicasDestacadas ?? []).map(c => ({
+  ...(cronicasDestacadas ?? []).map((c) => ({
     id: c.id,
     tipo: "cronica",
     titulo: c.titulo ?? `Crónica vs ${c.partidos?.rival}`,
@@ -83,279 +98,541 @@ const slider = [
     categoria: c.partidos?.equipos?.categorias,
     partido_id: c.partidos?.id,
   })),
-].sort((a, b) => new Date(b.fecha ?? 0) - new Date(a.fecha ?? 0)).slice(0, 5);
+]
+  .sort((a, b) => new Date(b.fecha ?? 0) - new Date(a.fecha ?? 0))
+  .slice(0, 6);
 
-// ── Grid de noticias (10 más recientes, no destacadas o todas) ─────────────
+// ── Grid noticias ─────────────────────────────────────────────────────────
 const { data: noticiasGrid } = await supabase
   .from("noticias")
-  .select("id, titulo, subtitulo, img_url, fecha_publicacion, slug, categorias(nombre, slug)")
+  .select(
+    "id, titulo, subtitulo, img_url, fecha_publicacion, slug, categorias(nombre, slug)",
+  )
   .eq("publicada", true)
   .order("fecha_publicacion", { ascending: false })
-  .limit(10);
+  .limit(6);
 
 const { data: cronicasGrid } = await supabase
   .from("cronicas")
-  .select(`
-    id, titulo, img_url,
-    partidos (id, rival, fecha, equipos(categorias(nombre, slug)))
-  `)
+  .select(
+    `id, titulo, img_url, partidos (id, rival, fecha, equipos(categorias(nombre, slug)))`,
+  )
   .eq("publicada", true)
   .order("created_at", { ascending: false })
-  .limit(10);
+  .limit(4);
+
+const sliderIds = new Set(slider.map((item) => `${item.tipo}-${item.id}`));
 
 const grid = [
-  ...(noticiasGrid ?? []).map(n => ({
-    id: n.id, tipo: "noticia",
-    titulo: n.titulo, subtitulo: n.subtitulo,
-    img_url: n.img_url, fecha: n.fecha_publicacion,
-    href: urlNoticia(n), categoria: n.categorias,
+  ...(noticiasGrid ?? []).map((n) => ({
+    id: n.id,
+    tipo: "noticia",
+    titulo: n.titulo,
+    subtitulo: n.subtitulo,
+    img_url: n.img_url,
+    fecha: n.fecha_publicacion,
+    href: urlNoticia(n),
+    categoria: n.categorias,
   })),
-  ...(cronicasGrid ?? []).map(c => ({
-    id: c.id, tipo: "cronica",
+  ...(cronicasGrid ?? []).map((c) => ({
+    id: c.id,
+    tipo: "cronica",
     titulo: c.titulo ?? `Crónica vs ${c.partidos?.rival}`,
-    subtitulo: null, img_url: c.img_url,
+    subtitulo: null,
+    img_url: c.img_url,
     fecha: c.partidos?.fecha,
     href: `/partidos/${c.partidos?.id}`,
     categoria: c.partidos?.equipos?.categorias,
   })),
-].sort((a, b) => new Date(b.fecha ?? 0) - new Date(a.fecha ?? 0)).slice(0, 10);
+]
+  .filter((item) => !sliderIds.has(`${item.tipo}-${item.id}`)) // ← línea nueva
+  .sort((a, b) => new Date(b.fecha ?? 0) - new Date(a.fecha ?? 0))
+  .slice(0, 8);
 
-// ── Helpers ────────────────────────────────────────────────────────────────
-// urlNoticia — para el grid
+// ── Helpers ───────────────────────────────────────────────────────────────
 function urlNoticia(n) {
   if (!n.fecha_publicacion || !n.slug) return `/noticias/${n.id}`;
-  const d   = new Date(n.fecha_publicacion);
-  const y   = d.getFullYear();
-  const m   = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `/noticias/${y}/${m}/${day}/${n.slug}`;
+  const d = new Date(n.fecha_publicacion);
+  return `/noticias/${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}/${n.slug}`;
 }
 
-// sliderHref — para el slider
 function sliderHref(item) {
   if (item.tipo === "cronica") return `/partidos/${item.partido_id}`;
   if (item.slug && item.fecha) {
-    const d   = new Date(item.fecha);
-    const y   = d.getFullYear();
-    const m   = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `/noticias/${y}/${m}/${day}/${item.slug}`;
+    const d = new Date(item.fecha);
+    return `/noticias/${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}/${item.slug}`;
   }
   return `/noticias/${item.id}`;
 }
 
 function formatFechaCorta(f) {
   if (!f) return "";
-  const [y, m, d] = (f.toString()).split("T")[0].split("-");
-  const meses = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
-  return `${parseInt(d)} ${meses[parseInt(m)-1]} ${y}`;
+  const [y, m, d] = f.toString().split("T")[0].split("-");
+  const meses = [
+    "ene",
+    "feb",
+    "mar",
+    "abr",
+    "may",
+    "jun",
+    "jul",
+    "ago",
+    "sep",
+    "oct",
+    "nov",
+    "dic",
+  ];
+  return `${parseInt(d)} ${meses[parseInt(m) - 1]}`;
+}
+
+function formatFechaLarga(f) {
+  if (!f) return "";
+  const [y, m, d] = f.toString().split("T")[0].split("-");
+  const meses = [
+    "ene",
+    "feb",
+    "mar",
+    "abr",
+    "may",
+    "jun",
+    "jul",
+    "ago",
+    "sep",
+    "oct",
+    "nov",
+    "dic",
+  ];
+  const dias = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
+  const fecha = new Date(f + "T00:00:00");
+  return `${dias[fecha.getDay()]} ${parseInt(d)} ${meses[parseInt(m) - 1]}`;
 }
 
 function nombreRival(p) {
   return p.equipos_rivales?.nombre_equipo ?? p.rival;
+}
+function escudoRival(p) {
+  return p.equipos_rivales?.clubes?.logo_url ?? "/escudo.png";
 }
 function etiquetaJornada(p) {
   if (p.jornada) return `J${p.jornada}`;
   if (p.ronda && p.ronda !== "Amistoso") return p.ronda;
   return "Amistoso";
 }
+function nombreEquipo(e) {
+  return e?.sponsor
+    ? `${e.sponsor} CB Jaca`
+    : `CB Jaca ${e?.categorias?.nombre ?? ""}`;
+}
 ---
 
 <Layout titulo="Inicio | CB Jaca">
-
-  <!-- ══ HERO CON SLIDER ══ -->
-  <div class="hero">
-
-    {slider.length === 0 ? (
-      <!-- Hero estático si no hay noticias destacadas -->
-      <div class="hero-static">
-        <p class="hero-tag">Bienvenido</p>
-        <h1>Club Baloncesto <span class="naranja">Jaca</span></h1>
-        <p class="hero-sub">Temporada 2025-26</p>
-      </div>
-    ) : (
-      <!-- Slider -->
-      <div class="slider" id="slider">
-        <ul class="slides" data-slides>
-          {slider.map((item, i) => (
-            <li class:list={["slide", i === 1 ? "center" : i === 0 ? "left" : i === 2 ? "right" : ""]}
-              data-index={i}>
-              {item.img_url && (
-                <div class="slide-bg" style={`background-image:url(${item.img_url})`} />
-              )}
-              <a href={sliderHref(item)} class="slide-content">
+  <!-- ══ SLIDER FULLSCREEN ══ -->
+  <div class="hero-slider">
+    {
+      slider.length === 0 ? (
+        <div class="hero-static">
+          <div class="hero-static-inner">
+            <p class="hero-tag">Bienvenido</p>
+            <h1>
+              Club Baloncesto <span>Jaca</span>
+            </h1>
+            <p class="hero-sub">Temporada 2025-26</p>
+          </div>
+        </div>
+      ) : (
+        <div class="slider-wrap" id="slider">
+          {/* Track de slides */}
+          <ul class="slides-track" id="slides-track">
+            {slider.map((item, i) => (
+              <li class="slide-item" data-index={i}>
+                {/* Fondo borroso */}
                 {item.img_url && (
-                  <img src={item.img_url} alt={item.titulo} class="slide-img" />
+                  <div
+                    class="slide-blur-bg"
+                    style={`background-image:url('${item.img_url}')`}
+                  />
                 )}
-                <div class="slide-info">
-                  <div class="slide-meta">
-                    {item.tipo === "cronica" && (
-                      <span class="slide-badge cronica">Crónica</span>
-                    )}
-                    {item.categoria && (
-                      <span class="slide-badge categoria">{item.categoria.nombre}</span>
-                    )}
-                    <span class="slide-fecha">{formatFechaCorta(item.fecha)}</span>
-                  </div>
-                  <h2 class="slide-titulo">{item.titulo}</h2>
-                  {item.subtitulo && (
-                    <p class="slide-subtitulo">{item.subtitulo}</p>
+                {!item.img_url && (
+                  <div class="slide-blur-bg slide-blur-bg--empty" />
+                )}
+                {/* Gradiente */}
+                <div class="slide-gradient" />
+                {/* Contenido */}
+                <a href={sliderHref(item)} class="slide-link">
+                  {item.img_url && (
+                    <img
+                      src={item.img_url}
+                      alt={item.titulo}
+                      class="slide-photo"
+                      loading={i === 0 ? "eager" : "lazy"}
+                    />
                   )}
-                </div>
-              </a>
-            </li>
-          ))}
-        </ul>
-        {slider.length > 1 && (
-          <>
-            <button class="carousel-btn prev" id="slider-prev" aria-label="Anterior">&#8592;</button>
-            <button class="carousel-btn next" id="slider-next" aria-label="Siguiente">&#8594;</button>
-          </>
-        )}
-      </div>
-    )}
+                  <div class="slide-text">
+                    <div class="slide-meta">
+                      {item.tipo === "cronica" && (
+                        <span class="slide-pill cronica">Crónica</span>
+                      )}
+                      {item.categoria && (
+                        <span class="slide-pill naranja">
+                          {item.categoria.nombre}
+                        </span>
+                      )}
+                      <span class="slide-fecha">
+                        {formatFechaCorta(item.fecha)}
+                      </span>
+                    </div>
+                    <h2 class="slide-titulo">{item.titulo}</h2>
+                    {item.subtitulo && (
+                      <p class="slide-subtitulo">{item.subtitulo}</p>
+                    )}
+                    <span class="slide-cta">Leer más →</span>
+                  </div>
+                </a>
+              </li>
+            ))}
+          </ul>
+
+          {/* Controles */}
+          {slider.length > 1 && (
+            <>
+              <button
+                class="slider-btn slider-prev"
+                id="slider-prev"
+                aria-label="Anterior"
+              >
+                ‹
+              </button>
+              <button
+                class="slider-btn slider-next"
+                id="slider-next"
+                aria-label="Siguiente"
+              >
+                ›
+              </button>
+              {/* Dots */}
+              <div class="slider-dots" id="slider-dots">
+                {slider.map((_, i) => (
+                  <button
+                    class:list={["dot", i === 0 ? "active" : ""]}
+                    data-dot={i}
+                    aria-label={`Slide ${i + 1}`}
+                  />
+                ))}
+              </div>
+              {/* Barra de progreso */}
+              <div class="slider-progress">
+                <div class="slider-progress-bar" id="progress-bar" />
+              </div>
+            </>
+          )}
+        </div>
+      )
+    }
   </div>
 
-  <div class="contenido">
-
-    <!-- ══ GRID DE NOTICIAS ══ -->
-    {grid.length > 0 && (
-      <section class="seccion">
-        <h2 class="seccion-titulo">Últimas noticias</h2>
-        <div class="noticias-grid">
-          {grid.map((item) => (
-            <a href={item.href} class="noticia-card">
-              {item.img_url ? (
-                <div class="noticia-img-wrap">
-                  <img src={item.img_url} alt={item.titulo} class="noticia-img" />
-                  {item.tipo === "cronica" && (
-                    <span class="noticia-badge">Crónica</span>
-                  )}
-                </div>
-              ) : (
-                <div class="noticia-img-placeholder">
-                  {item.tipo === "cronica" ? "📋" : "📰"}
-                </div>
-              )}
-              <div class="noticia-body">
-                {item.categoria && (
-                  <span class="noticia-cat">{item.categoria.nombre}</span>
-                )}
-                <h3 class="noticia-titulo">{item.titulo}</h3>
-                {item.subtitulo && (
-                  <p class="noticia-sub">{item.subtitulo}</p>
-                )}
-                <span class="noticia-fecha">{formatFechaCorta(item.fecha)}</span>
-              </div>
-            </a>
-          ))}
-        </div>
-        <div class="ver-mas-wrap">
-          <a href="/noticias" class="ver-mas">Ver todas las noticias →</a>
-        </div>
-      </section>
-    )}
-
-    <!-- ══ EQUIPOS ══ -->
-    <section class="seccion">
-      <h2 class="seccion-titulo">Equipos</h2>
-      <div class="equipos-grid">
-        {equipos.map((e) => {
-          const temporadaSlug = e.temporadas?.nombre ?? null;
-          const categoriaSlug = e.categorias?.slug ?? null;
-          const href = temporadaSlug && categoriaSlug
-            ? `/equipos/${categoriaSlug}/${temporadaSlug}`
-            : null;
-          const nombrePublico = e.sponsor
-            ? `${e.sponsor} CB Jaca`
-            : `CB Jaca ${e.categorias?.nombre ?? ""}`;
-          return href ? (
-            <a href={href} class="equipo-card">
-              <div class="equipo-nombre">{nombrePublico}</div>
-              <div class="equipo-cat">{e.categorias?.nombre}</div>
-              <span class="equipo-temp">{e.temporadas?.nombre}</span>
-            </a>
-          ) : (
-            <div class="equipo-card equipo-card--inactivo">
-              <div class="equipo-nombre">{nombrePublico}</div>
-              <div class="equipo-cat">{e.categorias?.nombre}</div>
+  <!-- ══ CONTENIDO PRINCIPAL ══ -->
+  <div class="page-wrap">
+    <div class="main-col">
+      <!-- Noticias grid -->
+      {
+        grid.length > 0 && (
+          <section class="seccion">
+            <div class="seccion-head">
+              <h2 class="seccion-titulo">Últimas noticias</h2>
+              <a href="/noticias" class="ver-mas">
+                Ver todas →
+              </a>
             </div>
-          );
-        })}
-      </div>
-    </section>
+            <div class="noticias-grid">
+              {grid.map((item, i) => (
+                <a
+                  href={item.href}
+                  class:list={["noticia-card", i === 0 ? "noticia-grande" : ""]}
+                >
+                  <div class="noticia-img-wrap">
+                    {item.img_url ? (
+                      <img
+                        src={item.img_url}
+                        alt={item.titulo}
+                        class="noticia-img"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div class="noticia-placeholder">
+                        <img src="/escudo-naranja.png" alt="CB Jaca" />
+                      </div>
+                    )}
+                    {item.tipo === "cronica" && (
+                      <span class="noticia-badge">Crónica</span>
+                    )}
+                  </div>
+                  <div class="noticia-body">
+                    {item.categoria && (
+                      <span class="noticia-cat">{item.categoria.nombre}</span>
+                    )}
+                    <h3 class="noticia-titulo">{item.titulo}</h3>
+                    {i === 0 && item.subtitulo && (
+                      <p class="noticia-sub">{item.subtitulo}</p>
+                    )}
+                    <span class="noticia-fecha">
+                      {formatFechaCorta(item.fecha)}
+                    </span>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </section>
+        )
+      }
 
-    <!-- ══ ÚLTIMOS RESULTADOS ══ -->
-    <section class="seccion">
-      <h2 class="seccion-titulo">Últimos resultados</h2>
-      {!partidos || partidos.length === 0 ? (
-        <p class="vacio">No hay partidos registrados aún.</p>
-      ) : (
-        <div class="partidos-lista">
-          {partidos.map((p) => {
-            const victoria = p.puntos_favor > p.puntos_contra;
-            const nombreEquipo = p.equipos?.sponsor
-              ? `${p.equipos.sponsor} CB Jaca`
-              : `CB Jaca ${p.equipos?.categorias?.nombre ?? ""}`;
-            return (
-              <a href={`/partidos/${p.id}`}
-                class:list={["partido-card", victoria ? "victoria" : "derrota"]}>
-                <div class="partido-info">
-                  <div class="partido-rival">{p.es_local ? "vs" : "@"} {nombreRival(p)}</div>
-                  <div class="partido-meta">
-                    <span class="partido-equipo">{nombreEquipo}</span>
-                    <span>·</span>
-                    <span>{etiquetaJornada(p)}</span>
-                    <span>·</span>
-                    <span>{formatFechaCorta(p.fecha)}</span>
+      <!-- Equipos -->
+      <section class="seccion">
+        <div class="seccion-head">
+          <h2 class="seccion-titulo">Equipos</h2>
+          <a href="/equipos" class="ver-mas">Ver todos →</a>
+        </div>
+        <div class="equipos-grid">
+          {
+            equipos.map((e) => {
+              const href =
+                e.temporadas?.nombre && e.categorias?.slug
+                  ? `/equipos/${e.categorias.slug}/${e.temporadas.nombre}`
+                  : null;
+              const nombre = e.sponsor
+                ? `${e.sponsor} CB Jaca`
+                : `CB Jaca ${e.categorias?.nombre ?? ""}`;
+              return href ? (
+                <a href={href} class="equipo-card">
+                  <img
+                    src="/escudo-naranja.png"
+                    alt="CB Jaca"
+                    class="equipo-escudo"
+                  />
+                  <div>
+                    <div class="equipo-nombre">{nombre}</div>
+                    <div class="equipo-cat">{e.categorias?.nombre}</div>
+                  </div>
+                  <span class="equipo-arrow">→</span>
+                </a>
+              ) : (
+                <div class="equipo-card equipo-card--off">
+                  <img
+                    src="/escudo-naranja.png"
+                    alt="CB Jaca"
+                    class="equipo-escudo"
+                  />
+                  <div>
+                    <div class="equipo-nombre">{nombre}</div>
+                    <div class="equipo-cat">{e.categorias?.nombre}</div>
                   </div>
                 </div>
-                <div class:list={["marcador", victoria ? "victoria" : "derrota"]}>
-                  {p.puntos_favor} – {p.puntos_contra}
-                </div>
-              </a>
-            );
-          })}
+              );
+            })
+          }
         </div>
-      )}
-    </section>
+      </section>
+    </div>
 
+    <!-- ══ SIDEBAR ══ -->
+    <aside class="sidebar">
+      <!-- Últimos resultados -->
+      {
+        ultimosResultados.map((p) => {
+          const vic = p.puntos_favor > p.puntos_contra;
+          const eq = nombreEquipo(p.equipos);
+          const cat = p.equipos?.categorias?.nombre ?? "";
+
+          // Local → CB Jaca izquierda | Visitante → CB Jaca derecha
+          // Elimina pNuestros/pEllos y usa directamente:
+          const izquierda = p.es_local
+            ? {
+                nombre: eq,
+                escudo: "/escudo-naranja.png",
+                pts: p.puntos_favor,
+                propio: true,
+              }
+            : {
+                nombre: nombreRival(p),
+                escudo: escudoRival(p),
+                pts: p.puntos_contra,
+                propio: false,
+              };
+          const derecha = p.es_local
+            ? {
+                nombre: nombreRival(p),
+                escudo: escudoRival(p),
+                pts: p.puntos_contra,
+                propio: false,
+              }
+            : {
+                nombre: eq,
+                escudo: "/escudo-naranja.png",
+                pts: p.puntos_favor,
+                propio: true,
+              };
+
+          return (
+            <a href={`/partidos/${p.id}`} class="widget-partido">
+              <div class="widget-cat">
+                {cat} · {etiquetaJornada(p)} · {formatFechaCorta(p.fecha)}
+              </div>
+              <div class="widget-equipos">
+                <div class="widget-equipo">
+                  <img
+                    src={izquierda.escudo}
+                    alt={izquierda.nombre}
+                    class="widget-escudo"
+                    onerror="this.src='/escudo.png'"
+                  />
+                  <span
+                    class:list={[
+                      "widget-eq-nombre",
+                      izquierda.propio && "propio",
+                    ]}
+                  >
+                    {izquierda.nombre}
+                  </span>
+                </div>
+                <div class="widget-marcador">
+                  <span
+                    class:list={[
+                      "widget-pts",
+                      izquierda.pts > derecha.pts ? "win" : "loss",
+                    ]}
+                  >
+                    {izquierda.pts}
+                  </span>
+                  <span class="widget-sep">–</span>
+                  <span
+                    class:list={[
+                      "widget-pts",
+                      derecha.pts > izquierda.pts ? "win" : "loss",
+                    ]}
+                  >
+                    {derecha.pts}
+                  </span>
+                </div>
+                <div class="widget-equipo rival">
+                  <img
+                    src={derecha.escudo}
+                    alt={derecha.nombre}
+                    class="widget-escudo"
+                    onerror="this.src='/escudo.png'"
+                  />
+                  <span
+                    class:list={[
+                      "widget-eq-nombre",
+                      derecha.propio && "propio",
+                    ]}
+                  >
+                    {derecha.nombre}
+                  </span>
+                </div>
+              </div>
+            </a>
+          );
+        })
+      }
+
+      <!-- Próximos partidos -->
+      {
+        proximosPartidos && proximosPartidos.length > 0 && (
+          <div class="sidebar-widget">
+            <h3 class="widget-titulo">Próximos partidos</h3>
+            <div class="widget-lista">
+              {proximosPartidos.map((p) => {
+                const eq = nombreEquipo(p.equipos);
+                return (
+                  <div class="widget-partido proximo">
+                    <div class="widget-equipos">
+                      <div class="widget-equipo">
+                        <img
+                          src="/escudo-naranja.png"
+                          alt="CB Jaca"
+                          class="widget-escudo"
+                        />
+                        <span class="widget-eq-nombre">{eq}</span>
+                      </div>
+                      <div class="widget-vs-fecha">
+                        <span class="widget-vs">vs</span>
+                        <span class="widget-fecha-proximo">
+                          {formatFechaLarga(p.fecha)}
+                        </span>
+                      </div>
+                      <div class="widget-equipo rival">
+                        <img
+                          src={escudoRival(p)}
+                          alt={nombreRival(p)}
+                          class="widget-escudo"
+                          onerror="this.src='/escudo.png'"
+                        />
+                        <span class="widget-eq-nombre">{nombreRival(p)}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )
+      }
+    </aside>
   </div>
 </Layout>
 
 <!-- ══ JS SLIDER ══ -->
 <script>
   function initSlider() {
-    const slides = Array.from(document.querySelectorAll(".slide"));
-    if (slides.length === 0) return;
+    const track = document.getElementById("slides-track");
+    const items = Array.from(document.querySelectorAll(".slide-item"));
+    const dots = Array.from(document.querySelectorAll(".dot"));
+    const bar = document.getElementById("progress-bar");
+    if (!track || items.length === 0) return;
 
-    let indices = slides.length === 1 ? [0, 0, 0]
-      : slides.length === 2 ? [1, 0, 1]
-      : [slides.length - 1, 0, 1];
+    let current = 0;
+    const total = items.length;
+    const DURATION = 6000;
 
-    function updateSlides() {
-      slides.forEach(s => s.classList.remove("left", "center", "right"));
-      slides[indices[0] % slides.length]?.classList.add("left");
-      slides[indices[1] % slides.length]?.classList.add("center");
-      slides[indices[2] % slides.length]?.classList.add("right");
+    function goTo(n) {
+      current = (n + total) % total;
+      track.style.transform = `translateX(-${current * 100}%)`;
+      dots.forEach((d, i) => d.classList.toggle("active", i === current));
+      resetProgress();
     }
 
-    updateSlides();
-
-    let timer = setInterval(next, 6000);
-
-    function next() {
-      indices = indices.map(i => (i + 1) % slides.length);
-      updateSlides();
+    // Barra de progreso animada
+    let progressTimer;
+    function resetProgress() {
+      if (!bar) return;
+      clearTimeout(progressTimer);
+      bar.style.transition = "none";
+      bar.style.width = "0%";
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          bar.style.transition = `width ${DURATION}ms linear`;
+          bar.style.width = "100%";
+        });
+      });
+      progressTimer = setTimeout(() => goTo(current + 1), DURATION);
     }
-    function prev() {
-      indices = indices.map(i => (i - 1 + slides.length) % slides.length);
-      updateSlides();
-    }
-    function reset() { clearInterval(timer); timer = setInterval(next, 6000); }
 
-    document.getElementById("slider-prev")?.addEventListener("click", () => { prev(); reset(); });
-    document.getElementById("slider-next")?.addEventListener("click", () => { next(); reset(); });
+    resetProgress();
+
+    document
+      .getElementById("slider-prev")
+      ?.addEventListener("click", () => goTo(current - 1));
+    document
+      .getElementById("slider-next")
+      ?.addEventListener("click", () => goTo(current + 1));
+    dots.forEach((d, i) => d.addEventListener("click", () => goTo(i)));
+
+    // Pausa en hover
+    const wrap = document.getElementById("slider");
+    wrap?.addEventListener("mouseenter", () => {
+      clearTimeout(progressTimer);
+      bar && (bar.style.transition = "none");
+    });
+    wrap?.addEventListener("mouseleave", resetProgress);
   }
 
   initSlider();
@@ -363,230 +640,683 @@ function etiquetaJornada(p) {
 </script>
 
 <style>
-  /* ══ HERO / SLIDER ══ */
-  .hero {
+  /* ══ SLIDER ══ */
+  .hero-slider {
+    width: 100%;
     position: relative;
-    overflow: hidden; color: white;
   }
+
   .hero-static {
-    padding: 4rem 2rem 3rem; z-index: 1;
-    display: flex; flex-direction: column; justify-content: flex-end;
-    min-height: 320px;
+    height: 60vh;
+    min-height: 400px;
+    background: var(--azul-oscuro, #0f172a);
+    display: flex;
+    align-items: flex-end;
+    color: white;
+  }
+  .hero-static-inner {
+    padding: 3rem 2rem;
+    max-width: 1100px;
+    margin: 0 auto;
+    width: 100%;
   }
   .hero-tag {
-    font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.1em; color: var(--orange, #f97316); margin-bottom: 0.5rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--naranja, #f28241);
+    margin-bottom: 0.5rem;
   }
-  h1 { font-size: clamp(1.8rem, 5vw, 3rem); font-weight: 800; margin-bottom: 0.4rem; }
-  .naranja { color: var(--orange, #f97316); }
-  .hero-sub { font-size: 0.95rem; color: rgba(255,255,255,0.5); }
+  .hero-static h1 {
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    font-weight: 900;
+    margin: 0 0 0.4rem;
+  }
+  .hero-static h1 span {
+    color: var(--naranja, #f28241);
+  }
+  .hero-sub {
+    font-size: 1rem;
+    color: rgba(255, 255, 255, 0.4);
+  }
 
-  /* ── Coverflow Slider ── */
-  .slider {
-    padding: 2rem 0 3rem;
-    width: 100%; min-height: 420px;
+  .slider-wrap {
     position: relative;
+    height: 82vh;
+    min-height: 480px;
+    max-height: 820px;
     overflow: hidden;
-    display: flex; align-items: center;
   }
-  .slides {
-    display: flex; justify-content: center; align-items: center;
-    position: relative; width: 100%; height: 380px;
-    list-style: none; margin: 0; padding: 0;
+
+  .slides-track {
+    display: flex;
+    height: 100%;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    transition: transform 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform;
   }
-  .slide {
+
+  .slide-item {
+    position: relative;
+    min-width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .slide-blur-bg {
     position: absolute;
-    width: 65%; height: 100%;
-    border-radius: 1rem; overflow: hidden;
-    transition: transform .6s cubic-bezier(.4,0,.2,1), opacity .6s ease, z-index 0s;
-    transform-origin: center;
-    -webkit-backface-visibility: hidden;
-    backface-visibility: hidden;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    filter: blur(24px) brightness(0.4);
+    transform: scale(1.1);
+    z-index: 0;
+    background-color: #0f172a;
   }
-  .slide-bg {
-    position: absolute; inset: 0;
-    background-size: cover; background-position: center;
-    filter: blur(20px); transform: scale(1.2); z-index: 0;
-    background-color: #1e293b;
+  .slide-blur-bg--empty {
+    background-color: #0f172a;
   }
-  .slide-content {
-    position: relative; z-index: 1;
-    display: flex; flex-direction: column;
-    justify-content: flex-end; align-items: flex-start;
-    height: 100%; width: 100%;
-    text-decoration: none; color: white;
-    background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 60%, transparent 100%);
+
+  .slide-gradient {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background: linear-gradient(
+      to top,
+      rgba(0, 0, 0, 0.92) 0%,
+      rgba(0, 0, 0, 0.4) 45%,
+      rgba(0, 0, 0, 0.05) 100%
+    );
+  }
+
+  .slide-link {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    height: 100%;
+    width: 100%;
+    text-decoration: none;
+    color: white;
     box-sizing: border-box;
   }
-  .slide-img {
-    position: absolute; inset: 0; width: 100%; height: 100%;
-    object-fit: cover; z-index: 0;
+
+  .slide-photo {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center top;
+    z-index: 0;
   }
-  .slide-info {
-    position: relative; z-index: 1; padding: 1.5rem;
+
+  .slide-text {
+    position: relative;
+    z-index: 3;
+    padding: 2.5rem 3rem;
+    max-width: 760px;
   }
+
   .slide-meta {
-    display: flex; align-items: center; gap: 8px; margin-bottom: 0.6rem; flex-wrap: wrap;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.9rem;
+    flex-wrap: wrap;
   }
-  .slide-badge {
-    font-size: 0.65rem; font-weight: 800; text-transform: uppercase;
-    letter-spacing: .07em; padding: 3px 8px; border-radius: 4px;
+  .slide-pill {
+    font-size: 0.62rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 3px 10px;
+    border-radius: 3px;
   }
-  .slide-badge.cronica { background: rgba(99,102,241,0.85); color: white; }
-  .slide-badge.categoria { background: rgba(249,115,22,0.9); color: white; }
-  .slide-fecha { font-size: 0.75rem; color: rgba(255,255,255,0.6); }
+  .slide-pill.naranja {
+    background: var(--naranja, #f28241);
+    color: white;
+  }
+  .slide-pill.cronica {
+    background: rgba(99, 102, 241, 0.85);
+    color: white;
+  }
+  .slide-fecha {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.5);
+  }
+
   .slide-titulo {
-    font-size: clamp(1.1rem, 2.5vw, 1.6rem); font-weight: 800;
-    line-height: 1.25; margin: 0 0 0.4rem;
-    text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    font-size: clamp(1.6rem, 3.5vw, 2.8rem);
+    font-weight: 900;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    margin: 0 0 0.6rem;
+    text-shadow: 0 2px 20px rgba(0, 0, 0, 0.5);
   }
   .slide-subtitulo {
-    font-size: 0.85rem; color: rgba(255,255,255,0.75); margin: 0;
-    display: -webkit-box; -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical; overflow: hidden;
+    font-size: clamp(0.85rem, 1.5vw, 1.05rem);
+    color: rgba(255, 255, 255, 0.65);
+    line-height: 1.55;
+    margin: 0 0 1.25rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .slide-cta {
+    display: inline-block;
+    font-size: 0.78rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--naranja, #f28241);
   }
 
-  /* Posiciones coverflow */
-  .slide.left {
-    transform: translateX(-52%) scale(0.82);
-    z-index: 1; opacity: 0.7;
-    pointer-events: none;
-  }
-  .slide.center {
-    transform: translateX(0) scale(1);
-    z-index: 3; opacity: 1;
-    pointer-events: auto;
-  }
-  .slide.right {
-    transform: translateX(52%) scale(0.82);
-    z-index: 1; opacity: 0.7;
-    pointer-events: none;
-  }
-  /* Slides sin posición: ocultas */
-  .slide:not(.left):not(.center):not(.right) {
-    opacity: 0; pointer-events: none; z-index: 0;
-    transform: translateX(0) scale(0.6);
-  }
-
-  /* Botones */
-  .carousel-btn {
-    position: absolute; z-index: 5;
-    border: 2px solid rgba(255,255,255,0.3);
-    background: rgba(0,0,0,0.3);
-    color: white; font-size: 1.4rem;
-    width: 40px; height: 40px; border-radius: 50%;
-    cursor: pointer; display: flex; align-items: center; justify-content: center;
-    transition: background .2s, border-color .2s;
+  /* Botones nav */
+  .slider-btn {
+    position: absolute;
+    z-index: 10;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    background: rgba(0, 0, 0, 0.35);
+    color: white;
+    font-size: 1.3rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+      background 0.2s,
+      border-color 0.2s;
     backdrop-filter: blur(4px);
-    top: 50%; transform: translateY(-50%);
   }
-  .carousel-btn:hover { background: rgba(249,115,22,0.7); border-color: var(--orange, #f97316); }
-  .carousel-btn.prev { left: 1rem; }
-  .carousel-btn.next { right: 1rem; }
+  .slider-btn:hover {
+    background: var(--naranja, #f28241);
+    border-color: var(--naranja, #f28241);
+  }
+  .slider-prev {
+    left: 1.5rem;
+  }
+  .slider-next {
+    right: 1.5rem;
+  }
 
-  /* ══ CONTENIDO ══ */
-  .contenido {
-    max-width: 900px; margin: 0 auto;
-    padding: 3rem 2rem; display: flex; flex-direction: column; gap: 3rem;
+  /* Dots */
+  .slider-dots {
+    position: absolute;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 6px;
+    z-index: 10;
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+    padding: 0;
+    transition: all 0.2s;
+  }
+  .dot.active {
+    background: var(--naranja, #f28241);
+    width: 24px;
+    border-radius: 4px;
+  }
+
+  /* Barra de progreso */
+  .slider-progress {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.1);
+    z-index: 10;
+  }
+  .slider-progress-bar {
+    height: 100%;
+    width: 0%;
+    background: var(--naranja, #f28241);
+  }
+
+  /* ══ LAYOUT ══ */
+  .page-wrap {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 3rem 2rem;
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 2.5rem;
+    align-items: start;
+  }
+
+  .main-col {
+    display: flex;
+    flex-direction: column;
+    gap: 3rem;
+    min-width: 0;
+  }
+
+  /* ── Secciones ── */
+  .seccion-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 1rem;
   }
   .seccion-titulo {
-    font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.08em; color: var(--orange, #f97316); margin-bottom: 1rem;
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--naranja, #f28241);
+    padding-left: 0.7rem;
+    position: relative;
   }
-  .vacio { color: var(--muted, #64748b); font-size: 0.9rem; }
+  .seccion-titulo::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--naranja, #f28241);
+    border-radius: 2px;
+  }
+  .ver-mas {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--naranja, #f28241);
+    text-decoration: none;
+  }
+  .ver-mas:hover {
+    opacity: 0.7;
+  }
 
   /* ── Grid noticias ── */
   .noticias-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 1rem;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto;
+    gap: 0.75rem;
   }
   .noticia-card {
-    display: flex; flex-direction: column;
-    background: var(--card, #1e293b);
-    border: 1px solid var(--borde, rgba(255,255,255,0.08));
-    border-radius: 12px; overflow: hidden;
-    text-decoration: none; color: inherit;
-    transition: border-color .2s, transform .15s;
+    display: flex;
+    flex-direction: column;
+    background: var(--card);
+    border: 1px solid var(--borde);
+    border-radius: 10px;
+    overflow: hidden;
+    text-decoration: none;
+    color: inherit;
+    transition:
+      border-color 0.2s,
+      transform 0.15s;
   }
-  .noticia-card:hover { border-color: var(--orange, #f97316); transform: translateY(-2px); }
+  .noticia-card:hover {
+    border-color: var(--naranja, #f28241);
+    transform: translateY(-2px);
+  }
+  .noticia-grande {
+    grid-column: span 2;
+    flex-direction: row;
+  }
+  .noticia-grande .noticia-img-wrap {
+    aspect-ratio: 16/9;
+    min-width: 280px;
+    flex: 1;
+  }
+  .noticia-grande .noticia-body {
+    flex: 1;
+    padding: 1.25rem;
+    justify-content: center;
+  }
+  .noticia-grande .noticia-titulo {
+    font-size: 1.1rem;
+  }
 
-  .noticia-img-wrap { position: relative; aspect-ratio: 16/9; overflow: hidden; }
-  .noticia-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .noticia-img-wrap {
+    aspect-ratio: 16/9;
+    overflow: hidden;
+    position: relative;
+    flex-shrink: 0;
+  }
+  .noticia-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform 0.3s;
+  }
+  .noticia-card:hover .noticia-img {
+    transform: scale(1.04);
+  }
   .noticia-badge {
-    position: absolute; top: 8px; left: 8px;
-    font-size: 0.6rem; font-weight: 800; text-transform: uppercase;
-    letter-spacing: .06em; padding: 2px 7px; border-radius: 4px;
-    background: rgba(99,102,241,0.85); color: white;
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    font-size: 0.6rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 2px 7px;
+    border-radius: 3px;
+    background: rgba(99, 102, 241, 0.85);
+    color: white;
   }
-  .noticia-img-placeholder {
-    aspect-ratio: 16/9; background: rgba(255,255,255,0.04);
-    display: flex; align-items: center; justify-content: center; font-size: 2rem;
+  .noticia-placeholder {
+    width: 100%;
+    height: 100%;
+    background: var(--naranja, #f28241);
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
-  .noticia-body { padding: 0.9rem 1rem; display: flex; flex-direction: column; gap: 0.3rem; flex: 1; }
+  .noticia-placeholder img {
+    width: 40%;
+    opacity: 0.9;
+  }
+  .noticia-body {
+    padding: 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    flex: 1;
+  }
   .noticia-cat {
-    font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .07em; color: var(--orange, #f97316);
+    font-size: 0.6rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--naranja, #f28241);
   }
-  .noticia-titulo { font-size: 0.88rem; font-weight: 700; line-height: 1.35; margin: 0; }
+  .noticia-titulo {
+    font-size: 0.85rem;
+    font-weight: 700;
+    line-height: 1.3;
+    margin: 0;
+  }
   .noticia-sub {
-    font-size: 0.78rem; color: var(--muted, #64748b); margin: 0;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin: 0;
+    line-height: 1.5;
   }
-  .noticia-fecha { font-size: 0.7rem; color: var(--muted, #64748b); margin-top: auto; padding-top: 0.4rem; }
-
-  .ver-mas-wrap { margin-top: 1rem; text-align: right; }
-  .ver-mas {
-    font-size: 0.8rem; font-weight: 700; color: var(--orange, #f97316);
-    text-decoration: none; letter-spacing: .03em;
+  .noticia-fecha {
+    font-size: 0.68rem;
+    color: var(--muted);
+    margin-top: auto;
+    padding-top: 0.3rem;
   }
-  .ver-mas:hover { text-decoration: underline; }
 
   /* ── Equipos ── */
   .equipos-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
   }
   .equipo-card {
-    padding: 1.1rem 1.2rem; background: var(--card, #1e293b);
-    border: 1px solid var(--borde, rgba(255,255,255,0.08));
-    border-radius: 10px; text-decoration: none; color: inherit;
-    display: flex; flex-direction: column; gap: 0.25rem;
-    transition: border-color .2s, transform .15s;
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    padding: 0.75rem 1rem;
+    background: var(--card);
+    border: 1px solid var(--borde);
+    border-left: 3px solid var(--naranja, #f28241);
+    border-radius: 8px;
+    text-decoration: none;
+    color: inherit;
+    transition:
+      background 0.15s,
+      transform 0.15s;
   }
-  .equipo-card:hover { border-color: var(--orange, #f97316); transform: translateY(-2px); }
-  .equipo-card--inactivo { opacity: 0.4; cursor: default; }
-  .equipo-nombre { font-weight: 700; font-size: 0.88rem; }
-  .equipo-cat { font-size: 0.75rem; color: var(--muted, #64748b); }
-  .equipo-temp { font-size: 0.68rem; font-weight: 700; color: var(--orange, #f97316); margin-top: 0.25rem; }
+  .equipo-card:hover {
+    background: var(--naranja, #f28241);
+    color: white;
+    transform: translateX(4px);
+  }
+  .equipo-card--off {
+    opacity: 0.4;
+    pointer-events: none;
+  }
+  .equipo-escudo {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+  .equipo-nombre {
+    font-weight: 700;
+    font-size: 0.85rem;
+  }
+  .equipo-cat {
+    font-size: 0.7rem;
+    color: var(--muted);
+  }
+  .equipo-card:hover .equipo-cat {
+    color: rgba(255, 255, 255, 0.7);
+  }
+  .equipo-arrow {
+    margin-left: auto;
+    font-size: 1rem;
+    color: var(--muted);
+    transition: transform 0.15s;
+  }
+  .equipo-card:hover .equipo-arrow {
+    color: white;
+    transform: translateX(3px);
+  }
 
-  /* ── Partidos ── */
-  .partidos-lista { display: flex; flex-direction: column; gap: 0.5rem; }
-  .partido-card {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 1rem; padding: 0.9rem 1.1rem;
-    background: var(--card, #1e293b);
-    border: 1px solid var(--borde, rgba(255,255,255,0.08));
-    border-left: 3px solid transparent; border-radius: 10px;
-    text-decoration: none; color: inherit;
+  /* ══ SIDEBAR ══ */
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    position: sticky;
+    top: 72px; /* altura del nav */
   }
-  .partido-card.victoria { border-left-color: #22c55e; }
-  .partido-card.derrota  { border-left-color: #3b82f6; }
-  .partido-rival { font-weight: 700; font-size: 0.9rem; margin-bottom: 0.2rem; }
-  .partido-meta { display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; color: var(--muted, #64748b); }
-  .partido-equipo { color: var(--orange, #f97316); font-weight: 600; }
-  .marcador { font-size: 1.2rem; font-weight: 800; flex-shrink: 0; }
-  .marcador.victoria { color: #22c55e; }
-  .marcador.derrota  { color: #3b82f6; }
+
+  .sidebar-widget {
+    background: var(--card);
+    border: 1px solid var(--borde);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .widget-titulo {
+    font-size: 0.62rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--naranja, #f28241);
+    padding: 0.9rem 1rem 0.75rem;
+    border-bottom: 1px solid var(--borde);
+    margin: 0;
+  }
+
+  .widget-lista {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .widget-partido {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.8rem 1rem;
+    border-bottom: 1px solid var(--borde);
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.15s;
+  }
+  .widget-partido:last-child {
+    border-bottom: none;
+  }
+  .widget-partido:not(.proximo):hover {
+    background: var(--color-background-secondary, rgba(0, 0, 0, 0.03));
+  }
+
+  .widget-equipos {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .widget-equipo {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2rem;
+  }
+  .widget-equipo.rival {
+    align-items: flex-end;
+    text-align: right;
+  }
+  .widget-escudo {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+  }
+  .widget-eq-nombre {
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1.2;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .widget-marcador {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .widget-pts {
+    font-size: 1.1rem;
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+  }
+  .widget-pts.win {
+    color: var(--naranja, #f28241);
+  }
+  .widget-pts.loss {
+    color: var(--muted);
+    opacity: 0.5;
+  }
+  .widget-sep {
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+
+  .widget-vs-fecha {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+  .widget-vs {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  .widget-fecha-proximo {
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--naranja, #f28241);
+    text-align: center;
+  }
+
+  .widget-resultado-pill {
+    font-size: 0.58rem;
+    font-weight: 800;
+    padding: 1px 6px;
+    border-radius: 3px;
+  }
+  .widget-resultado-pill.win {
+    background: rgba(242, 130, 65, 0.15);
+    color: var(--naranja, #f28241);
+  }
+  .widget-resultado-pill.loss {
+    background: rgba(59, 130, 246, 0.12);
+    color: #60a5fa;
+  }
+  .widget-resultado-pill.neutro {
+    background: rgba(100, 116, 139, 0.12);
+    color: var(--muted);
+  }
 
   /* ── Responsive ── */
-  @media (max-width: 640px) {
-    .slides { height: 280px; }
-    .slide { width: 80%; }
-    .slide-info { padding: 1rem; }
-    .slide-titulo { font-size: 1rem; }
-    .carousel-btn { width: 32px; height: 32px; font-size: 1rem; }
-    .contenido { padding: 2rem 1rem; }
-    .equipos-grid { grid-template-columns: 1fr 1fr; }
-    .noticias-grid { grid-template-columns: 1fr; }
+  @media (max-width: 900px) {
+    .page-wrap {
+      grid-template-columns: 1fr;
+    }
+    .sidebar {
+      position: static;
+    }
+    .slider-wrap {
+      height: 65vh;
+      min-height: 360px;
+    }
+    .slide-text {
+      padding: 1.5rem;
+    }
+  }
+
+  @media (max-width: 600px) {
+    .slider-wrap {
+      height: 55vh;
+      min-height: 300px;
+    }
+    .slide-titulo {
+      font-size: 1.4rem;
+    }
+    .slide-subtitulo {
+      display: none;
+    }
+    .noticias-grid {
+      grid-template-columns: 1fr;
+    }
+    .noticia-grande {
+      flex-direction: column;
+    }
+    .noticia-grande .noticia-img-wrap {
+      min-width: unset;
+    }
+    .page-wrap {
+      padding: 2rem 1rem;
+    }
+    .slider-btn {
+      width: 36px;
+      height: 36px;
+      font-size: 1rem;
+    }
+  }
+  .widget-cat {
+    font-size: 0.6rem;
+    color: var(--muted);
+    margin-bottom: 0.35rem;
+    font-weight: 600;
+  }
+  .widget-eq-nombre.propio {
+    color: var(--naranja, #f28241);
   }
 </style>

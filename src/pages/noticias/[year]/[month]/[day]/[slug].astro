@@ -18,10 +18,10 @@ export async function getStaticPaths() {
       const d = new Date(n.fecha_publicacion);
       return {
         params: {
-          year:  String(d.getFullYear()),
+          year: String(d.getFullYear()),
           month: String(d.getMonth() + 1).padStart(2, "0"),
-          day:   String(d.getDate()).padStart(2, "0"),
-          slug:  n.slug,
+          day: String(d.getDate()).padStart(2, "0"),
+          slug: n.slug,
         },
       };
     });
@@ -32,7 +32,8 @@ const { year, month, day, slug } = Astro.params;
 // ── Noticia ────────────────────────────────────────────────────────────────
 const { data: noticia } = await supabase
   .from("noticias")
-  .select(`
+  .select(
+    `
     id, titulo, subtitulo, contenido, img_url, fecha,
     publicada, destacada, slug, fecha_publicacion,
     equipos (
@@ -41,7 +42,8 @@ const { data: noticia } = await supabase
       temporadas (nombre)
     ),
     categorias (id, nombre, slug)
-  `)
+  `,
+  )
   .eq("publicada", true)
   .eq("slug", slug)
   .single();
@@ -51,7 +53,9 @@ if (!noticia) return Astro.redirect("/noticias");
 // ── Noticias relacionadas ──────────────────────────────────────────────────
 const { data: relacionadas } = await supabase
   .from("noticias")
-  .select("id, titulo, img_url, fecha_publicacion, slug, categorias(nombre, slug)")
+  .select(
+    "id, titulo, img_url, fecha_publicacion, slug, categorias(nombre, slug)",
+  )
   .eq("publicada", true)
   .eq("categoria_id", noticia.categorias?.id ?? "")
   .neq("id", noticia.id)
@@ -61,9 +65,9 @@ const { data: relacionadas } = await supabase
 // ── Helpers ────────────────────────────────────────────────────────────────
 function urlNoticia(n) {
   if (!n.fecha_publicacion || !n.slug) return `/noticias/${n.id}`;
-  const d   = new Date(n.fecha_publicacion);
-  const y   = d.getFullYear();
-  const m   = String(d.getMonth() + 1).padStart(2, "0");
+  const d = new Date(n.fecha_publicacion);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `/noticias/${y}/${m}/${day}/${n.slug}`;
 }
@@ -71,14 +75,19 @@ function urlNoticia(n) {
 function formatFecha(f) {
   if (!f) return "";
   return new Date(f).toLocaleDateString("es-ES", {
-    weekday: "long", day: "numeric", month: "long", year: "numeric",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
   });
 }
 
 function formatFechaCorta(f) {
   if (!f) return "";
   return new Date(f).toLocaleDateString("es-ES", {
-    day: "numeric", month: "short", year: "numeric",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
   });
 }
 
@@ -88,9 +97,10 @@ const nombreEquipo = noticia.equipos?.sponsor
     ? `CB Jaca ${noticia.equipos?.categorias?.nombre ?? ""}`
     : "CB Jaca";
 
-const equipoHref = noticia.equipos?.categorias?.slug && noticia.equipos?.temporadas?.nombre
-  ? `/equipos/${noticia.equipos.categorias.slug}/${noticia.equipos.temporadas.nombre}`
-  : null;
+const equipoHref =
+  noticia.equipos?.categorias?.slug && noticia.equipos?.temporadas?.nombre
+    ? `/equipos/${noticia.equipos.categorias.slug}/${noticia.equipos.temporadas.nombre}`
+    : null;
 
 const parrafos = (noticia.contenido ?? "").split("\n").filter(Boolean);
 
@@ -98,36 +108,50 @@ const canonicalUrl = `https://cbjaca.es/noticias/${year}/${month}/${day}/${slug}
 ---
 
 <Layout titulo={`${noticia.titulo} | CB Jaca`}>
-
-  <div class="noticia-hero" style={noticia.img_url ? `--hero-img: url('${noticia.img_url}')` : ""}>
+  <div
+    class="noticia-hero"
+    style={noticia.img_url ? `--hero-img: url('${noticia.img_url}')` : ""}
+  >
     <div class={`hero-bg ${noticia.img_url ? "has-image" : "no-image"}`}></div>
     <div class="hero-inner">
       <nav class="hero-nav">
         <a href="/noticias" class="volver">← Noticias</a>
-        {noticia.categorias && (
-          <a href={`/noticias/categoria/${noticia.categorias.slug}`} class="badge-categoria">
-            {noticia.categorias.nombre}
-          </a>
-        )}
-        {noticia.destacada && (
-          <span class="badge-destacada">Destacada</span>
-        )}
+        {
+          noticia.categorias && (
+            <a
+              href={`/noticias/categoria/${noticia.categorias.slug}`}
+              class="badge-categoria"
+            >
+              {noticia.categorias.nombre}
+            </a>
+          )
+        }
+        {noticia.destacada && <span class="badge-destacada">Destacada</span>}
       </nav>
 
       <div class="hero-content">
         <h1 class="noticia-titulo">{noticia.titulo}</h1>
-        {noticia.subtitulo && (
-          <p class="noticia-subtitulo">{noticia.subtitulo}</p>
-        )}
+        {
+          noticia.subtitulo && (
+            <p class="noticia-subtitulo">{noticia.subtitulo}</p>
+          )
+        }
         <div class="meta-row">
-          <time class="meta-fecha" datetime={noticia.fecha_publicacion ?? noticia.fecha}>
+          <time
+            class="meta-fecha"
+            datetime={noticia.fecha_publicacion ?? noticia.fecha}
+          >
             {formatFecha(noticia.fecha_publicacion ?? noticia.fecha)}
           </time>
-          {equipoHref ? (
-            <a href={equipoHref} class="meta-equipo">{nombreEquipo}</a>
-          ) : (
-            <span class="meta-equipo">{nombreEquipo}</span>
-          )}
+          {
+            equipoHref ? (
+              <a href={equipoHref} class="meta-equipo">
+                {nombreEquipo}
+              </a>
+            ) : (
+              <span class="meta-equipo">{nombreEquipo}</span>
+            )
+          }
         </div>
       </div>
     </div>
@@ -135,24 +159,30 @@ const canonicalUrl = `https://cbjaca.es/noticias/${year}/${month}/${day}/${slug}
 
   <div class="noticia-layout">
     <article class="noticia-articulo">
-
-      {noticia.img_url && (
-        <div class="img-principal-wrap">
-          <img
-            src={noticia.img_url}
-            alt={noticia.titulo}
-            class="img-principal"
-            loading="eager"
-          />
-        </div>
-      )}
+      {
+        noticia.img_url && (
+          <div class="img-principal-wrap">
+            <img
+              src={noticia.img_url}
+              alt={noticia.titulo}
+              class="img-principal"
+              loading="eager"
+            />
+          </div>
+        )
+      }
 
       <div class="contenido-texto">
-        {parrafos.length > 0
-          ? parrafos.map((p, i) => (
+        {
+          parrafos.length > 0 ? (
+            parrafos.map((p, i) => (
               <p class={i === 0 ? "primer-parrafo" : ""}>{p}</p>
             ))
-          : <p class="sin-contenido">El contenido de esta noticia no está disponible aún.</p>
+          ) : (
+            <p class="sin-contenido">
+              El contenido de esta noticia no está disponible aún.
+            </p>
+          )
         }
       </div>
 
@@ -161,23 +191,29 @@ const canonicalUrl = `https://cbjaca.es/noticias/${year}/${month}/${day}/${slug}
         <div class="compartir-btns">
           <a
             href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(noticia.titulo)}&url=${encodeURIComponent(canonicalUrl)}`}
-            target="_blank" rel="noopener"
+            target="_blank"
+            rel="noopener"
             class="btn-share btn-x"
             aria-label="Compartir en X"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.253 5.622 5.912-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+              <path
+                d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.253 5.622 5.912-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"
+              ></path>
             </svg>
             X / Twitter
           </a>
           <a
-            href={`https://wa.me/?text=${encodeURIComponent(noticia.titulo + ' ' + canonicalUrl)}`}
-            target="_blank" rel="noopener"
+            href={`https://wa.me/?text=${encodeURIComponent(noticia.titulo + " " + canonicalUrl)}`}
+            target="_blank"
+            rel="noopener"
             class="btn-share btn-wa"
             aria-label="Compartir por WhatsApp"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z"/>
+              <path
+                d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z"
+              ></path>
             </svg>
             WhatsApp
           </a>
@@ -190,206 +226,444 @@ const canonicalUrl = `https://cbjaca.es/noticias/${year}/${month}/${day}/${slug}
         <h3 class="sidebar-titulo">Sobre esta noticia</h3>
         <dl class="sidebar-meta">
           <dt>Fecha</dt>
-          <dd>{formatFechaCorta(noticia.fecha_publicacion ?? noticia.fecha)}</dd>
-          {noticia.categorias && <>
-            <dt>Categoría</dt>
-            <dd>
-              <a href={`/noticias/categoria/${noticia.categorias.slug}`}>
-                {noticia.categorias.nombre}
-              </a>
-            </dd>
-          </>}
-          {noticia.equipos && <>
-            <dt>Equipo</dt>
-            <dd>
-              {equipoHref
-                ? <a href={equipoHref}>{nombreEquipo}</a>
-                : nombreEquipo
-              }
-            </dd>
-          </>}
+          <dd>
+            {formatFechaCorta(noticia.fecha_publicacion ?? noticia.fecha)}
+          </dd>
+          {
+            noticia.categorias && (
+              <>
+                <dt>Categoría</dt>
+                <dd>
+                  <a href={`/noticias/categoria/${noticia.categorias.slug}`}>
+                    {noticia.categorias.nombre}
+                  </a>
+                </dd>
+              </>
+            )
+          }
+          {
+            noticia.equipos && (
+              <>
+                <dt>Equipo</dt>
+                <dd>
+                  {equipoHref ? (
+                    <a href={equipoHref}>{nombreEquipo}</a>
+                  ) : (
+                    nombreEquipo
+                  )}
+                </dd>
+              </>
+            )
+          }
         </dl>
       </div>
     </aside>
   </div>
 
-  {relacionadas && relacionadas.length > 0 && (
-    <section class="relacionadas-section">
-      <div class="relacionadas-inner">
-        <h2 class="relacionadas-titulo">Más noticias</h2>
-        <div class="relacionadas-grid">
-          {relacionadas.map((n) => (
-            <a href={urlNoticia(n)} class="rel-card">
-              <div class="rel-img-wrap">
-                {n.img_url
-                  ? <img src={n.img_url} alt={n.titulo} class="rel-img" loading="lazy" />
-                  : <div class="rel-img-placeholder"><span>CB Jaca</span></div>
-                }
-              </div>
-              <div class="rel-info">
-                {n.categorias && <span class="rel-cat">{n.categorias.nombre}</span>}
-                <p class="rel-titulo">{n.titulo}</p>
-                <time class="rel-fecha">{formatFechaCorta(n.fecha_publicacion)}</time>
-              </div>
-            </a>
-          ))}
+  {
+    relacionadas && relacionadas.length > 0 && (
+      <section class="relacionadas-section">
+        <div class="relacionadas-inner">
+          <h2 class="relacionadas-titulo">Más noticias</h2>
+          <div class="relacionadas-grid">
+            {relacionadas.map((n) => (
+              <a href={urlNoticia(n)} class="rel-card">
+                <div class="rel-img-wrap">
+                  {n.img_url ? (
+                    <img
+                      src={n.img_url}
+                      alt={n.titulo}
+                      class="rel-img"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div class="rel-img-placeholder">
+                      <span>CB Jaca</span>
+                    </div>
+                  )}
+                </div>
+                <div class="rel-info">
+                  {n.categorias && (
+                    <span class="rel-cat">{n.categorias.nombre}</span>
+                  )}
+                  <p class="rel-titulo">{n.titulo}</p>
+                  <time class="rel-fecha">
+                    {formatFechaCorta(n.fecha_publicacion)}
+                  </time>
+                </div>
+              </a>
+            ))}
+          </div>
         </div>
-      </div>
-    </section>
-  )}
-
+      </section>
+    )
+  }
 </Layout>
 
 <style>
   .noticia-hero {
-    position: relative; background-color: #0f172a; color: white; overflow: hidden;
+    position: relative;
+    background-color: #0f172a;
+    color: white;
+    overflow: hidden;
   }
-  .hero-bg { position: absolute; inset: 0; z-index: 0; }
+  .hero-bg {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+  }
   .hero-bg.has-image {
-    background-image: var(--hero-img); background-size: cover; background-position: center;
+    background-image: var(--hero-img);
+    background-size: cover;
+    background-position: center;
     filter: brightness(0.25) saturate(0.6);
   }
-  .hero-bg.no-image { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); }
+  .hero-bg.no-image {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  }
   .hero-inner {
-    position: relative; z-index: 1; max-width: 900px; margin: 0 auto; padding: 2rem 2rem 3rem;
+    position: relative;
+    z-index: 1;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem 2rem 3rem;
   }
   .hero-nav {
-    display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 2rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 2rem;
   }
   .volver {
-    font-size: 0.78rem; font-weight: 700; color: var(--orange, #f97316);
-    text-decoration: none; text-transform: uppercase; letter-spacing: 0.05em; margin-right: auto;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--orange, #f97316);
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-right: auto;
   }
-  .volver:hover { text-decoration: underline; }
-  .badge-categoria, .badge-destacada {
-    font-size: 0.65rem; font-weight: 800; text-transform: uppercase;
-    letter-spacing: 0.08em; padding: 3px 10px; border-radius: 20px; text-decoration: none;
+  .volver:hover {
+    text-decoration: underline;
+  }
+  .badge-categoria,
+  .badge-destacada {
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 3px 10px;
+    border-radius: 20px;
+    text-decoration: none;
   }
   .badge-categoria {
-    background: rgba(249,115,22,0.15); color: var(--orange, #f97316);
-    border: 1px solid rgba(249,115,22,0.3);
+    background: rgba(249, 115, 22, 0.15);
+    color: var(--orange, #f97316);
+    border: 1px solid rgba(249, 115, 22, 0.3);
   }
-  .badge-categoria:hover { background: rgba(249,115,22,0.25); }
+  .badge-categoria:hover {
+    background: rgba(249, 115, 22, 0.25);
+  }
   .badge-destacada {
-    background: rgba(234,179,8,0.15); color: #eab308; border: 1px solid rgba(234,179,8,0.3);
+    background: rgba(234, 179, 8, 0.15);
+    color: #eab308;
+    border: 1px solid rgba(234, 179, 8, 0.3);
   }
-  .hero-content { max-width: 720px; }
+  .hero-content {
+    max-width: 720px;
+  }
   .noticia-titulo {
-    font-size: clamp(1.6rem, 4vw, 2.8rem); font-weight: 900;
-    line-height: 1.15; letter-spacing: -0.02em; margin: 0 0 0.75rem; color: white;
+    font-size: clamp(1.6rem, 4vw, 2.8rem);
+    font-weight: 900;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    margin: 0 0 0.75rem;
+    color: white;
   }
   .noticia-subtitulo {
-    font-size: clamp(0.95rem, 2vw, 1.15rem); line-height: 1.6;
-    color: rgba(255,255,255,0.6); margin: 0 0 1.5rem; font-weight: 400;
+    font-size: clamp(0.95rem, 2vw, 1.15rem);
+    line-height: 1.6;
+    color: rgba(255, 255, 255, 0.6);
+    margin: 0 0 1.5rem;
+    font-weight: 400;
   }
-  .meta-row { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
-  .meta-fecha { font-size: 0.78rem; color: rgba(255,255,255,0.4); text-transform: capitalize; }
+  .meta-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .meta-fecha {
+    font-size: 0.78rem;
+    color: rgba(255, 255, 255, 0.4);
+    text-transform: capitalize;
+  }
   .meta-equipo {
-    font-size: 0.78rem; font-weight: 700; color: var(--orange, #f97316);
-    text-decoration: none; text-transform: uppercase; letter-spacing: 0.05em;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--orange, #f97316);
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
-  a.meta-equipo:hover { text-decoration: underline; }
+  a.meta-equipo:hover {
+    text-decoration: underline;
+  }
 
   .noticia-layout {
-    max-width: 900px; margin: 0 auto; padding: 3rem 2rem;
-    display: grid; grid-template-columns: 1fr 260px; gap: 3rem; align-items: start;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 3rem 2rem;
+    display: grid;
+    grid-template-columns: 1fr 260px;
+    gap: 3rem;
+    align-items: start;
   }
   @media (max-width: 700px) {
-    .noticia-layout { grid-template-columns: 1fr; padding: 2rem 1rem; gap: 2rem; }
-    .sidebar { order: -1; }
+    .noticia-layout {
+      grid-template-columns: 1fr;
+      padding: 2rem 1rem;
+      gap: 2rem;
+    }
+    .sidebar {
+      order: -1;
+    }
   }
 
-  .noticia-articulo { min-width: 0; }
+  .noticia-articulo {
+    min-width: 0;
+  }
   .img-principal-wrap {
-    border-radius: 12px; overflow: hidden; margin-bottom: 2rem;
-    border: 1px solid var(--borde, rgba(255,255,255,0.07)); aspect-ratio: 16/9;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 2rem;
+    border: 1px solid var(--borde, rgba(255, 255, 255, 0.07));
+    aspect-ratio: 16/9;
   }
-  .img-principal { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .contenido-texto { font-size: 1rem; line-height: 1.85; color: var(--texto, #cbd5e1); }
-  .contenido-texto p { margin-bottom: 1.2rem; }
+  .img-principal {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .contenido-texto {
+    font-size: 1rem;
+    line-height: 1.85;
+    color: var(--texto, #cbd5e1);
+  }
+  .contenido-texto p {
+    margin-bottom: 1.2rem;
+  }
   .contenido-texto .primer-parrafo {
-    font-size: 1.1rem; font-weight: 500; color: var(--texto-principal, #e2e8f0); line-height: 1.75;
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--texto-principal, #e2e8f0);
+    line-height: 1.75;
   }
-  .contenido-texto .sin-contenido { color: var(--muted, #64748b); font-style: italic; }
+  .contenido-texto .sin-contenido {
+    color: var(--muted, #64748b);
+    font-style: italic;
+  }
 
   .compartir {
-    display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
-    margin-top: 2.5rem; padding-top: 2rem;
-    border-top: 1px solid var(--borde, rgba(255,255,255,0.07));
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-top: 2.5rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--borde, rgba(255, 255, 255, 0.07));
   }
   .compartir-label {
-    font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.06em; color: var(--muted, #64748b);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted, #64748b);
   }
-  .compartir-btns { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .compartir-btns {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
   .btn-share {
-    display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.75rem;
-    font-weight: 700; padding: 0.45rem 0.9rem; border-radius: 6px;
-    text-decoration: none; transition: opacity 0.15s; border: 1px solid transparent;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.45rem 0.9rem;
+    border-radius: 6px;
+    text-decoration: none;
+    transition: opacity 0.15s;
+    border: 1px solid transparent;
   }
-  .btn-share:hover { opacity: 0.8; }
-  .btn-x { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.7); border-color: rgba(255,255,255,0.1); }
-  .btn-wa { background: rgba(37,211,102,0.1); color: #25d366; border-color: rgba(37,211,102,0.2); }
+  .btn-share:hover {
+    opacity: 0.8;
+  }
+  .btn-x {
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.7);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  .btn-wa {
+    background: rgba(37, 211, 102, 0.1);
+    color: #25d366;
+    border-color: rgba(37, 211, 102, 0.2);
+  }
 
-  .sidebar { position: sticky; top: 1.5rem; }
+  .sidebar {
+    position: sticky;
+    top: 1.5rem;
+  }
   .sidebar-card {
-    background: var(--card, #1e293b); border: 1px solid var(--borde, rgba(255,255,255,0.07));
-    border-radius: 12px; padding: 1.5rem;
+    background: var(--card, #1e293b);
+    border: 1px solid var(--borde, rgba(255, 255, 255, 0.07));
+    border-radius: 12px;
+    padding: 1.5rem;
   }
   .sidebar-titulo {
-    font-size: 0.65rem; font-weight: 800; text-transform: uppercase;
-    letter-spacing: 0.1em; color: var(--orange, #f97316); margin: 0 0 1rem;
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--orange, #f97316);
+    margin: 0 0 1rem;
   }
   .sidebar-meta {
-    display: grid; grid-template-columns: auto 1fr; gap: 0.5rem 1rem; font-size: 0.82rem; margin: 0;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.5rem 1rem;
+    font-size: 0.82rem;
+    margin: 0;
   }
-  .sidebar-meta dt { color: var(--muted, #64748b); font-weight: 600; white-space: nowrap; }
-  .sidebar-meta dd { color: var(--texto, #cbd5e1); margin: 0; font-weight: 500; }
-  .sidebar-meta dd a { color: var(--orange, #f97316); text-decoration: none; font-weight: 700; }
-  .sidebar-meta dd a:hover { text-decoration: underline; }
+  .sidebar-meta dt {
+    color: var(--muted, #64748b);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .sidebar-meta dd {
+    color: var(--texto, #cbd5e1);
+    margin: 0;
+    font-weight: 500;
+  }
+  .sidebar-meta dd a {
+    color: var(--orange, #f97316);
+    text-decoration: none;
+    font-weight: 700;
+  }
+  .sidebar-meta dd a:hover {
+    text-decoration: underline;
+  }
 
   .relacionadas-section {
     background: var(--bg-clr-2, #0f172a);
-    border-top: 1px solid var(--borde, rgba(255,255,255,0.07)); padding: 3rem 2rem;
+    border-top: 1px solid var(--borde, rgba(255, 255, 255, 0.07));
+    padding: 3rem 2rem;
   }
-  .relacionadas-inner { max-width: 900px; margin: 0 auto; }
+  .relacionadas-inner {
+    max-width: 900px;
+    margin: 0 auto;
+  }
   .relacionadas-titulo {
-    font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.08em; color: var(--orange, #f97316); margin-bottom: 1.5rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--orange, #f97316);
+    margin-bottom: 1.5rem;
   }
   .relacionadas-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1rem;
   }
   .rel-card {
-    display: flex; flex-direction: column; background: var(--card, #1e293b);
-    border: 1px solid var(--borde, rgba(255,255,255,0.07)); border-radius: 10px;
-    overflow: hidden; text-decoration: none; transition: border-color 0.2s, transform 0.2s;
+    display: flex;
+    flex-direction: column;
+    background: var(--card, #1e293b);
+    border: 1px solid var(--borde, rgba(255, 255, 255, 0.07));
+    border-radius: 10px;
+    overflow: hidden;
+    text-decoration: none;
+    transition:
+      border-color 0.2s,
+      transform 0.2s;
   }
-  .rel-card:hover { border-color: var(--orange, #f97316); transform: translateY(-2px); }
-  .rel-img-wrap { aspect-ratio: 16/9; overflow: hidden; background: rgba(255,255,255,0.04); }
-  .rel-img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s ease; }
-  .rel-card:hover .rel-img { transform: scale(1.05); }
+  .rel-card:hover {
+    border-color: var(--orange, #f97316);
+    transform: translateY(-2px);
+  }
+  .rel-img-wrap {
+    aspect-ratio: 16/9;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.04);
+  }
+  .rel-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+  }
+  .rel-card:hover .rel-img {
+    transform: scale(1.05);
+  }
   .rel-img-placeholder {
-    width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   .rel-img-placeholder span {
-    font-size: 0.65rem; font-weight: 800; text-transform: uppercase;
-    letter-spacing: 0.1em; color: rgba(255,255,255,0.15);
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: rgba(255, 255, 255, 0.15);
   }
-  .rel-info { padding: 0.9rem 1rem; display: flex; flex-direction: column; gap: 0.3rem; flex: 1; }
+  .rel-info {
+    padding: 0.9rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    flex: 1;
+  }
   .rel-cat {
-    font-size: 0.62rem; font-weight: 800; text-transform: uppercase;
-    letter-spacing: 0.08em; color: var(--orange, #f97316);
+    font-size: 0.62rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--orange, #f97316);
   }
   .rel-titulo {
-    font-size: 0.88rem; font-weight: 700; line-height: 1.3; color: var(--texto, #cbd5e1); margin: 0;
-    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+    font-size: 0.88rem;
+    font-weight: 700;
+    line-height: 1.3;
+    color: var(--texto, #cbd5e1);
+    margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
-  .rel-fecha { font-size: 0.72rem; color: var(--muted, #64748b); margin-top: auto; padding-top: 0.4rem; }
+  .rel-fecha {
+    font-size: 0.72rem;
+    color: var(--muted, #64748b);
+    margin-top: auto;
+    padding-top: 0.4rem;
+  }
 
   @media (max-width: 640px) {
-    .hero-inner { padding: 1.5rem 1rem 2rem; }
-    .relacionadas-section { padding: 2rem 1rem; }
-    .relacionadas-grid { grid-template-columns: 1fr 1fr; }
+    .hero-inner {
+      padding: 1.5rem 1rem 2rem;
+    }
+    .relacionadas-section {
+      padding: 2rem 1rem;
+    }
+    .relacionadas-grid {
+      grid-template-columns: 1fr 1fr;
+    }
   }
 </style>

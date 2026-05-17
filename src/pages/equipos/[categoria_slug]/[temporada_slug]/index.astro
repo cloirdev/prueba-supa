@@ -66,7 +66,10 @@ const jugadoresPorEquipo = new Map();
 // ── Partidos ───────────────────────────────────────────────────────────────
 const { data: partidos } = await supabase
   .from("partidos")
-  .select(`id, rival, es_local, fecha, jornada, ronda, puntos_favor, puntos_contra, equipo_id, equipos_rivales(nombre_equipo, clubes(nombre))`)
+  .select(`
+    id, rival, es_local, fecha, jornada, ronda, puntos_favor, puntos_contra, equipo_id,
+    equipos_rivales(nombre_equipo, clubes(nombre, logo_url))
+  `)
   .in("equipo_id", equipoIds)
   .order("fecha", { ascending: true });
 
@@ -148,6 +151,11 @@ function etiquetaJornada(p) {
   if (p.ronda && p.ronda !== "Amistoso") return p.ronda;
   return "Amistoso";
 }
+
+function escudoRival(p) {
+  return p.equipos_rivales?.clubes?.logo_url ?? "/escudo.png";
+}
+
 function fotoJugador(jugador, preferida = "accion") {
   const accionFields = [
     "foto_accion_url",
@@ -170,6 +178,8 @@ const posicionLabel = {
   base: "Base", escolta: "Escolta", alero: "Alero",
   ala_pivot: "Ala-Pívot", pivot: "Pívot",
 };
+
+
 ---
 
 <Layout titulo={`${categoriaNombre} – ${temporadaNombre} | CB Jaca`}>
@@ -292,10 +302,39 @@ const posicionLabel = {
                             <span class="fecha">{formatFecha(p.fecha)}</span>
                           </div>
                           <div class="partido-vs">
-                            <span class:list={["rival-nombre", p.es_local && "propio"]}>{p.es_local ? nombreEquipo : nombreRival(p)}</span>
-                            <span class="vs-sep">vs</span>
-                            <span class:list={["rival-nombre", !p.es_local && "propio"]}>{p.es_local ? nombreRival(p) : nombreEquipo}</span>
-                          </div>
+  <span class:list={["rival-nombre", p.es_local && "propio"]}>
+    {p.es_local ? nombreEquipo : nombreRival(p)}
+  </span>
+
+  <!-- Escudos enfrentados -->
+  <div class="escudos-vs">
+    <img
+      src={p.es_local ? "/escudo-naranja.png" : escudoRival(p)}
+      alt={p.es_local ? "CB Jaca" : nombreRival(p)}
+      class="escudo-mini"
+      onerror="this.src='/escudo.png'"
+    />
+    <span class="vs-sep">vs</span>
+    <img
+      src={p.es_local ? escudoRival(p) : "/escudo-naranja.png"}
+      alt={p.es_local ? nombreRival(p) : "CB Jaca"}
+      class="escudo-mini"
+      onerror="this.src='/escudo.png'"
+    />
+  </div>
+
+  {p.puntos_favor !== null && (
+    <span class:list={["marcador", p.puntos_favor > p.puntos_contra ? "victoria" : "derrota"]}>
+      {p.es_local ? p.puntos_favor : p.puntos_contra}
+      {" – "}
+      {p.es_local ? p.puntos_contra : p.puntos_favor}
+    </span>
+  )}
+
+  <span class:list={["rival-nombre", !p.es_local && "propio"]}>
+    {p.es_local ? nombreRival(p) : nombreEquipo}
+  </span>
+</div>
                           <span class:list={["condicion-pill", p.es_local ? "local" : "visitante"]}>
                             {p.es_local ? "Local" : "Visitante"}
                           </span>
@@ -317,14 +356,32 @@ const posicionLabel = {
                               <span class="fecha">{formatFecha(p.fecha)}</span>
                             </div>
                             <div class="partido-vs">
-                              <span class:list={["rival-nombre", p.es_local && "propio"]}>{p.es_local ? nombreEquipo : nombreRival(p)}</span>
-                              <span class:list={["marcador", victoria ? "victoria" : "derrota"]}>
-                                {p.es_local ? p.puntos_favor : p.puntos_contra}
-                                {" – "}
-                                {p.es_local ? p.puntos_contra : p.puntos_favor}
-                              </span>
-                              <span class:list={["rival-nombre", !p.es_local && "propio"]}>{p.es_local ? nombreRival(p) : nombreEquipo}</span>
-                            </div>
+  <span class:list={["rival-nombre", p.es_local && "propio"]}>
+    {p.es_local ? nombreEquipo : nombreRival(p)}
+  </span>
+  <div class="escudos-vs">
+    <img
+      src={p.es_local ? "/escudo-naranja.png" : escudoRival(p)}
+      alt={p.es_local ? "CB Jaca" : nombreRival(p)}
+      class="escudo-mini"
+      onerror="this.src='/escudo.png'"
+    />
+    <span class:list={["marcador", victoria ? "victoria" : "derrota"]}>
+      {p.es_local ? p.puntos_favor : p.puntos_contra}
+      {" – "}
+      {p.es_local ? p.puntos_contra : p.puntos_favor}
+    </span>
+    <img
+      src={p.es_local ? escudoRival(p) : "/escudo-naranja.png"}
+      alt={p.es_local ? nombreRival(p) : "CB Jaca"}
+      class="escudo-mini"
+      onerror="this.src='/escudo.png'"
+    />
+  </div>
+  <span class:list={["rival-nombre", !p.es_local && "propio"]}>
+    {p.es_local ? nombreRival(p) : nombreEquipo}
+  </span>
+</div>
                             <span class:list={["resultado-badge", victoria ? "victoria" : "derrota"]}>
                               {victoria ? "V" : "D"}
                             </span>
@@ -543,12 +600,12 @@ const posicionLabel = {
     color: var(--orange, #f97316); padding: 0.75rem;
     background: rgba(249,115,22,0.08); border-bottom: 1px solid rgba(249,115,22,0.2);
   }
-  .seccion { padding: 3rem 2rem; max-width: 900px; margin: 0 auto; }
+  .seccion { padding: 3rem 2rem; margin: 0 auto; }
   .seccion-alt {
     max-width: 100%;
     padding: 3rem 2rem;
   }
-  .seccion-alt > * { max-width: 900px; margin-left: auto; margin-right: auto; }
+  .seccion-alt > * { margin-left: auto; margin-right: auto; }
   .seccion-titulo { font-size: 1.4rem; font-weight: 800; margin-bottom: 1.5rem; }
   .bloque-label {
     font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
@@ -583,7 +640,6 @@ const posicionLabel = {
     color: white;
     text-decoration: none;
     overflow: hidden;
-    border: 1px solid rgba(255,255,255,0.08);
   }
   .jugador-card:hover {
     --myColor1: var(--orange, #f97316);
@@ -797,4 +853,17 @@ const posicionLabel = {
     .rival-nombre { flex: unset; max-width: 120px; }
     .tabla-clasificacion th, .tabla-clasificacion td { padding: 8px 6px; font-size: 0.78rem; }
   }
+
+  .escudos-vs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.escudo-mini {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  border-radius: 4px;
+}
 </style>
