@@ -12,13 +12,14 @@
     "astro": "astro"
   },
   "dependencies": {
-    "@astrojs/node": "^10.1.0",
-    "@astrojs/react": "^5.0.4",
+    "@astrojs/node": "^10.1.1",
+    "@astrojs/react": "^5.0.5",
     "@supabase/supabase-js": "^2.100.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "astro": "^6.3.1",
+    "astro": "^6.3.3",
     "cheerio": "^1.2.0",
+    "fuse.js": "^7.3.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   }

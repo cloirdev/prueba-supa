@@ -1,5 +1,6 @@
 ---
 import "@/styles/global.css";
+import Buscador from "@/components/Buscador";
 import Footer from "@/components/Footer.astro";
 const { titulo } = Astro.props;
 ---
@@ -17,6 +18,7 @@ const { titulo } = Astro.props;
       <div class="nav-links">
         <a href="/noticias">Noticias</a>
         <a href="/equipos">Equipos</a>
+        <Buscador client:load></Buscador>
       </div>
       <button class="theme-btn" id="theme-btn" aria-label="Cambiar tema">
         <svg id="sunmoon" width="40" height="40" viewBox="0 0 200 200">
@@ -111,7 +113,7 @@ const { titulo } = Astro.props;
     height: 56px;
     position: sticky;
     top: 0;
-    z-index: 10;
+    z-index: 12;
   }
 
   .nav-logo {
@@ -128,6 +130,7 @@ const { titulo } = Astro.props;
   .nav-links {
     display: flex;
     gap: 24px;
+    align-items: center;
   }
 
   .nav-links a {
