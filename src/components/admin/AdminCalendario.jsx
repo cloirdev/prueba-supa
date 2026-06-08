@@ -4,8 +4,9 @@ import FormPartido from "./FormPartido.jsx";
 
 function crearFormInicial() {
   return {
-    rival_id: "",
-    tipo: "liga",
+    participante_id: "",
+    club_rival_id: "",
+    fase_id: "",
     jornada: "",
     fecha: "",
     es_local: true,
@@ -23,7 +24,9 @@ export default function AdminCalendario({
   onBack,
 }) {
   const [partidos, setPartidos] = useState([]);
-  const [rivales, setRivales] = useState([]);
+  const [participantes, setParticipantes] = useState([]);
+  const [clubes, setClubes] = useState([]);
+  const [fases, setFases] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [partidoSeleccionado, setPartidoSeleccionado] = useState(null);
   const [vista, setVista] = useState("lista");
@@ -34,16 +37,27 @@ export default function AdminCalendario({
 
   useEffect(() => {
     cargar();
-    cargarRivales();
-  }, [temporada.id]);
+    cargarOpciones();
+  }, [equipo.id]);
 
   async function cargar() {
     setCargando(true);
     const { data, error: err } = await supabase
       .from("partidos")
-      .select(`*, equipos_rivales (id, nombre_equipo, clubes (nombre))`)
-      .eq("equipo_id", equipo.id) // ← solo este filtro, equipo ya implica temporada
+      .select(
+        `
+        *,
+        participante_local:participantes!participante_local_id (
+          id, nombre_equipo, equipo_id, clubes(nombre, logo_url)
+        ),
+        participante_visitante:participantes!participante_visitante_id (
+          id, nombre_equipo, equipo_id, clubes(nombre, logo_url)
+        )
+      `,
+      )
+      .eq("equipo_id", equipo.id)
       .order("fecha", { ascending: false });
+
     if (err) {
       setError("No se pudieron cargar los partidos");
       setCargando(false);
@@ -53,14 +67,48 @@ export default function AdminCalendario({
     setCargando(false);
   }
 
-  async function cargarRivales() {
-    if (!equipo.categoria_id) return;
-    const { data } = await supabase
-      .from("equipos_rivales")
-      .select("id, nombre_equipo, clubes (nombre), categorias (nombre)")
-      .eq("categoria_id", equipo.categoria_id)
-      .order("nombre_equipo");
-    setRivales(data ?? []);
+  async function cargarOpciones() {
+    const temporadaId = temporada?.temporadas?.id ?? temporada?.id;
+
+    // Fases del equipo en esta temporada
+    const { data: fasesData } = await supabase
+      .from("fases_competicion")
+      .select("id, nombre, tipo, competicion_id, competiciones(nombre)")
+      .eq("temporada_id", temporadaId);
+    setFases(fasesData ?? []);
+
+    // Participantes rivales (sin nuestro equipo)
+    if (fasesData?.length) {
+      const faseIds = fasesData.map((f) => f.id);
+      const { data: partsData } = await supabase
+        .from("participantes")
+        .select(
+          "id, nombre_equipo, equipo_id, fase_id, clubes(nombre, logo_url)",
+        )
+        .in("fase_id", faseIds)
+        .or(`equipo_id.is.null,equipo_id.neq.${equipo.id}`)
+        .order("nombre_equipo");
+      setParticipantes(partsData ?? []);
+    }
+
+    // Clubes para amistosos
+    const { data: clubesData } = await supabase
+      .from("clubes")
+      .select("id, nombre, logo_url")
+      .order("nombre");
+    setClubes(clubesData ?? []);
+  }
+
+  // Nombre del rival resolviendo desde participante → nombre_equipo ?? clubes.nombre
+  function nombreRival(p) {
+    const participanteRival = p.es_local
+      ? p.participante_visitante
+      : p.participante_local;
+    return (
+      participanteRival?.nombre_equipo ??
+      participanteRival?.clubes?.nombre ??
+      "—"
+    );
   }
 
   function calcularPuntos(f) {
@@ -84,9 +132,13 @@ export default function AdminCalendario({
     e.stopPropagation();
     const pLoc = p.es_local ? p.puntos_favor : p.puntos_contra;
     const pVis = p.es_local ? p.puntos_contra : p.puntos_favor;
+    const participanteRival = p.es_local
+      ? p.participante_visitante
+      : p.participante_local;
     setForm({
-      rival_id: p.equipo_rival_id ?? "",
-      tipo: p.ronda === "Amistoso" ? "amistoso" : p.ronda ? "playoff" : "liga",
+      participante_id: participanteRival?.id ?? "",
+      club_rival_id: "",
+      fase_id: p.fase_id ?? "",
       jornada: p.jornada ?? p.ronda ?? "",
       fecha: p.fecha ?? "",
       es_local: p.es_local ?? true,
@@ -111,51 +163,54 @@ export default function AdminCalendario({
     setError("");
     setMsg("");
 
-    if (!form.rival_id) {
+    if (!form.participante_id && !form.club_rival_id) {
       setError("Selecciona un rival");
       return;
     }
-    if (form.tipo === "liga") {
-      const jornada = Number.parseInt(form.jornada, 10);
-      if (!form.jornada || Number.isNaN(jornada) || jornada < 1) {
-        setError("La jornada debe ser un número mayor que 0");
-        return;
-      }
-    }
-    if ((form.tipo === "copa" || form.tipo === "playoff") && !form.jornada) {
-      setError("Selecciona una ronda");
+    if (form.participante_id && !form.fase_id) {
+      setError("Selecciona una fase");
       return;
     }
-    if (
-      form.disputado &&
-      (form.puntos_local === "" || form.puntos_visitante === "")
-    ) {
-      setError("Introduce los puntos del partido");
+    if (form.fase_id && !form.participante_id && !form.club_rival_id) {
+      setError("Selecciona un rival");
       return;
     }
 
-    const rivalObj = rivales.find((r) => r.id === form.rival_id);
-    const rivalNombre =
-      rivalObj?.nombre_equipo ?? rivalObj?.clubes?.nombre ?? "—";
     const { puntos_favor, puntos_contra } = form.disputado
       ? calcularPuntos(form)
       : { puntos_favor: null, puntos_contra: null };
 
+    // Buscar el participante propio (CB Jaca) en esa fase
+    let participantePropioId = null;
+    if (form.fase_id) {
+      const { data } = await supabase
+        .from("participantes")
+        .select("id")
+        .eq("fase_id", form.fase_id)
+        .eq("equipo_id", equipo.id)
+        .single();
+      participantePropioId = data?.id ?? null;
+    }
+
     const payload = {
       equipo_id: equipo.id,
-      equipo_rival_id: form.rival_id,
-      rival: rivalNombre,
       fecha: form.fecha || null,
       es_local: form.es_local,
       puntos_favor,
       puntos_contra,
-      jornada: form.tipo === "liga" ? parseInt(form.jornada) || null : null,
+      fase_id: form.fase_id || null,
+      jornada:
+        form.jornada && !isNaN(parseInt(form.jornada))
+          ? parseInt(form.jornada)
+          : null,
       ronda:
-        form.tipo === "amistoso"
-          ? "Amistoso"
-          : form.tipo !== "liga"
-            ? form.jornada || null
-            : null,
+        form.jornada && isNaN(parseInt(form.jornada)) ? form.jornada : null,
+      participante_local_id: form.es_local
+        ? participantePropioId
+        : form.participante_id || null,
+      participante_visitante_id: form.es_local
+        ? form.participante_id || null
+        : participantePropioId,
     };
 
     const { error: err } =
@@ -173,10 +228,6 @@ export default function AdminCalendario({
     setMsg(vista === "editar" ? "Partido actualizado" : "Partido creado");
   }
 
-  const nombreRival = (p) =>
-    p.equipos_rivales?.nombre_equipo ??
-    p.equipos_rivales?.clubes?.nombre ??
-    p.rival;
   const pLocal = (p) => (p.es_local ? p.puntos_favor : p.puntos_contra);
   const pVis = (p) => (p.es_local ? p.puntos_contra : p.puntos_favor);
 
@@ -188,7 +239,9 @@ export default function AdminCalendario({
         equipo={equipo}
         temporada={temporada}
         partido={partidoSeleccionado}
-        rivales={rivales}
+        participantes={participantes}
+        clubes={clubes}
+        fases={fases}
         onBack={() => {
           setPartidoSeleccionado(null);
           cargar();
@@ -227,7 +280,6 @@ export default function AdminCalendario({
       {msg && <p className="adm-msg-success">{msg}</p>}
       {error && <p className="adm-msg-error">{error}</p>}
 
-      {/* ── Lista ── */}
       {vista === "lista" && (
         <>
           {partidos.length === 0 && (
@@ -259,7 +311,7 @@ export default function AdminCalendario({
                     </div>
                     <div className="adm-card-subtitle">
                       {fechaStr} ·{" "}
-                      {p.jornada ? `J${p.jornada}` : (p.ronda ?? "Amistoso")} ·{" "}
+                      {p.jornada ? `J${p.jornada}` : (p.ronda ?? "—")} ·{" "}
                       {p.es_local ? "Local" : "Visitante"}
                     </div>
                   </div>
@@ -314,7 +366,6 @@ export default function AdminCalendario({
         </>
       )}
 
-      {/* ── Formulario ── */}
       {(vista === "nuevo" || vista === "editar") && (
         <>
           <h2 style={{ marginBottom: "20px", fontSize: "16px" }}>
@@ -323,7 +374,9 @@ export default function AdminCalendario({
           <FormPartido
             form={form}
             setForm={setForm}
-            rivales={rivales}
+            participantes={participantes}
+            clubes={clubes}
+            fases={fases}
             equipo={equipo}
             vista={vista}
             onGuardar={guardar}

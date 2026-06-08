@@ -1,143 +1,40 @@
 ---
 // src/pages/equipos/[categoria_slug]/[temporada_slug]/index.astro
 // @ts-nocheck
-import { supabase } from "@/lib/supabase.js";
+import {
+  getEquipoTemporadaPageData,
+  getEquipoTemporadaStaticPaths,
+} from "@/lib/services/equipos.js";
 import Layout from "@/layouts/Layout.astro";
-
+ 
 export async function getStaticPaths() {
-  const { data: equipos, error } = await supabase.from("equipos").select(`
-    id,
-    categorias (nombre, slug),
-    temporadas (nombre)
-  `);
-
-  if (error || !equipos) {
-    console.error("❌ Error en Supabase:", error);
-    return [];
-  }
-
-  const rutasMap = new Map();
-
-  equipos.forEach((e) => {
-    const cSlug = e.categorias?.slug;
-    const tNombre = e.temporadas?.nombre;
-    if (!cSlug || !tNombre) return;
-    const key = `${cSlug}/${tNombre}`;
-    if (!rutasMap.has(key)) {
-      rutasMap.set(key, {
-        params: { categoria_slug: cSlug, temporada_slug: tNombre },
-        props: {
-          equipoIds: [e.id],
-          categoriaNombre: e.categorias.nombre,
-          categoriaSlug: cSlug,
-          temporadaNombre: tNombre,
-          temporadaSlug: tNombre,
-        },
-      });
-    } else {
-      rutasMap.get(key).props.equipoIds.push(e.id);
-    }
-  });
-
-  return Array.from(rutasMap.values());
+  return getEquipoTemporadaStaticPaths();
 }
-
+ 
 const { equipoIds, categoriaNombre, categoriaSlug, temporadaNombre, temporadaSlug } = Astro.props;
-
-// ── Equipos ────────────────────────────────────────────────────────────────
-const { data: equipos } = await supabase
-  .from("equipos")
-  .select(`*, categorias(nombre, slug), temporadas(nombre, id), competiciones(nombre, id)`)
-  .in("id", equipoIds);
-
-// ── Plantilla ──────────────────────────────────────────────────────────────
-const { data: convocatorias } = await supabase
-  .from("convocatorias_temporada")
-  .select(`dorsal, equipo_id, jugadores(*)`)
-  .in("equipo_id", equipoIds)
-  .order("dorsal", { ascending: true });
-
-const jugadoresPorEquipo = new Map();
-(convocatorias ?? []).forEach((c) => {
-  if (!jugadoresPorEquipo.has(c.equipo_id)) jugadoresPorEquipo.set(c.equipo_id, []);
-  jugadoresPorEquipo.get(c.equipo_id).push(c);
-});
-
-// ── Partidos ───────────────────────────────────────────────────────────────
-const { data: partidos } = await supabase
-  .from("partidos")
-  .select(`
-    id, rival, es_local, fecha, jornada, ronda, puntos_favor, puntos_contra, equipo_id,
-    equipos_rivales(nombre_equipo, clubes(nombre, logo_url))
-  `)
-  .in("equipo_id", equipoIds)
-  .order("fecha", { ascending: true });
-
-const partidosPorEquipo = new Map();
-(partidos ?? []).forEach((p) => {
-  if (!partidosPorEquipo.has(p.equipo_id)) partidosPorEquipo.set(p.equipo_id, []);
-  partidosPorEquipo.get(p.equipo_id).push(p);
-});
-
-// ── Clasificación ──────────────────────────────────────────────────────────
-// Cargar fases de cada competición + temporada del equipo
-const competicionIds = [...new Set((equipos ?? []).map(e => e.competiciones?.id).filter(Boolean))];
-const temporadaId = equipos?.[0]?.temporadas?.id;
-
-let fasesPorEquipo = new Map();
-let participantesPorFase = new Map();
-let clasificacionPorFase = new Map();
-
-if (competicionIds.length > 0 && temporadaId) {
-  const { data: fases } = await supabase
-    .from("fases_competicion")
-    .select("*")
-    .in("competicion_id", competicionIds)
-    .eq("temporada_id", temporadaId)
-    .order("orden", { ascending: true });
-
-  if (fases?.length) {
-    // Agrupar fases por equipo (por competicion_id)
-    equipos?.forEach(e => {
-      const fasesEquipo = (fases ?? []).filter(f => f.competicion_id === e.competiciones?.id);
-      fasesPorEquipo.set(e.id, fasesEquipo);
-    });
-
-    const faseIds = fases.map(f => f.id);
-
-    const { data: participantes } = await supabase
-      .from("participantes_competicion")
-      .select(`*, equipos_rivales(id, nombre_equipo, clubes(nombre)), equipos(id, sponsor, categorias(nombre))`)
-      .in("fase_id", faseIds);
-
-    const { data: clasificacion } = await supabase
-      .from("clasificacion")
-      .select("*")
-      .in("fase_id", faseIds);
-
-    faseIds.forEach(fid => {
-      participantesPorFase.set(fid, (participantes ?? []).filter(p => p.fase_id === fid));
-      clasificacionPorFase.set(fid, (clasificacion ?? []).filter(c => c.fase_id === fid));
-    });
-  }
-}
-
-// ── Otras temporadas ───────────────────────────────────────────────────────
-const { data: otrasTemporadas } = await supabase
-  .from("equipos")
-  .select(`id, temporadas(nombre)`)
-  .eq("categoria_id", equipos?.[0]?.categoria_id);
-
-const temporadasOrdenadas = (otrasTemporadas ?? [])
-  .filter((e) => e.temporadas?.nombre)
-  .map((e) => ({ nombre: e.temporadas.nombre, slug: e.temporadas.nombre }))
-  .sort((a, b) => b.nombre.localeCompare(a.nombre))
-  .filter((t, i, arr) => arr.findIndex((x) => x.slug === t.slug) === i);
-
+ 
+const {
+  equipos,
+  jugadoresPorEquipo,
+  entrenadoresPorEquipo,
+  partidosPorEquipo,
+  fasesPorEquipo,
+  participantesPorFase,
+  clasificacionPorFase,
+  temporadasOrdenadas,
+} = await getEquipoTemporadaPageData(equipoIds);
+ 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function nombreRival(p) {
-  return p.equipos_rivales?.nombre_equipo ?? p.rival;
+  const rival = p.es_local ? p.participante_visitante : p.participante_local;
+  return rival?.nombre_equipo ?? rival?.clubes?.nombre ?? "—";
 }
+ 
+function escudoRival(p) {
+  const rival = p.es_local ? p.participante_visitante : p.participante_local;
+  return rival?.clubes?.logo_url ?? "/escudo.png";
+}
+ 
 function formatFecha(fechaStr) {
   if (!fechaStr) return "Por confirmar";
   const [y, m, d] = fechaStr.split("-");
@@ -146,73 +43,111 @@ function formatFecha(fechaStr) {
   const fecha = new Date(fechaStr + "T00:00:00");
   return `${dias[fecha.getDay()]} ${d} ${meses[parseInt(m)-1]}`;
 }
+ 
 function etiquetaJornada(p) {
   if (p.jornada) return `J${p.jornada}`;
   if (p.ronda && p.ronda !== "Amistoso") return p.ronda;
   return "Amistoso";
 }
-
-function escudoRival(p) {
-  return p.equipos_rivales?.clubes?.logo_url ?? "/escudo.png";
-}
-
+ 
 function fotoJugador(jugador, preferida = "accion") {
-  const accionFields = [
-    "foto_accion_url",
-    "foto_dinamica_url",
-    "foto_juego_url",
-    "foto_url",
-    "imagen_url",
-  ];
-  const seriaFields = [
-    "foto_dni_url",
-    "foto_seria_url",
-    "foto_perfil_url",
-  ];
+  const accionFields = ["foto_accion_url", "foto_dinamica_url", "foto_juego_url", "foto_url", "imagen_url"];
+  const seriaFields = ["foto_dni_url", "foto_seria_url", "foto_perfil_url"];
   const prioridad = preferida === "seria"
     ? [...seriaFields, ...accionFields]
     : [...accionFields, ...seriaFields];
   return prioridad.map((field) => jugador?.[field]).find(Boolean) ?? null;
 }
+ 
 const posicionLabel = {
   base: "Base", escolta: "Escolta", alero: "Alero",
   ala_pivot: "Ala-Pívot", pivot: "Pívot",
 };
-
-
 ---
+
 
 <Layout titulo={`${categoriaNombre} – ${temporadaNombre} | CB Jaca`}>
 
-  <!-- ── HEADER ── -->
-  <div class="equipo-header">
-    <div class="equipo-header-inner">
-      <a href="/equipos" class="volver">← Equipos</a>
-      <div class="header-top">
-        <div>
-          <p class="categoria-label">{categoriaNombre}</p>
-          <h1>
-            {equipos?.[0]?.sponsor ? `${equipos[0].sponsor} CB Jaca` : `CB Jaca ${categoriaNombre}`}
-          </h1>
-        </div>
-        {temporadasOrdenadas.length > 1 && (
-          <select class="temporada-select"
-            onchange={`window.location.href='/equipos/${categoriaSlug}/' + this.value`}>
-            {temporadasOrdenadas.map((t) => (
-              <option value={t.slug} selected={t.slug === temporadaSlug}>{t.nombre}</option>
-            ))}
-          </select>
+<!-- ── HERO ── -->
+<div
+  class="equipo-hero"
+  style={`background-image:
+    linear-gradient(
+      to bottom,
+      rgba(0,0,0,0.35),
+      rgba(0,0,0,0.88)
+    ),
+    url('${equipos?.[0]?.foto_url || "/placeholder-team.jpg"}')`}
+>
+  <div class="equipo-hero-inner">
+    <a href="/equipos" class="volver">← Equipos</a>
+
+    <div class="hero-content">
+      <div class="hero-text">
+        <p class="categoria-label">{categoriaNombre}</p>
+
+        <h1>
+          {equipos?.[0]?.sponsor
+            ? `${equipos[0].sponsor} CB Jaca`
+            : `CB Jaca ${categoriaNombre}`}
+        </h1>
+
+        {equipos?.[0]?.competiciones?.nombre && (
+          <p class="hero-competicion">
+            {equipos[0].competiciones.nombre}
+          </p>
+        )}
+
+        {equipos?.[0]?.sponsors?.nombre && (
+          <p class="hero-sponsored">
+            Patrocinado por {equipos[0].sponsors.nombre}
+          </p>
         )}
       </div>
 
-      <!-- ── TABS NAV ── -->
-      <nav class="tabs-nav" role="tablist">
-        <button class="tab-btn active" data-tab="plantilla" role="tab">Plantilla</button>
-        <button class="tab-btn" data-tab="calendario" role="tab">Calendario</button>
-        <button class="tab-btn" data-tab="clasificacion" role="tab">Clasificación</button>
-      </nav>
+      {equipos?.[0]?.sponsors?.logo_url && (
+        <div class="hero-logo-wrap">
+          <img
+            src={equipos[0].sponsors.logo_url}
+            alt={`Logo ${equipos[0].sponsors.nombre}`}
+            class="hero-logo"
+          />
+        </div>
+      )}
     </div>
+
+    {temporadasOrdenadas.length > 1 && (
+      <select
+        class="temporada-select"
+        onchange={`window.location.href='/equipos/${categoriaSlug}/' + this.value`}
+      >
+        {temporadasOrdenadas.map((t) => (
+          <option
+            value={t.slug}
+            selected={t.slug === temporadaSlug}
+          >
+            {t.nombre}
+          </option>
+        ))}
+      </select>
+    )}
+
+    <!-- ── TABS NAV ── -->
+    <nav class="tabs-nav" role="tablist">
+      <button class="tab-btn active" data-tab="plantilla" role="tab">
+        Plantilla
+      </button>
+
+      <button class="tab-btn" data-tab="calendario" role="tab">
+        Calendario
+      </button>
+
+      <button class="tab-btn" data-tab="clasificacion" role="tab">
+        Clasificación
+      </button>
+    </nav>
   </div>
+</div>
 
   <!-- ── CONTENIDO POR EQUIPO ── -->
   {(equipos ?? []).map((equipo) => {
@@ -222,6 +157,9 @@ const posicionLabel = {
     const disputados = [...todosPartidos.filter((p) => p.puntos_favor !== null)].reverse();
     const nombreEquipo = equipo.sponsor ? `${equipo.sponsor} CB Jaca` : `CB Jaca ${categoriaNombre}`;
     const fasesEquipo = fasesPorEquipo.get(equipo.id) ?? [];
+    const entrenadores = entrenadoresPorEquipo.get(equipo.id) ?? [];
+const entrenadorPrincipal = entrenadores.find(e => e.rol === "principal");
+const ayudantes = entrenadores.filter(e => e.rol === "ayudante");
 
     // Agrupar fases por orden
     const niveles = fasesEquipo.reduce((acc, f) => {
@@ -253,20 +191,20 @@ const posicionLabel = {
                   return (
                     <a href={`/jugadores/${c.jugadores?.id}`} class="jugador-card">
                       {foto ? (
-  <img
-    src={foto}
-    alt={`Foto de ${c.jugadores?.nombre ?? ""} ${c.jugadores?.apellido ?? ""}`}
-    class="jugador-img"
-    loading="lazy"
-  />
-) : (
-  /* Si no hay foto, cargamos el SVG desde la carpeta public */
-  <img 
-    src="/avatar.svg" 
-    alt="Avatar por defecto" 
-    class="jugador-img avatar-placeholder" 
-  />
-)}
+                        <img
+                          src={foto}
+                          alt={`Foto de ${c.jugadores?.nombre ?? ""} ${c.jugadores?.apellido ?? ""}`}
+                          class="jugador-img"
+                          loading="lazy"
+                        />
+                      ) : (
+                        /* Si no hay foto, cargamos el SVG desde la carpeta public */
+                        <img 
+                          src="/avatar.svg" 
+                          alt="Avatar por defecto" 
+                          class="jugador-img avatar-placeholder" 
+                        />
+                      )}
                       <div class="card-content">
                         <span class="dorsal-pill">{c.dorsal ?? "—"}</span>
                         <h3>
@@ -280,6 +218,36 @@ const posicionLabel = {
                 })}
               </div>
             )}
+
+            {entrenadores.length > 0 && (
+  <div class="cuerpo-tecnico">
+    <h3 class="cuerpo-tecnico-titulo">Cuerpo técnico</h3>
+    <div class="cuerpo-tecnico-lista">
+      {entrenadorPrincipal && (
+        <div class="entrenador-card">
+          <div class="entrenador-icono">🏀</div>
+          <div>
+            <div class="entrenador-nombre">
+              {entrenadorPrincipal.entrenadores.nombre} {entrenadorPrincipal.entrenadores.apellido}
+            </div>
+            <div class="entrenador-rol">Entrenador principal</div>
+          </div>
+        </div>
+      )}
+      {ayudantes.map(e => (
+        <div class="entrenador-card">
+          <div class="entrenador-icono">📋</div>
+          <div>
+            <div class="entrenador-nombre">
+              {e.entrenadores.nombre} {e.entrenadores.apellido}
+            </div>
+            <div class="entrenador-rol">Ayudante</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
           </section>
         </div>
 
@@ -440,8 +408,8 @@ const posicionLabel = {
                     const c = cls.find(c => c.participante_id === p.id);
                     const esMiEquipo = p.equipo_id === equipo.id;
                     const nombre = esMiEquipo
-                      ? nombreEquipo
-                      : (p.equipos_rivales?.nombre_equipo ?? p.equipos_rivales?.clubes?.nombre ?? "—");
+  ? nombreEquipo
+  : (p.nombre_equipo ?? p.clubes?.nombre ?? "—");
                     return { p, c, nombre, esMiEquipo };
                   }).sort((a, b) => (a.c?.posicion ?? 999) - (b.c?.posicion ?? 999));
 
@@ -544,28 +512,135 @@ const posicionLabel = {
 </script>
 
 <style>
-  /* ── Header ── */
-  .equipo-header {
-    background: linear-gradient(to bottom, rgba(0,0,0,0.5), rgba(0,0,0,0.95)),
-      center/cover no-repeat;
-    background-color: #0f172a;
-    padding: 3rem 2rem 0;
-    color: white;
+  /* ── HERO ───────────────────────────────────── */
+.equipo-hero {
+  position: relative;
+  min-height: 480px;
+  display: flex;
+  align-items: flex-end;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  padding: 3rem 2rem 0;
+  color: white;
+}
+
+.equipo-hero-inner {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.volver {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--orange, #f97316);
+  text-decoration: none;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hero-content {
+  margin-top: 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
+.hero-text {
+  max-width: 720px;
+}
+
+.categoria-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--orange, #f97316);
+  margin-bottom: 0.4rem;
+}
+
+h1 {
+  font-size: clamp(2rem, 5vw, 4rem);
+  font-weight: 900;
+  line-height: 1;
+  margin: 0;
+}
+
+.hero-competicion {
+  margin-top: 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.8);
+}
+
+.hero-sponsored {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: rgba(255,255,255,0.65);
+}
+
+.hero-logo-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hero-logo {
+  width: 140px;
+  height: 140px;
+  object-fit: contain;
+
+  background: rgba(255,255,255,0.95);
+  padding: 1rem;
+  border-radius: 20px;
+
+  box-shadow: 0 10px 30px rgba(0,0,0,.35);
+
+  display: block;
+}
+
+.temporada-select {
+  margin-top: 2rem;
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: rgba(255,255,255,0.08);
+  backdrop-filter: blur(10px);
+  color: white;
+  border: 1px solid rgba(255,255,255,0.15);
+  cursor: pointer;
+  outline: none;
+}
+
+.temporada-select option {
+  background: #0f172a;
+  color: white;
+}
+
+@media (max-width: 768px) {
+  .equipo-hero {
+    min-height: 400px;
+    padding: 2rem 1rem 0;
   }
-  .equipo-header-inner { max-width: 900px; margin: 0 auto; }
-  .volver {
-    font-size: 0.8rem; font-weight: 700; color: var(--orange, #f97316);
-    text-decoration: none; text-transform: uppercase; letter-spacing: 0.05em;
+
+  .hero-content {
+    flex-direction: column;
+    align-items: flex-start;
   }
-  .header-top {
-    display: flex; justify-content: space-between; align-items: flex-end;
-    gap: 2rem; margin-top: 1.5rem; flex-wrap: wrap;
+
+  .hero-logo {
+    max-width: 180px;
+    max-height: 100px;
   }
-  .categoria-label {
-    font-size: 0.8rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.08em; color: var(--orange, #f97316); margin-bottom: 0.4rem;
+
+  h1 {
+    font-size: 2.4rem;
   }
-  h1 { font-size: clamp(1.6rem, 4vw, 2.5rem); font-weight: 800; margin: 0; }
+}
   .temporada-select {
     padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.78rem;
     font-weight: 600; background: transparent; color: var(--orange, #f97316);
@@ -865,5 +940,30 @@ const posicionLabel = {
   height: 28px;
   object-fit: contain;
   border-radius: 4px;
+}
+.cuerpo-tecnico {
+  margin-top: 2.5rem;
+  padding-top: 2rem;
+  border-top: 1px solid var(--borde, rgba(255,255,255,0.07));
+}
+.cuerpo-tecnico-titulo {
+  font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--orange, #f97316); margin-bottom: 1rem;
+}
+.cuerpo-tecnico-lista {
+  display: flex; flex-wrap: wrap; gap: 0.75rem;
+}
+.entrenador-card {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.75rem 1.1rem;
+  background: var(--card, #1e293b);
+  border: 1px solid var(--borde, rgba(255,255,255,0.07));
+  border-radius: 10px; min-width: 220px;
+}
+.entrenador-icono { font-size: 1.3rem; }
+.entrenador-nombre { font-size: 0.9rem; font-weight: 700; }
+.entrenador-rol {
+  font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--muted, #64748b); margin-top: 2px;
 }
 </style>

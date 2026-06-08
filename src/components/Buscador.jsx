@@ -8,7 +8,7 @@ const COLOR_TIPO = {
 };
 
 const ETIQUETAS = {
-  jugador: "Jugadoras",
+  jugador: "Jugadores",
   equipo: "Equipos",
   noticia: "Noticias",
 };
@@ -66,12 +66,12 @@ export default function Buscador() {
   const [query, setQuery] = useState("");
   const [resultados, setResultados] = useState([]);
   const [abierto, setAbierto] = useState(false);
+  const [expandido, setExpandido] = useState(false);
   const [indiceActivo, setIndiceActivo] = useState(-1);
   const [cargado, setCargado] = useState(false);
   const fuseRef = useRef(null);
   const inputRef = useRef(null);
   const contenedorRef = useRef(null);
-
   // Carga el índice + Fuse dinámicamente
   useEffect(() => {
     Promise.all([
@@ -85,6 +85,18 @@ export default function Buscador() {
       });
       setCargado(true);
     });
+  }, []);
+
+  useEffect(() => {
+    function handler(e) {
+      if (!contenedorRef.current?.contains(e.target)) {
+        setAbierto(false);
+        setExpandido(false);
+        setQuery("");
+      }
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, []);
 
   // Búsqueda reactiva
@@ -147,103 +159,92 @@ export default function Buscador() {
   }
 
   return (
-    <div ref={contenedorRef} style={{ position: "relative", width: "260px" }}>
-      {/* ── Input ── */}
-      <div style={{ position: "relative" }}>
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="var(--muted)"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+    <div ref={contenedorRef} style={{ position: "relative" }}>
+      {/* ── Barra ── */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "6px",
+          background: expandido ? "var(--card)" : "transparent",
+          border: expandido
+            ? "1.5px solid var(--borde)"
+            : "1.5px solid transparent",
+          borderRadius: "8px",
+          transition: "all .2s ease",
+          overflow: "hidden",
+          width: expandido ? "260px" : "34px",
+        }}
+      >
+        {/* Icono lupa / botón */}
+        <button
+          onClick={() => {
+            setExpandido(true);
+            setTimeout(() => inputRef.current?.focus(), 50);
+          }}
           style={{
-            position: "absolute",
-            left: "11px",
-            top: "50%",
-            transform: "translateY(-50%)",
-            pointerEvents: "none",
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            padding: "8px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+            color: "var(--muted)",
           }}
         >
-          <circle cx="11" cy="11" r="7" />
-          <path d="m21 21-4.35-4.35" />
-        </svg>
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="m21 21-4.35-4.35" />
+          </svg>
+        </button>
+
+        {/* Input — solo visible cuando expandido */}
         <input
           ref={inputRef}
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKeyDown}
-          onFocus={() => resultados.length > 0 && setAbierto(true)}
           placeholder="Buscar…"
           style={{
-            width: "100%",
-            padding: "8px 44px 8px 32px",
+            width: expandido ? "100%" : "0",
+            padding: expandido ? "8px 8px 8px 0" : "0",
             fontSize: "13px",
-            background: "var(--card)",
-            border: "1.5px solid var(--borde)",
-            borderRadius: "8px",
+            background: "transparent",
+            border: "none",
             color: "var(--texto)",
             outline: "none",
-            transition: "border-color .15s, box-shadow .15s",
-          }}
-          onFocusCapture={(e) => {
-            e.target.style.borderColor = "var(--naranja)";
-            e.target.style.boxShadow = "0 0 0 3px rgba(242,130,65,.15)";
-            if (resultados.length > 0) setAbierto(true);
-          }}
-          onBlurCapture={(e) => {
-            e.target.style.borderColor = "var(--borde)";
-            e.target.style.boxShadow = "none";
+            opacity: expandido ? 1 : 0,
+            transition: "opacity .15s",
           }}
         />
-        {/* Atajo Ctrl+K */}
-        {!query && (
-          <kbd
-            style={{
-              position: "absolute",
-              right: "8px",
-              top: "50%",
-              transform: "translateY(-50%)",
-              fontSize: "10px",
-              fontWeight: 600,
-              color: "var(--muted)",
-              background: "var(--color-background-secondary)",
-              border: "1px solid var(--borde)",
-              borderRadius: "4px",
-              padding: "1px 5px",
-              letterSpacing: ".04em",
-              pointerEvents: "none",
-            }}
-          >
-            ⌘K
-          </kbd>
-        )}
-        {/* Botón limpiar */}
-        {query && (
+        {/* Botón cerrar — solo cuando expandido */}
+        {expandido && (
           <button
             onClick={() => {
               setQuery("");
-              inputRef.current?.focus();
+              setAbierto(false);
+              setExpandido(false);
             }}
             style={{
-              position: "absolute",
-              right: "8px",
-              top: "50%",
-              transform: "translateY(-50%)",
-              background: "var(--color-background-secondary)",
+              background: "transparent",
               border: "none",
-              borderRadius: "50%",
-              width: "18px",
-              height: "18px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
               cursor: "pointer",
+              padding: "8px",
               color: "var(--muted)",
-              fontSize: "12px",
+              flexShrink: 0,
+              fontSize: "14px",
               lineHeight: 1,
             }}
           >
@@ -251,7 +252,6 @@ export default function Buscador() {
           </button>
         )}
       </div>
-
       {/* ── Dropdown ── */}
       {abierto && (
         <div

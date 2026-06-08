@@ -82,11 +82,21 @@ export default function AdminEquipos({
           .from("equipos")
           .select(
             `
-            id, sponsor, categoria_id, competicion_id, temporada_id,
-            categorias (nombre),
-            competiciones (nombre),
-            temporadas (nombre)
-          `,
+  id,
+  foto_url,
+  sponsor_id,
+  categoria_id,
+  competicion_id,
+  temporada_id,
+  categorias (nombre),
+  competiciones (nombre),
+  temporadas (nombre),
+  sponsors (
+    id,
+    nombre,
+    logo_url
+  )
+`,
           )
           .eq("temporada_id", temporada.id)
           .order("sponsor", { ascending: true, nullsFirst: false });
@@ -149,7 +159,7 @@ export default function AdminEquipos({
           >
             <div>
               <div className="adm-card-title">
-                {e.sponsor ?? e.categorias?.nombre ?? "Equipo"}
+                {e.sponsors?.nombre ?? e.categorias?.nombre ?? "Equipo"}
               </div>
               <div className="adm-card-subtitle">
                 {e.categorias?.nombre ?? "Sin categoría"}

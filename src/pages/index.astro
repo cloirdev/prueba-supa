@@ -29,10 +29,15 @@ const { data: ultimosResultados } = await supabase
   .from("partidos")
   .select(
     `
-    id, rival, es_local, fecha, jornada, ronda,
+    id, es_local, fecha, jornada, ronda,
     puntos_favor, puntos_contra,
     equipos (sponsor, categorias (nombre, slug), temporadas (nombre)),
-    equipos_rivales (nombre_equipo, clubes(logo_url))
+    participante_local:participantes!participante_local_id (
+      id, nombre_equipo, clubes(nombre, logo_url)
+    ),
+    participante_visitante:participantes!participante_visitante_id (
+      id, nombre_equipo, clubes(nombre, logo_url)
+    )
   `,
   )
   .not("puntos_favor", "is", null)
@@ -45,9 +50,14 @@ const { data: proximosPartidos } = await supabase
   .from("partidos")
   .select(
     `
-    id, rival, es_local, fecha, jornada, ronda,
+    id, es_local, fecha, jornada, ronda,
     equipos (sponsor, categorias (nombre, slug)),
-    equipos_rivales (nombre_equipo, clubes(logo_url))
+    participante_local:participantes!participante_local_id (
+      id, nombre_equipo, clubes(nombre, logo_url)
+    ),
+    participante_visitante:participantes!participante_visitante_id (
+      id, nombre_equipo, clubes(nombre, logo_url)
+    )
   `,
   )
   .is("puntos_favor", null)
@@ -69,7 +79,14 @@ const { data: noticiasDestacadas } = await supabase
 const { data: cronicasDestacadas } = await supabase
   .from("cronicas")
   .select(
-    `id, titulo, img_url, destacada, partidos (id, rival, fecha, equipos(categorias(nombre, slug)))`,
+    `
+    id, titulo, img_url, destacada,
+    partidos (
+      id, es_local, fecha,
+      equipos(categorias(nombre, slug)),
+      participante_visitante:participantes!participante_visitante_id (nombre_equipo, clubes(nombre))
+    )
+  `,
   )
   .eq("publicada", true)
   .eq("destacada", true)
@@ -87,17 +104,23 @@ const slider = [
     slug: n.slug,
     categoria: n.categorias,
   })),
-  ...(cronicasDestacadas ?? []).map((c) => ({
-    id: c.id,
-    tipo: "cronica",
-    titulo: c.titulo ?? `Crónica vs ${c.partidos?.rival}`,
-    subtitulo: null,
-    img_url: c.img_url,
-    fecha: c.partidos?.fecha,
-    slug: null,
-    categoria: c.partidos?.equipos?.categorias,
-    partido_id: c.partidos?.id,
-  })),
+  ...(cronicasDestacadas ?? []).map((c) => {
+    const rival =
+      c.partidos?.participante_visitante?.nombre_equipo ??
+      c.partidos?.participante_visitante?.clubes?.nombre ??
+      "Rival";
+    return {
+      id: c.id,
+      tipo: "cronica",
+      titulo: c.titulo ?? `Crónica vs ${rival}`,
+      subtitulo: null,
+      img_url: c.img_url,
+      fecha: c.partidos?.fecha,
+      slug: null,
+      categoria: c.partidos?.equipos?.categorias,
+      partido_id: c.partidos?.id,
+    };
+  }),
 ]
   .sort((a, b) => new Date(b.fecha ?? 0) - new Date(a.fecha ?? 0))
   .slice(0, 6);
@@ -115,7 +138,14 @@ const { data: noticiasGrid } = await supabase
 const { data: cronicasGrid } = await supabase
   .from("cronicas")
   .select(
-    `id, titulo, img_url, partidos (id, rival, fecha, equipos(categorias(nombre, slug)))`,
+    `
+    id, titulo, img_url,
+    partidos (
+      id, es_local, fecha,
+      equipos(categorias(nombre, slug)),
+      participante_visitante:participantes!participante_visitante_id (nombre_equipo, clubes(nombre))
+    )
+  `,
   )
   .eq("publicada", true)
   .order("created_at", { ascending: false })
@@ -134,18 +164,24 @@ const grid = [
     href: urlNoticia(n),
     categoria: n.categorias,
   })),
-  ...(cronicasGrid ?? []).map((c) => ({
-    id: c.id,
-    tipo: "cronica",
-    titulo: c.titulo ?? `Crónica vs ${c.partidos?.rival}`,
-    subtitulo: null,
-    img_url: c.img_url,
-    fecha: c.partidos?.fecha,
-    href: `/partidos/${c.partidos?.id}`,
-    categoria: c.partidos?.equipos?.categorias,
-  })),
+  ...(cronicasGrid ?? []).map((c) => {
+    const rival =
+      c.partidos?.participante_visitante?.nombre_equipo ??
+      c.partidos?.participante_visitante?.clubes?.nombre ??
+      "Rival";
+    return {
+      id: c.id,
+      tipo: "cronica",
+      titulo: c.titulo ?? `Crónica vs ${rival}`,
+      subtitulo: null,
+      img_url: c.img_url,
+      fecha: c.partidos?.fecha,
+      href: `/partidos/${c.partidos?.id}`,
+      categoria: c.partidos?.equipos?.categorias,
+    };
+  }),
 ]
-  .filter((item) => !sliderIds.has(`${item.tipo}-${item.id}`)) // ← línea nueva
+  .filter((item) => !sliderIds.has(`${item.tipo}-${item.id}`))
   .sort((a, b) => new Date(b.fecha ?? 0) - new Date(a.fecha ?? 0))
   .slice(0, 8);
 
@@ -208,16 +244,21 @@ function formatFechaLarga(f) {
 }
 
 function nombreRival(p) {
-  return p.equipos_rivales?.nombre_equipo ?? p.rival;
+  const rival = p.es_local ? p.participante_visitante : p.participante_local;
+  return rival?.nombre_equipo ?? rival?.clubes?.nombre ?? "—";
 }
+
 function escudoRival(p) {
-  return p.equipos_rivales?.clubes?.logo_url ?? "/escudo.png";
+  const rival = p.es_local ? p.participante_visitante : p.participante_local;
+  return rival?.clubes?.logo_url ?? "/escudo.png";
 }
+
 function etiquetaJornada(p) {
   if (p.jornada) return `J${p.jornada}`;
   if (p.ronda && p.ronda !== "Amistoso") return p.ronda;
   return "Amistoso";
 }
+
 function nombreEquipo(e) {
   return e?.sponsor
     ? `${e.sponsor} CB Jaca`
@@ -225,8 +266,7 @@ function nombreEquipo(e) {
 }
 ---
 
-<Layout titulo="Inicio | CB Jaca">
-  <!-- ══ SLIDER FULLSCREEN ══ -->
+<Layout titulo="Inicio">
   <div class="hero-slider">
     {
       slider.length === 0 ? (

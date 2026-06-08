@@ -11,12 +11,10 @@ export async function getStaticPaths() {
 
 const { id } = Astro.params;
 
-// ── Partido ────────────────────────────────────────────────────────────────
 const { data: partido } = await supabase
   .from("partidos")
-  .select(
-    `
-    id, rival, es_local, fecha, jornada, ronda,
+  .select(`
+    id, es_local, fecha, jornada, ronda,
     puntos_favor, puntos_contra,
     equipos (
       id, sponsor,
@@ -24,18 +22,18 @@ const { data: partido } = await supabase
       temporadas (nombre),
       competiciones (nombre)
     ),
-    equipos_rivales (
-      id, nombre_equipo,
-      clubes (nombre, logo_url)
+    participante_local:participantes!participante_local_id (
+      id, nombre_equipo, clubes(nombre, logo_url)
+    ),
+    participante_visitante:participantes!participante_visitante_id (
+      id, nombre_equipo, clubes(nombre, logo_url)
     )
-  `,
-  )
+  `)
   .eq("id", id)
   .single();
 
 if (!partido) return Astro.redirect("/");
 
-// ── Crónica ────────────────────────────────────────────────────────────────
 const { data: cronica } = await supabase
   .from("cronicas")
   .select("contenido, publicada")
@@ -43,17 +41,14 @@ const { data: cronica } = await supabase
   .eq("publicada", true)
   .single();
 
-// ── Fotos ──────────────────────────────────────────────────────────────────
 const { data: fotos } = await supabase
   .from("fotos")
   .select("id, url, descripcion")
   .eq("partido_id", id);
 
-// ── Boxscore ───────────────────────────────────────────────────────────────
 const { data: boxscore } = await supabase
   .from("convocatorias_partido")
-  .select(
-    `
+  .select(`
     titular, minutos, puntos,
     tiros_2_anotados, tiros_2_intentados,
     tiros_campo_intentados, tiros_campo_anotados,
@@ -64,8 +59,7 @@ const { data: boxscore } = await supabase
     faltas_cometidas, faltas_recibidas,
     mas_menos, valoracion,
     jugadores (id, nombre, apellido, posicion)
-  `,
-  )
+  `)
   .eq("partido_id", id)
   .order("titular", { ascending: false });
 
@@ -75,64 +69,50 @@ const { data: dorsales } = await supabase
   .select("jugador_id, dorsal")
   .eq("equipo_id", equipoId);
 
-const dorsalMap = new Map(
-  (dorsales ?? []).map((d) => [d.jugador_id, d.dorsal]),
-);
+const dorsalMap = new Map((dorsales ?? []).map((d) => [d.jugador_id, d.dorsal]));
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// Resolver nombre y escudo del rival desde participantes
+const participanteRival = partido.es_local
+  ? partido.participante_visitante
+  : partido.participante_local;
+
 const disputado = partido.puntos_favor !== null;
 const nombrePropio = partido.equipos?.sponsor
   ? `${partido.equipos.sponsor} CB Jaca`
   : `CB Jaca ${partido.equipos?.categorias?.nombre ?? ""}`;
-const nombreRival = partido.equipos_rivales?.nombre_equipo ?? partido.rival;
-const logoRival = partido.equipos_rivales?.clubes?.logo_url ?? null;
+const nombreRival = participanteRival?.nombre_equipo ?? participanteRival?.clubes?.nombre ?? "Rival";
+const logoRival = participanteRival?.clubes?.logo_url ?? null;
 const escudoPropio = "/escudo-naranja.png";
 
-const pNuestros = partido.es_local
-  ? partido.puntos_favor
-  : partido.puntos_contra;
+const pNuestros = partido.es_local ? partido.puntos_favor : partido.puntos_contra;
 const pEllos = partido.es_local ? partido.puntos_contra : partido.puntos_favor;
 const victoria = disputado && pNuestros > pEllos;
 
 const equipoLocal = partido.es_local ? nombrePropio : nombreRival;
 const equipoVisit = partido.es_local ? nombreRival : nombrePropio;
-const ptosLocal = partido.es_local
-  ? partido.puntos_favor
-  : partido.puntos_contra;
-const ptosVisit = partido.es_local
-  ? partido.puntos_contra
-  : partido.puntos_favor;
-const escudoLocal = partido.es_local
-  ? escudoPropio
-  : (logoRival ?? "/escudo.png");
-const escudoVisit = partido.es_local
-  ? (logoRival ?? "/escudo.png")
-  : escudoPropio;
+const ptosLocal = partido.es_local ? partido.puntos_favor : partido.puntos_contra;
+const ptosVisit = partido.es_local ? partido.puntos_contra : partido.puntos_favor;
+const escudoLocal = partido.es_local ? escudoPropio : (logoRival ?? "/escudo.png");
+const escudoVisit = partido.es_local ? (logoRival ?? "/escudo.png") : escudoPropio;
 
-function iniciales(nombre) {
-  return nombre
-    .split(" ")
-    .map((w) => w[0])
-    .join("")
-    .slice(0, 3)
-    .toUpperCase();
-}
+const tieneCronica = !!cronica?.contenido;
+const tieneFotos = (fotos ?? []).length > 0;
+const tieneBoxscore = (boxscore ?? []).length > 0;
+
+const tabDefault = tieneCronica ? "cronica" : tieneBoxscore ? "boxscore" : tieneFotos ? "fotos" : "cronica";
 
 function formatMinutos(min) {
   if (!min) return "00:00";
-  const str = min.toString().padStart(4, "0");
-  const m = str.slice(0, -2);
-  const s = str.slice(-2);
-  return `${m}:${s}`;
+  const segs = parseInt(min);
+  const mm = Math.floor(segs / 60);
+  const ss = segs % 60;
+  return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
 }
 
 function formatFecha(f) {
   if (!f) return "Fecha por confirmar";
   return new Date(f).toLocaleDateString("es-ES", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
 }
 
@@ -140,11 +120,6 @@ function etiquetaJornada(p) {
   if (p.jornada) return `Jornada ${p.jornada}`;
   if (p.ronda && p.ronda !== "Amistoso") return p.ronda;
   return "Amistoso";
-}
-
-function pct(an, int_) {
-  if (!int_) return "—";
-  return `${Math.round((an / int_) * 100)}%`;
 }
 
 function sum(lista, campo) {
@@ -156,101 +131,57 @@ const suplentes = (boxscore ?? []).filter((s) => !s.titular);
 
 const categoriaSlug = partido.equipos?.categorias?.slug;
 const temporadaSlug = partido.equipos?.temporadas?.nombre;
-const equipoHref =
-  categoriaSlug && temporadaSlug
-    ? `/equipos/${categoriaSlug}/${temporadaSlug}`
-    : null;
+const equipoHref = categoriaSlug && temporadaSlug
+  ? `/equipos/${categoriaSlug}/${temporadaSlug}`
+  : null;
 ---
 
 <Layout titulo={`${nombrePropio} vs ${nombreRival} | CB Jaca`}>
-  <!-- ══ HERO con escudos de fondo ══ -->
+  <!-- ══ HERO ══ -->
   <div
     class="partido-hero"
     style={`--escudo-local: url('${escudoLocal}'); --escudo-visit: url('${escudoVisit}');`}
   >
-    <!-- Escudos semitransparentes de fondo -->
     <div class="hero-escudo-local"></div>
     <div class="hero-escudo-visit"></div>
-    <!-- Gradiente oscuro encima -->
     <div class="hero-overlay"></div>
 
     <div class="hero-inner">
-      <!-- Meta -->
       <div class="hero-meta">
         <a href={equipoHref ?? "/equipos"} class="volver">← {nombrePropio}</a>
         <span class="hero-pill">{etiquetaJornada(partido)}</span>
-        {
-          partido.equipos?.competiciones?.nombre && (
-            <span class="hero-pill muted">
-              {partido.equipos.competiciones.nombre}
-            </span>
-          )
-        }
+        {partido.equipos?.competiciones?.nombre && (
+          <span class="hero-pill muted">{partido.equipos.competiciones.nombre}</span>
+        )}
       </div>
 
-      <!-- Marcador principal -->
       <div class="marcador-wrap">
-        <!-- Equipo local -->
         <div class="equipo-col">
           <div class="escudo-box">
-            <img
-              src={escudoLocal}
-              alt={equipoLocal}
-              class="escudo-img"
-              onerror={`this.src='/escudo.png'`}
-            />
+            <img src={escudoLocal} alt={equipoLocal} class="escudo-img" onerror="this.src='/escudo.png'" />
           </div>
           <span class="equipo-nombre">{equipoLocal}</span>
         </div>
 
-        <!-- Resultado -->
         <div class="resultado-col">
-          {
-            disputado ? (
-              <div class="marcador-numeros">
-                <span
-                  class:list={[
-                    "pts",
-                    ptosLocal >= ptosVisit ? "ganador" : "perdedor",
-                  ]}
-                >
-                  {ptosLocal}
-                </span>
-                <span class="separador">–</span>
-                <span
-                  class:list={[
-                    "pts",
-                    ptosVisit >= ptosLocal ? "ganador" : "perdedor",
-                  ]}
-                >
-                  {ptosVisit}
-                </span>
-              </div>
-            ) : (
-              <div class="pendiente-box">
-                <span class="pendiente-label">Pendiente</span>
-                <span class="pendiente-fecha">
-                  {formatFecha(partido.fecha)}
-                </span>
-              </div>
-            )
-          }
-          {
-            disputado && (
-              <span class="hero-fecha">{formatFecha(partido.fecha)}</span>
-            )
-          }
+          {disputado ? (
+            <div class="marcador-numeros">
+              <span class:list={["pts", ptosLocal >= ptosVisit ? "ganador" : "perdedor"]}>{ptosLocal}</span>
+              <span class="separador">–</span>
+              <span class:list={["pts", ptosVisit >= ptosLocal ? "ganador" : "perdedor"]}>{ptosVisit}</span>
+            </div>
+          ) : (
+            <div class="pendiente-box">
+              <span class="pendiente-label">Pendiente</span>
+              <span class="pendiente-fecha">{formatFecha(partido.fecha)}</span>
+            </div>
+          )}
+          {disputado && <span class="hero-fecha">{formatFecha(partido.fecha)}</span>}
         </div>
 
-        <!-- Equipo visitante -->
         <div class="equipo-col visitante">
           <div class="escudo-box">
-            <img
-              src={escudoVisit}
-              alt={equipoVisit}
-              class="escudo-img"
-              onerror={`this.src='/escudo.png'`}
-            />
+            <img src={escudoVisit} alt={equipoVisit} class="escudo-img" onerror="this.src='/escudo.png'" />
           </div>
           <span class="equipo-nombre">{equipoVisit}</span>
         </div>
@@ -258,259 +189,163 @@ const equipoHref =
     </div>
   </div>
 
-  <!-- ══ CONTENIDO ══ -->
-  <div class="contenido">
-    <!-- Crónica -->
-    {
-      cronica?.contenido && (
-        <section class="seccion">
-          <h2 class="seccion-titulo">Crónica</h2>
-          <div class="cronica-texto">
-            {cronica.contenido
-              .split("\n")
-              .filter(Boolean)
-              .map((p) => (
-                <p>{p}</p>
-              ))}
+  <!-- ══ PESTAÑAS ══ -->
+  {(tieneCronica || tieneBoxscore || tieneFotos) && (
+    <div class="tabs-outer">
+      <div class="tabs-nav" role="tablist">
+        {tieneCronica && (
+          <button class="tab-btn" data-tab="cronica" role="tab">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4z"/><path d="M8 9h8M8 13h5"/></svg>
+            Crónica
+          </button>
+        )}
+        {tieneBoxscore && (
+          <button class="tab-btn" data-tab="boxscore" role="tab">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+            Boxscore
+          </button>
+        )}
+        {tieneFotos && (
+          <button class="tab-btn" data-tab="fotos" role="tab">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+            Fotos {tieneFotos && <span class="tab-count">{fotos.length}</span>}
+          </button>
+        )}
+      </div>
+
+      <!-- ── Crónica ── -->
+      {tieneCronica && (
+        <div class="tab-panel" data-panel="cronica">
+          <div class="contenido-inner">
+            <div class="cronica-texto">
+              {cronica.contenido.split("\n").filter(Boolean).map((p) => <p>{p}</p>)}
+            </div>
           </div>
-        </section>
-      )
-    }
+        </div>
+      )}
 
-    <!-- Fotos -->
-    {
-      fotos && fotos.length > 0 && (
-        <section class="seccion seccion-alt">
-          <h2 class="seccion-titulo">Fotos</h2>
-          <div class="fotos-grid">
-            {fotos.map((f) => (
-              <a href={f.url} target="_blank" rel="noopener" class="foto-wrap">
-                <img
-                  src={f.url}
-                  alt={f.descripcion ?? "Foto del partido"}
-                  class="foto-img"
-                  loading="lazy"
-                />
-              </a>
-            ))}
-          </div>
-        </section>
-      )
-    }
-
-    <!-- Boxscore -->
-    {
-      boxscore && boxscore.length > 0 && (
-        <section class="seccion">
-          <h2 class="seccion-titulo">Boxscore</h2>
-
-          {[
-            { label: "Titulares", lista: titulares },
-            { label: "Suplentes", lista: suplentes },
-          ].map(
-            ({ label, lista }) =>
-              lista.length > 0 && (
-                <div class="boxscore-bloque">
-                  <h3 class="boxscore-label">{label}</h3>
-                  <div class="boxscore-wrap">
-                    <table class="boxscore-tabla">
-                      <thead>
-                        <tr>
-                          <th class="left">#</th>
-                          <th class="left">Jugador</th>
-                          <th>MIN</th>
-                          <th>PTS</th>
-                          <th>FG</th>
-                          <th>T2</th>
-                          <th>3PT</th>
-                          <th>FT</th>
-                          <th>OREB</th>
-                          <th>DREB</th>
-                          <th>REB</th>
-                          <th>AST</th>
-                          <th>STL</th>
-                          <th>PER</th>
-                          <th>BLK</th>
-                          <th>PF</th>
-                          <th>FR</th>
-                          <th>VAL</th>
-                          <th>+/-</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {lista.map((s) => {
-                          const j = s.jugadores;
-                          const reb =
-                            (parseInt(s.rebotes_ofensivos) || 0) +
-                            (parseInt(s.rebotes_defensivos) || 0);
-                          const dorsal = dorsalMap.get(j?.id) ?? "—";
-                          const val = s.valoracion ?? 0;
-                          const mm = s.mas_menos ?? 0;
-                          return (
-                            <tr>
-                              <td class="dorsal-col">{dorsal}</td>
-                              <td class="jugador-col">
-                                <a
-                                  href={`/jugadores/${j?.id}`}
-                                  class="jugador-link"
-                                >
-                                  {j?.nombre?.[0]}. {j?.apellido}
-                                </a>
-                              </td>
-                              <td style="font-family:monospace">
-                                {formatMinutos(s.minutos)}
-                              </td>
-                              <td class="pts-col">{s.puntos ?? 0}</td>
-                              <td class="tiro">
-                                {s.tiros_campo_anotados ?? 0}/
-                                {s.tiros_campo_intentados ?? 0}
-                              </td>
-                              <td class="tiro">
-                                {s.tiros_2_anotados ?? 0}/
-                                {s.tiros_2_intentados ?? 0}
-                              </td>
-                              <td class="tiro">
-                                {s.triples_anotados ?? 0}/
-                                {s.triples_intentados ?? 0}
-                              </td>
-                              <td class="tiro">
-                                {s.tiros_libres_anotados ?? 0}/
-                                {s.tiros_libres_intentados ?? 0}
-                              </td>
-                              <td>{s.rebotes_ofensivos ?? 0}</td>
-                              <td>{s.rebotes_defensivos ?? 0}</td>
-                              <td class="reb-col">{reb}</td>
-                              <td>{s.asistencias ?? 0}</td>
-                              <td>{s.robos ?? 0}</td>
-                              <td>{s.perdidas ?? 0}</td>
-                              <td>{s.tapones ?? 0}</td>
-                              <td>{s.faltas_cometidas ?? 0}</td>
-                              <td>{s.faltas_recibidas ?? 0}</td>
-                              <td
-                                class:list={[
-                                  "val-col",
-                                  val > 0 ? "pos" : val < 0 ? "neg" : "",
-                                ]}
-                              >
-                                {val > 0 ? `+${val}` : val}
-                              </td>
-                              <td
-                                class:list={[
-                                  "mm-col",
-                                  mm > 0 ? "pos" : mm < 0 ? "neg" : "",
-                                ]}
-                              >
-                                {mm > 0 ? `+${mm}` : mm}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                        <tr class="totales-row">
-                          <td />
-                          <td
-                            class="left"
-                            style="font-size:0.62rem;font-weight:700;letter-spacing:.06em;color:var(--muted)"
-                          >
-                            TOTALES
-                          </td>
-                          <td>—</td>
-                          <td class="pts-col">{sum(lista, "puntos")}</td>
-                          <td class="tiro">
-                            {sum(lista, "tiros_campo_anotados")}/
-                            {sum(lista, "tiros_campo_intentados")}
-                          </td>
-                          <td class="tiro">
-                            {sum(lista, "tiros_2_anotados")}/
-                            {sum(lista, "tiros_2_intentados")}
-                          </td>
-                          <td class="tiro">
-                            {sum(lista, "triples_anotados")}/
-                            {sum(lista, "triples_intentados")}
-                          </td>
-                          <td class="tiro">
-                            {sum(lista, "tiros_libres_anotados")}/
-                            {sum(lista, "tiros_libres_intentados")}
-                          </td>
-                          <td>{sum(lista, "rebotes_ofensivos")}</td>
-                          <td>{sum(lista, "rebotes_defensivos")}</td>
-                          <td class="reb-col">
-                            {sum(lista, "rebotes_ofensivos") +
-                              sum(lista, "rebotes_defensivos")}
-                          </td>
-                          <td>{sum(lista, "asistencias")}</td>
-                          <td>{sum(lista, "robos")}</td>
-                          <td>{sum(lista, "perdidas")}</td>
-                          <td>{sum(lista, "tapones")}</td>
-                          <td>{sum(lista, "faltas_cometidas")}</td>
-                          <td>{sum(lista, "faltas_recibidas")}</td>
-                          <td class="val-col">
-                            {sum(lista, "valoracion") > 0
-                              ? `+${sum(lista, "valoracion")}`
-                              : sum(lista, "valoracion")}
-                          </td>
-                          <td>—</td>
-                        </tr>
-                      </tbody>
-                    </table>
+      <!-- ── Boxscore ── -->
+      {tieneBoxscore && (
+        <div class="tab-panel" data-panel="boxscore">
+          <div class="contenido-inner contenido-wide">
+            {[{ label: "Titulares", lista: titulares }, { label: "Suplentes", lista: suplentes }].map(
+              ({ label, lista }) =>
+                lista.length > 0 && (
+                  <div class="boxscore-bloque">
+                    <h3 class="boxscore-label">{label}</h3>
+                    <div class="boxscore-wrap">
+                      <table class="boxscore-tabla">
+                        <thead>
+                          <tr>
+                            <th class="left">#</th>
+                            <th class="left">Jugador</th>
+                            <th>MIN</th>
+                            <th>PTS</th>
+                            <th>FG</th>
+                            <th>T2</th>
+                            <th>3PT</th>
+                            <th>TL</th>
+                            <th>OREB</th>
+                            <th>DREB</th>
+                            <th>REB</th>
+                            <th>AST</th>
+                            <th>ROB</th>
+                            <th>PER</th>
+                            <th>TAP</th>
+                            <th>FC</th>
+                            <th>FR</th>
+                            <th>VAL</th>
+                            <th>+/-</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {lista.map((s) => {
+                            const j = s.jugadores;
+                            const reb = (parseInt(s.rebotes_ofensivos) || 0) + (parseInt(s.rebotes_defensivos) || 0);
+                            const dorsal = dorsalMap.get(j?.id) ?? "—";
+                            const val = s.valoracion ?? 0;
+                            const mm = s.mas_menos ?? 0;
+                            return (
+                              <tr>
+                                <td class="dorsal-col">{dorsal}</td>
+                                <td class="jugador-col">
+                                  <a href={`/jugadores/${j?.id}`} class="jugador-link">
+                                    {j?.nombre?.[0]}. {j?.apellido}
+                                  </a>
+                                </td>
+                                <td style="font-family:monospace">{formatMinutos(s.minutos)}</td>
+                                <td class="pts-col">{s.puntos ?? 0}</td>
+                                <td class="tiro">{s.tiros_campo_anotados ?? 0}/{s.tiros_campo_intentados ?? 0}</td>
+                                <td class="tiro">{s.tiros_2_anotados ?? 0}/{s.tiros_2_intentados ?? 0}</td>
+                                <td class="tiro">{s.triples_anotados ?? 0}/{s.triples_intentados ?? 0}</td>
+                                <td class="tiro">{s.tiros_libres_anotados ?? 0}/{s.tiros_libres_intentados ?? 0}</td>
+                                <td>{s.rebotes_ofensivos ?? 0}</td>
+                                <td>{s.rebotes_defensivos ?? 0}</td>
+                                <td class="reb-col">{reb}</td>
+                                <td>{s.asistencias ?? 0}</td>
+                                <td>{s.robos ?? 0}</td>
+                                <td>{s.perdidas ?? 0}</td>
+                                <td>{s.tapones ?? 0}</td>
+                                <td>{s.faltas_cometidas ?? 0}</td>
+                                <td>{s.faltas_recibidas ?? 0}</td>
+                                <td class:list={["val-col", val > 0 ? "pos" : val < 0 ? "neg" : ""]}>
+                                  {val > 0 ? `+${val}` : val}
+                                </td>
+                                <td class:list={["mm-col", mm > 0 ? "pos" : mm < 0 ? "neg" : ""]}>
+                                  {mm > 0 ? `+${mm}` : mm}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          <tr class="totales-row">
+                            <td />
+                            <td class="left" style="font-size:0.62rem;font-weight:700;letter-spacing:.06em;color:var(--muted)">TOTALES</td>
+                            <td>—</td>
+                            <td class="pts-col">{sum(lista, "puntos")}</td>
+                            <td class="tiro">{sum(lista, "tiros_campo_anotados")}/{sum(lista, "tiros_campo_intentados")}</td>
+                            <td class="tiro">{sum(lista, "tiros_2_anotados")}/{sum(lista, "tiros_2_intentados")}</td>
+                            <td class="tiro">{sum(lista, "triples_anotados")}/{sum(lista, "triples_intentados")}</td>
+                            <td class="tiro">{sum(lista, "tiros_libres_anotados")}/{sum(lista, "tiros_libres_intentados")}</td>
+                            <td>{sum(lista, "rebotes_ofensivos")}</td>
+                            <td>{sum(lista, "rebotes_defensivos")}</td>
+                            <td class="reb-col">{sum(lista, "rebotes_ofensivos") + sum(lista, "rebotes_defensivos")}</td>
+                            <td>{sum(lista, "asistencias")}</td>
+                            <td>{sum(lista, "robos")}</td>
+                            <td>{sum(lista, "perdidas")}</td>
+                            <td>{sum(lista, "tapones")}</td>
+                            <td>{sum(lista, "faltas_cometidas")}</td>
+                            <td>{sum(lista, "faltas_recibidas")}</td>
+                            <td class="val-col">
+                              {sum(lista, "valoracion") > 0 ? `+${sum(lista, "valoracion")}` : sum(lista, "valoracion")}
+                            </td>
+                            <td>—</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
-              ),
-          )}
+                )
+            )}
+          </div>
+        </div>
+      )}
 
-          {boxscore.length > 0 && (
-            <div class="equipo-totales">
-              {[
-                { label: "Puntos", val: sum(boxscore, "puntos") },
-                {
-                  label: "Rebotes",
-                  val:
-                    sum(boxscore, "rebotes_ofensivos") +
-                    sum(boxscore, "rebotes_defensivos"),
-                },
-                { label: "Asist.", val: sum(boxscore, "asistencias") },
-                { label: "Robos", val: sum(boxscore, "robos") },
-                { label: "Tapones", val: sum(boxscore, "tapones") },
-                { label: "Pérdidas", val: sum(boxscore, "perdidas") },
-                {
-                  label: "% FG",
-                  val: pct(
-                    sum(boxscore, "tiros_campo_anotados"),
-                    sum(boxscore, "tiros_campo_intentados"),
-                  ),
-                },
-                {
-                  label: "% T2",
-                  val: pct(
-                    sum(boxscore, "tiros_2_anotados"),
-                    sum(boxscore, "tiros_2_intentados"),
-                  ),
-                },
-                {
-                  label: "% 3PT",
-                  val: pct(
-                    sum(boxscore, "triples_anotados"),
-                    sum(boxscore, "triples_intentados"),
-                  ),
-                },
-                {
-                  label: "% TL",
-                  val: pct(
-                    sum(boxscore, "tiros_libres_anotados"),
-                    sum(boxscore, "tiros_libres_intentados"),
-                  ),
-                },
-              ].map(({ label, val }) => (
-                <div class="total-item">
-                  <span class="total-val">{val}</span>
-                  <span class="total-label">{label}</span>
-                </div>
+      <!-- ── Fotos ── -->
+      {tieneFotos && (
+        <div class="tab-panel" data-panel="fotos">
+          <div class="contenido-inner">
+            <div class="fotos-grid">
+              {fotos.map((f) => (
+                <a href={f.url} target="_blank" rel="noopener" class="foto-wrap">
+                  <img src={f.url} alt={f.descripcion ?? "Foto del partido"} class="foto-img" loading="lazy" />
+                </a>
               ))}
             </div>
-          )}
-        </section>
-      )
-    }
-  </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )}
 </Layout>
 
 <style>
@@ -526,7 +361,6 @@ const equipoHref =
     align-items: center;
   }
 
-  /* Escudos semitransparentes de fondo */
   .hero-escudo-local,
   .hero-escudo-visit {
     position: absolute;
@@ -548,18 +382,12 @@ const equipoHref =
     opacity: 0.08;
     filter: grayscale(0.6);
   }
-
-  /* Gradiente central que oscurece los bordes y centra la atención */
   .hero-overlay {
     position: absolute;
     inset: 0;
     z-index: 1;
     pointer-events: none;
-    background: radial-gradient(
-      ellipse 60% 100% at 50% 50%,
-      rgba(15, 23, 42, 0.5) 0%,
-      rgba(15, 23, 42, 0.9) 100%
-    );
+    background: radial-gradient(ellipse 60% 100% at 50% 50%, rgba(15,23,42,0.5) 0%, rgba(15,23,42,0.9) 100%);
   }
 
   .hero-inner {
@@ -570,7 +398,6 @@ const equipoHref =
     margin: 0 auto;
   }
 
-  /* Meta pills */
   .hero-meta {
     display: flex;
     align-items: center;
@@ -587,9 +414,7 @@ const equipoHref =
     letter-spacing: 0.05em;
     margin-right: auto;
   }
-  .volver:hover {
-    opacity: 0.8;
-  }
+  .volver:hover { opacity: 0.8; }
 
   .hero-pill {
     font-size: 0.62rem;
@@ -598,384 +423,181 @@ const equipoHref =
     letter-spacing: 0.07em;
     padding: 3px 10px;
     border-radius: 20px;
-    background: rgba(255, 255, 255, 0.08);
-    color: rgba(255, 255, 255, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.5);
+    border: 1px solid rgba(255,255,255,0.1);
   }
-  .hero-pill.muted {
-    color: rgba(255, 255, 255, 0.3);
-  }
-  .hero-pill.resultado.victoria {
-    background: rgba(34, 197, 94, 0.15);
-    color: #4ade80;
-    border-color: rgba(34, 197, 94, 0.25);
-  }
-  .hero-pill.resultado.derrota {
-    background: rgba(59, 130, 246, 0.15);
-    color: #60a5fa;
-    border-color: rgba(59, 130, 246, 0.25);
-  }
+  .hero-pill.muted { color: rgba(255,255,255,0.3); }
+  .hero-pill.resultado.victoria { background: rgba(34,197,94,0.15); color: #4ade80; border-color: rgba(34,197,94,0.25); }
+  .hero-pill.resultado.derrota  { background: rgba(59,130,246,0.15); color: #60a5fa; border-color: rgba(59,130,246,0.25); }
 
-  /* Marcador */
   .marcador-wrap {
     display: grid;
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
     gap: 2rem;
   }
-
-  .equipo-col {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.75rem;
-  }
-  .equipo-col.visitante {
-    align-items: flex-end;
-    text-align: right;
-  }
-
+  .equipo-col { display: flex; flex-direction: column; align-items: flex-start; gap: 0.75rem; }
+  .equipo-col.visitante { align-items: flex-end; text-align: right; }
   .escudo-box {
-    width: 64px;
-    height: 64px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    width: 64px; height: 64px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
     border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-    padding: 6px;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden; padding: 6px;
   }
-  .escudo-img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-  }
+  .escudo-img { width: 100%; height: 100%; object-fit: contain; }
+  .equipo-nombre { font-size: clamp(0.85rem, 2.2vw, 1.15rem); font-weight: 800; line-height: 1.2; color: white; }
 
-  .equipo-nombre {
-    font-size: clamp(0.85rem, 2.2vw, 1.15rem);
-    font-weight: 800;
-    line-height: 1.2;
-    color: white;
-  }
+  .resultado-col { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
+  .marcador-numeros { display: flex; align-items: center; gap: 0.5rem; }
+  .pts { font-size: clamp(2.5rem, 7vw, 4rem); font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1; }
+  .pts.ganador { color: white; }
+  .pts.perdedor { color: rgba(255,255,255,0.22); }
+  .separador { font-size: 1.8rem; color: rgba(255,255,255,0.15); font-weight: 300; }
+  .hero-fecha { font-size: 0.72rem; color: rgba(255,255,255,0.35); text-align: center; text-transform: capitalize; }
+  .pendiente-box { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; }
+  .pendiente-label { font-size: 0.8rem; font-weight: 700; color: rgba(255,255,255,0.25); text-transform: uppercase; letter-spacing: 0.08em; }
+  .pendiente-fecha { font-size: 0.82rem; color: rgba(255,255,255,0.5); text-align: center; }
 
-  /* Resultado central */
-  .resultado-col {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .marcador-numeros {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-  .pts {
-    font-size: clamp(2.5rem, 7vw, 4rem);
-    font-weight: 900;
-    font-variant-numeric: tabular-nums;
-    line-height: 1;
-    transition: color 0.2s;
-  }
-  .pts.ganador {
-    color: white;
-  }
-  .pts.perdedor {
-    color: rgba(255, 255, 255, 0.22);
-  }
-
-  .separador {
-    font-size: 1.8rem;
-    color: rgba(255, 255, 255, 0.15);
-    font-weight: 300;
-  }
-
-  .hero-fecha {
-    font-size: 0.72rem;
-    color: rgba(255, 255, 255, 0.35);
-    text-align: center;
-    text-transform: capitalize;
-  }
-
-  .pendiente-box {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.3rem;
-  }
-  .pendiente-label {
-    font-size: 0.8rem;
-    font-weight: 700;
-    color: rgba(255, 255, 255, 0.25);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-  }
-  .pendiente-fecha {
-    font-size: 0.82rem;
-    color: rgba(255, 255, 255, 0.5);
-    text-align: center;
-  }
-
-  /* ══ CONTENIDO ══ */
-  .contenido {
-    max-width: 900px;
+  /* ══ PESTAÑAS ══ */
+  .tabs-outer {
+    max-width: 1100px;
     margin: 0 auto;
+    padding: 0 2rem 4rem;
   }
 
-  .seccion {
-    padding: 3rem 2rem;
-  }
-  .seccion-alt {
-    max-width: 100%;
-    background: var(--color-background-secondary, #1e293b);
-    padding: 3rem 2rem;
-  }
-  .seccion-alt > * {
-    max-width: 900px;
-    margin-left: auto;
-    margin-right: auto;
+  .tabs-nav {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid var(--borde);
+    margin-bottom: 2rem;
+    margin-top: 2rem;
   }
 
-  .seccion-titulo {
-    font-size: 0.68rem;
-    font-weight: 800;
+  .tab-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--muted);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    cursor: pointer;
+    transition: color .15s, border-color .15s;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--naranja, #f28241);
-    margin-bottom: 1.25rem;
-    padding-left: 0.75rem;
-    position: relative;
+    letter-spacing: .05em;
   }
-  .seccion-titulo::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 3px;
-    background: var(--naranja, #f28241);
-    border-radius: 2px;
+  .tab-btn:hover { color: var(--texto); }
+  .tab-btn.active {
+    color: var(--naranja, #f28241);
+    border-bottom-color: var(--naranja, #f28241);
+  }
+  .tab-count {
+    font-size: 0.65rem;
+    background: var(--color-background-secondary);
+    border: 1px solid var(--borde);
+    border-radius: 10px;
+    padding: 1px 6px;
+    font-weight: 700;
+    color: var(--muted);
+  }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ══ CONTENIDO INTERIOR ══ */
+  .contenido-inner {
+    max-width: 720px;
+  }
+  .contenido-wide {
+    max-width: 100%;
   }
 
   /* Crónica */
-  .cronica-texto {
-    font-size: 1rem;
-    line-height: 1.85;
-    max-width: 680px;
-  }
-  .cronica-texto p {
-    margin-bottom: 1rem;
-  }
+  .cronica-texto { font-size: 1rem; line-height: 1.85; }
+  .cronica-texto p { margin-bottom: 1rem; }
 
   /* Fotos */
   .fotos-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 0.6rem;
-    max-width: 900px;
-    margin: 0 auto;
   }
-  .foto-wrap {
-    border-radius: 10px;
-    overflow: hidden;
-    border: 1px solid var(--borde);
-    display: block;
-    aspect-ratio: 4/3;
-  }
-  .foto-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    transition: transform 0.3s ease;
-  }
-  .foto-wrap:hover .foto-img {
-    transform: scale(1.04);
-  }
+  .foto-wrap { border-radius: 10px; overflow: hidden; border: 1px solid var(--borde); display: block; aspect-ratio: 4/3; }
+  .foto-img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s ease; }
+  .foto-wrap:hover .foto-img { transform: scale(1.04); }
 
   /* Boxscore */
-  .boxscore-bloque {
-    margin-bottom: 2rem;
-  }
+  .boxscore-bloque { margin-bottom: 2rem; }
   .boxscore-label {
-    font-size: 0.62rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--muted);
-    margin-bottom: 0.6rem;
+    font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--muted); margin-bottom: 0.6rem;
   }
-  .boxscore-wrap {
-    overflow-x: auto;
-  }
-  .boxscore-tabla {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.82rem;
-    min-width: 640px;
-  }
-  .boxscore-tabla thead tr {
-    border-bottom: 2px solid var(--naranja, #f28241);
-  }
+  .boxscore-wrap { overflow-x: auto; }
+  .boxscore-tabla { width: 100%; border-collapse: collapse; font-size: 0.82rem; min-width: 700px; }
+  .boxscore-tabla thead tr { border-bottom: 2px solid var(--naranja, #f28241); }
   .boxscore-tabla th {
-    padding: 0.4rem 0.6rem;
-    text-align: center;
-    font-size: 0.62rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--muted);
-    white-space: nowrap;
+    padding: 0.4rem 0.6rem; text-align: center;
+    font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--muted); white-space: nowrap;
   }
-  .boxscore-tabla th.left {
-    text-align: left;
-  }
-  .boxscore-tabla tbody tr {
-    border-bottom: 1px solid var(--borde);
-    transition: background 0.15s;
-  }
-  .boxscore-tabla tbody tr:hover {
-    background: var(--card);
-  }
-  .boxscore-tabla td {
-    padding: 0.5rem 0.6rem;
-    text-align: center;
-    color: var(--muted);
-  }
-  .boxscore-tabla td.left {
-    text-align: left;
-  }
+  .boxscore-tabla th.left { text-align: left; }
+  .boxscore-tabla tbody tr { border-bottom: 1px solid var(--borde); transition: background 0.15s; }
+  .boxscore-tabla tbody tr:hover { background: var(--card); }
+  .boxscore-tabla td { padding: 0.5rem 0.6rem; text-align: center; color: var(--muted); }
+  .boxscore-tabla td.left { text-align: left; }
 
-  .dorsal-col {
-    font-size: 0.72rem;
-    font-weight: 700;
-    color: var(--naranja, #f28241) !important;
-    width: 28px;
-  }
-  .jugador-col {
-    min-width: 130px;
-  }
-  .jugador-link {
-    font-weight: 700;
-    font-size: 0.85rem;
-    color: var(--texto) !important;
-    text-decoration: none;
-  }
-  .jugador-link:hover {
-    color: var(--naranja, #f28241) !important;
-  }
-  .pts-col {
-    font-weight: 800;
-    font-size: 0.95rem;
-    color: var(--naranja, #f28241) !important;
-  }
-  .tiro {
-    font-size: 0.75rem;
-  }
+  .dorsal-col { font-size: 0.72rem; font-weight: 700; color: var(--naranja, #f28241) !important; width: 28px; }
+  .jugador-col { min-width: 130px; }
+  .jugador-link { font-weight: 700; font-size: 0.85rem; color: var(--texto) !important; text-decoration: none; }
+  .jugador-link:hover { color: var(--naranja, #f28241) !important; }
+  .pts-col { font-weight: 800; font-size: 0.95rem; color: var(--naranja, #f28241) !important; }
+  .tiro { font-size: 0.75rem; }
+  .reb-col { font-weight: 800; }
 
-  .totales-row {
-    border-top: 2px solid var(--borde);
-    background: var(--card);
-  }
-  .totales-row td {
-    font-weight: 700;
-    color: var(--texto) !important;
-    padding: 0.6rem;
-  }
-  .totales-row .pts-col {
-    color: var(--naranja, #f28241) !important;
-  }
+  .totales-row { border-top: 2px solid var(--borde); background: var(--card); }
+  .totales-row td { font-weight: 700; color: var(--texto) !important; padding: 0.6rem; }
+  .totales-row .pts-col { color: var(--naranja, #f28241) !important; }
 
-  /* Totales globales */
-  .equipo-totales {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.6rem;
-    margin-top: 1.5rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid var(--borde);
-  }
-  .total-item {
-    background: var(--card);
-    border: 1px solid var(--borde);
-    border-radius: 8px;
-    padding: 0.75rem 1rem;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.15rem;
-    min-width: 70px;
-    flex: 1;
-  }
-  .total-val {
-    font-size: 1.3rem;
-    font-weight: 800;
-    color: var(--naranja, #f28241);
-  }
-  .total-label {
-    font-size: 0.6rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--muted);
-  }
+  .val-col { font-weight: 800; }
+  .val-col.pos, .mm-col.pos { color: #0baa3b !important; }
+  .val-col.neg, .mm-col.neg { color: #ef4444 !important; }
+  .mm-col { font-weight: 700; font-size: 0.8rem; }
 
   /* ── Responsive ── */
   @media (max-width: 640px) {
-    .partido-hero {
-      padding: 1.5rem 1rem 2.5rem;
-      min-height: 220px;
-    }
-    .hero-escudo-local,
-    .hero-escudo-visit {
-      background-size: 45%;
-    }
-    .hero-meta {
-      margin-bottom: 1.5rem;
-    }
-    .marcador-wrap {
-      gap: 0.75rem;
-    }
-    .escudo-box {
-      width: 48px;
-      height: 48px;
-    }
-    .equipo-nombre {
-      font-size: 0.78rem;
-    }
-    .pts {
-      font-size: 2.2rem;
-    }
-    .seccion {
-      padding: 2rem 1rem;
-    }
-    .fotos-grid {
-      grid-template-columns: repeat(2, 1fr);
-    }
-  }
-
-  .reb-col {
-    font-weight: 800;
-  }
-  .val-col {
-    font-weight: 800;
-  }
-  .val-col.pos {
-    color: #0baa3b;
-  }
-  .val-col.neg {
-    color: #ef4444;
-  }
-  .mm-col {
-    font-weight: 700;
-    font-size: 0.8rem;
-  }
-  .mm-col.pos {
-    color: #0baa3b !important;
-  }
-  .mm-col.neg {
-    color: #ef4444 !important;
+    .partido-hero { padding: 1.5rem 1rem 2.5rem; min-height: 220px; }
+    .hero-escudo-local, .hero-escudo-visit { background-size: 45%; }
+    .hero-meta { margin-bottom: 1.5rem; }
+    .marcador-wrap { gap: 0.75rem; }
+    .escudo-box { width: 48px; height: 48px; }
+    .equipo-nombre { font-size: 0.78rem; }
+    .pts { font-size: 2.2rem; }
+    .tabs-outer { padding: 0 1rem 3rem; }
+    .tab-btn { padding: 8px 12px; font-size: 0.72rem; }
+    .fotos-grid { grid-template-columns: repeat(2, 1fr); }
   }
 </style>
+
+<script define:vars={{ tabDefault }}>
+  const btns = document.querySelectorAll(".tab-btn");
+  const panels = document.querySelectorAll(".tab-panel");
+
+  function activar(tab) {
+    btns.forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+    panels.forEach((p) => p.classList.toggle("active", p.dataset.panel === tab));
+  }
+
+  btns.forEach((btn) => {
+    btn.addEventListener("click", () => activar(btn.dataset.tab));
+  });
+
+  // Activar pestaña por defecto
+  activar(tabDefault);
+</script>

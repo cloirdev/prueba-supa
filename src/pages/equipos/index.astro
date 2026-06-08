@@ -1,114 +1,136 @@
 ---
 // @ts-nocheck
+// src/pages/equipos/index.astro
 import { supabase } from "@/lib/supabase.js";
 import Layout from "@/layouts/Layout.astro";
 
-const { data: categorias, error } = await supabase
-  .from("categorias")
-  .select("id, nombre, slug, orden, genero")
-  .order("orden", { ascending: true });
+const { data: temporadas } = await supabase
+  .from("temporadas")
+  .select("id, nombre")
+  .order("nombre", { ascending: false });
 
-if (error) console.error("Error cargando categorías:", error);
+const temporadaActual = temporadas?.[0] ?? null;
 
-const categoriasConEquipo = await Promise.all(
-  (categorias ?? [])
-    .filter((cat) => cat.slug)
-    .map(async (cat) => {
-      const { data: equipos } = await supabase
-        .from("equipos")
-        .select("id, sponsor, temporada_id, foto_url, temporadas (nombre)")
-        .eq("categoria_id", cat.id);
+const { data: equipos } = await supabase
+  .from("equipos")
+  .select(
+    `
+    id, sponsor, foto_url, temporada_id,
+    categorias (id, nombre, slug, orden, genero),
+    temporadas (id, nombre),
+    sponsors (nombre, logo_url)
+  `,
+  )
+  .order("temporada_id");
 
-      const equipo =
-        equipos?.sort((a, b) =>
-          (b.temporadas?.nombre ?? "").localeCompare(
-            a.temporadas?.nombre ?? "",
-          ),
-        )[0] ?? null;
-      const temporadaSlug = equipo?.temporadas?.nombre ?? null;
+const porTemporada = {};
+for (const e of equipos ?? []) {
+  const tid = e.temporadas?.id;
+  if (!tid) continue;
+  if (!porTemporada[tid]) porTemporada[tid] = [];
+  porTemporada[tid].push(e);
+}
 
-      return { ...cat, equipo, temporadaSlug };
-    }),
-);
+function nombreEquipo(equipo) {
+  return equipo.sponsor
+    ? `${equipo.sponsor} CB Jaca`
+    : `CB Jaca ${equipo.categorias?.nombre ?? ""}`;
+}
 
-const iconoGenero = { masculino: "♂", femenino: "♀", mixto: "⚥" };
+function urlEquipo(equipo) {
+  const cat = equipo.categorias?.slug;
+  const temp = equipo.temporadas?.nombre;
+  return cat && temp ? `/equipos/${cat}/${temp}` : null;
+}
 ---
 
 <Layout titulo="Equipos - CB Jaca">
   <section class="equipos-section">
     <div class="equipos-header">
-      <h1>Nuestros <span class="highlight">Equipos</span></h1>
-      <p class="subtitulo">
-        Selecciona una categoría para ver su plantilla y calendario.
-      </p>
-    </div>
+      <div class="header-top">
+        <div>
+          <h1>Nuestros <span class="highlight">Equipos</span></h1>
+          <p class="subtitulo">
+            Selecciona una categoría para ver su plantilla y calendario.
+          </p>
+        </div>
 
-    <div class="equipos-grid">
-      {
-        categoriasConEquipo.map((cat) => {
-          const href = cat.temporadaSlug
-            ? `/equipos/${cat.slug}/${cat.temporadaSlug}`
-            : null;
-          const nombreEquipo = cat.equipo?.sponsor
-            ? `${cat.equipo.sponsor} CB Jaca`
-            : `CB Jaca ${cat.nombre}`;
-          const foto = cat.equipo?.foto_url;
-
-          return href ? (
-            <a
-              href={href}
-              class="equipo-card"
-              style={foto ? `--bg-img: url('${foto}')` : ""}
-              data-tiene-foto={foto ? "true" : "false"}
-            >
-              <div class="card-inner">
-                <div class="card-top">
-                  <span class="genero-badge">
-                    {iconoGenero[cat.genero] ?? ""} {cat.nombre}
-                  </span>
-                  {cat.equipo?.temporadas?.nombre && (
-                    <span class="temporada-badge">
-                      {cat.equipo.temporadas.nombre}
-                    </span>
-                  )}
-                </div>
-                <div class="card-bottom">
-                  <div class="card-logos">
-                    <img
-                      src="/escudo-naranja.png"
-                      alt="CB Jaca"
-                      class="escudo-card"
-                    />
-                  </div>
-                  <div>
-                    <h2 class="card-nombre">{nombreEquipo}</h2>
-                    <span class="ver-mas">Ver equipo →</span>
-                  </div>
-                </div>
-              </div>
-            </a>
-          ) : (
-            <div class="equipo-card equipo-card--inactivo">
-              <div class="card-inner">
-                <div class="card-top">
-                  <span class="genero-badge">
-                    {iconoGenero[cat.genero] ?? ""} {cat.nombre}
-                  </span>
-                </div>
-                <div class="card-bottom">
-                  <h2 class="card-nombre">{cat.nombre}</h2>
-                  <p class="sin-datos">Sin temporada activa</p>
-                </div>
-              </div>
-            </div>
-          );
-        })
-      }
+        {
+          temporadas && temporadas.length > 1 && (
+            <select id="sel-temporada" class="temporada-select">
+              {temporadas.map((t) => (
+                <option value={t.id} selected={t.id === temporadaActual?.id}>
+                  {t.nombre}
+                </option>
+              ))}
+            </select>
+          )
+        }
+      </div>
     </div>
 
     {
-      (!categorias || categorias.length === 0) && (
-        <p class="vacio">No se han encontrado categorías.</p>
+      (temporadas ?? []).map((temp) => {
+        const lista = porTemporada[temp.id] ?? [];
+        if (lista.length === 0) return null;
+        lista.sort(
+          (a, b) => (a.categorias?.orden ?? 99) - (b.categorias?.orden ?? 99),
+        );
+        return (
+          <div
+            class="equipos-grid"
+            data-temporada={temp.id}
+            style={temp.id !== temporadaActual?.id ? "display:none" : ""}
+          >
+            {lista.map((equipo) => {
+              const href = urlEquipo(equipo);
+              const foto = equipo.foto_url;
+              const nombre = nombreEquipo(equipo);
+              const genero = equipo.categorias?.genero;
+              return href ? (
+                <a
+                  href={href}
+                  class="equipo-card"
+                  style={foto ? `--bg-img: url('${foto}')` : ""}
+                  data-tiene-foto={foto ? "true" : "false"}
+                >
+                  <div class="card-inner">
+                    <div class="card-top">
+                      <span class="genero-badge">
+                        {equipo.categorias?.nombre}
+                      </span>
+                      <span class="temporada-badge">{temp.nombre}</span>
+                    </div>
+                    <div class="card-bottom">
+                      <div class="card-logos">
+                        <img
+                          src="/escudo-naranja.png"
+                          alt="CB Jaca"
+                          class="escudo-card"
+                        />
+                        <h2 class="card-nombre">{nombre}</h2>
+                        {equipo.sponsors?.logo_url && (
+                          <img
+                            src={equipo.sponsors.logo_url}
+                            alt={equipo.sponsors.nombre}
+                            title={equipo.sponsors.nombre}
+                            class="sponsor-logo"
+                          />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </a>
+              ) : null;
+            })}
+          </div>
+        );
+      })
+    }
+
+    {
+      (!equipos || equipos.length === 0) && (
+        <p class="vacio">No se han encontrado equipos.</p>
       )
     }
   </section>
@@ -120,9 +142,15 @@ const iconoGenero = { masculino: "♂", femenino: "♀", mixto: "⚥" };
     margin: 0 auto;
     padding: 4rem 2rem;
   }
-
   .equipos-header {
     margin-bottom: 3rem;
+  }
+  .header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    flex-wrap: wrap;
   }
 
   h1 {
@@ -138,9 +166,42 @@ const iconoGenero = { masculino: "♂", femenino: "♀", mixto: "⚥" };
     color: var(--muted, #64748b);
   }
 
+  /* ── Select — mismo estilo que en la página de equipo ── */
+  .temporada-select {
+    padding: 0.45rem 1rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    background: transparent;
+    color: var(--naranja, #f97316);
+    border: 1.5px solid var(--naranja, #f97316);
+    cursor: pointer;
+    outline: none;
+    transition:
+      background 0.15s,
+      color 0.15s;
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 2rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23f97316' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.6rem center;
+  }
+  .temporada-select:hover {
+    background-color: rgba(249, 115, 22, 0.08);
+  }
+  .temporada-select:focus {
+    box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.2);
+  }
+  .temporada-select option {
+    background: var(--fondo, #ffffff);
+    color: var(--texto, #2a0f0f);
+  }
+
+  /* ── Grid ── */
   .equipos-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
     gap: 1.5rem;
   }
 
@@ -149,20 +210,21 @@ const iconoGenero = { masculino: "♂", femenino: "♀", mixto: "⚥" };
     position: relative;
     display: flex;
     flex-direction: column;
-    height: clamp(220px, 28vw, 340px);
+    height: clamp(220px, 28vw, 320px);
     border-radius: 14px;
     overflow: hidden;
     text-decoration: none;
     color: white;
     border: 1px solid var(--borde, rgba(255, 255, 255, 0.08));
     background-color: #0f172a;
-    transition: border-color 0.2s;
+    transition:
+      border-color 0.2s,
+      transform 0.2s;
   }
   .equipo-card:hover {
     border-color: var(--naranja, #f97316);
+    transform: translateY(-2px);
   }
-
-  /* Fondo con foto */
   .equipo-card::before {
     content: "";
     position: absolute;
@@ -188,8 +250,6 @@ const iconoGenero = { masculino: "♂", femenino: "♀", mixto: "⚥" };
     transform: scale(1.07);
     filter: grayscale(0);
   }
-
-  /* Sin foto: fondo sólido con acento naranja */
   .equipo-card[data-tiene-foto="false"]::before {
     background-image: linear-gradient(
       135deg,
@@ -207,7 +267,6 @@ const iconoGenero = { masculino: "♂", femenino: "♀", mixto: "⚥" };
     height: 100%;
     padding: 1.25rem 1.5rem;
   }
-
   .card-top {
     display: flex;
     justify-content: space-between;
@@ -235,11 +294,17 @@ const iconoGenero = { masculino: "♂", femenino: "♀", mixto: "⚥" };
     border: 1px solid rgba(255, 255, 255, 0.2);
     backdrop-filter: blur(4px);
   }
-
   .card-bottom {
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     gap: 1rem;
+  }
+  .card-logos {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    width: 100%;
+    gap: 0.6rem;
   }
   .escudo-card {
     width: 48px;
@@ -247,6 +312,14 @@ const iconoGenero = { masculino: "♂", femenino: "♀", mixto: "⚥" };
     object-fit: contain;
     flex-shrink: 0;
     filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5));
+  }
+  .sponsor-logo {
+    height: 40px;
+    width: auto;
+    max-width: 80px;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+    opacity: 0.85;
   }
   .card-nombre {
     font-size: clamp(1rem, 2vw, 1.3rem);
@@ -262,17 +335,6 @@ const iconoGenero = { masculino: "♂", femenino: "♀", mixto: "⚥" };
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
-
-  .equipo-card--inactivo {
-    opacity: 0.45;
-    cursor: default;
-  }
-  .sin-datos {
-    font-size: 0.82rem;
-    color: rgba(255, 255, 255, 0.5);
-    margin: 0;
-  }
-
   .vacio {
     text-align: center;
     color: var(--muted, #64748b);
@@ -283,6 +345,10 @@ const iconoGenero = { masculino: "♂", femenino: "♀", mixto: "⚥" };
     .equipos-section {
       padding: 2rem 1rem;
     }
+    .header-top {
+      flex-direction: column;
+      align-items: flex-start;
+    }
     .equipos-grid {
       grid-template-columns: 1fr;
     }
@@ -291,3 +357,17 @@ const iconoGenero = { masculino: "♂", femenino: "♀", mixto: "⚥" };
     }
   }
 </style>
+
+<script>
+  const sel = document.getElementById("sel-temporada");
+  const grids = document.querySelectorAll(".equipos-grid");
+
+  if (sel) {
+    sel.addEventListener("change", () => {
+      const tid = sel.value;
+      grids.forEach((g) => {
+        g.style.display = g.dataset.temporada === tid ? "" : "none";
+      });
+    });
+  }
+</script>

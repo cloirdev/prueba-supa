@@ -1,18 +1,26 @@
-// FormPartido.jsx — formulario reutilizable en AdminCalendario y AdminPartido
-
 export default function FormPartido({
   form,
   setForm,
-  rivales,
+  participantes = [],
+  clubes = [],
+  fases = [],
   equipo,
-  vista, // "nuevo" | "editar"
+  vista,
   onGuardar,
   onCancelar,
 }) {
   const nombreEquipo =
     equipo.sponsor ?? equipo.categorias?.nombre ?? "Nosotros";
-  const rivalObj = rivales.find((r) => r.id === form.rival_id);
-  const nombreRivalSel = rivalObj?.nombre_equipo ?? "Rival";
+
+  // Nombre del rival seleccionado
+  const nombreRivalSel = (() => {
+    if (form.tipo === "amistoso") {
+      const club = clubes.find((c) => c.id === form.club_rival_id);
+      return club?.nombre ?? "Rival";
+    }
+    const p = participantes.find((p) => p.id === form.participante_id);
+    return p?.nombre_equipo ?? p?.clubes?.nombre ?? "Rival";
+  })();
 
   const labelLocal = form.es_local
     ? `${nombreEquipo} (local)`
@@ -21,38 +29,27 @@ export default function FormPartido({
     ? `${nombreRivalSel} (visitante)`
     : `${nombreEquipo} (visitante)`;
 
+  // Participantes de la fase seleccionada, excluyendo el equipo propio
+  const participantesFase = participantes.filter(
+    (p) => !form.fase_id || p.fase_id === form.fase_id,
+  );
+
   return (
     <div className="card adm-form-card" style={{ maxWidth: "520px" }}>
-      {/* Rival */}
-      <div className="adm-field">
-        <label className="adm-label">Rival</label>
-        {rivales.length === 0 ? (
-          <p style={{ fontSize: "13px", color: "var(--muted)" }}>
-            No hay rivales para esta categoría.
-          </p>
-        ) : (
-          <select
-            value={form.rival_id}
-            onChange={(e) => setForm({ ...form, rival_id: e.target.value })}
-            className="adm-input"
-          >
-            <option value="">Selecciona un rival...</option>
-            {rivales.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.nombre_equipo}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
-
       {/* Tipo de partido */}
       <div className="adm-field">
         <label className="adm-label">Tipo de partido</label>
         <select
           value={form.tipo}
           onChange={(e) =>
-            setForm({ ...form, tipo: e.target.value, jornada: "" })
+            setForm({
+              ...form,
+              tipo: e.target.value,
+              jornada: "",
+              participante_id: "",
+              club_rival_id: "",
+              fase_id: "",
+            })
           }
           className="adm-input"
         >
@@ -62,6 +59,77 @@ export default function FormPartido({
           <option value="amistoso">Amistoso</option>
         </select>
       </div>
+
+      {/* Fase (liga / copa / playoff) */}
+      {form.tipo !== "amistoso" && fases.length > 0 && (
+        <div className="adm-field">
+          <label className="adm-label">Competición / Fase</label>
+          <select
+            value={form.fase_id}
+            onChange={(e) =>
+              setForm({ ...form, fase_id: e.target.value, participante_id: "" })
+            }
+            className="adm-input"
+          >
+            <option value="">Selecciona una fase...</option>
+            {fases.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.competiciones?.nombre} — {f.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Rival (competición) */}
+      {form.tipo !== "amistoso" && (
+        <div className="adm-field">
+          <label className="adm-label">Rival</label>
+          {participantesFase.length === 0 ? (
+            <p style={{ fontSize: "13px", color: "var(--muted)" }}>
+              {form.fase_id
+                ? "No hay rivales en esta fase."
+                : "Selecciona una fase primero."}
+            </p>
+          ) : (
+            <select
+              value={form.participante_id}
+              onChange={(e) =>
+                setForm({ ...form, participante_id: e.target.value })
+              }
+              className="adm-input"
+            >
+              <option value="">Selecciona un rival...</option>
+              {participantesFase.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre_equipo ?? p.clubes?.nombre ?? p.id}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
+
+      {/* Rival (amistoso) — solo club libre */}
+      {form.tipo === "amistoso" && (
+        <div className="adm-field">
+          <label className="adm-label">Club rival</label>
+          <select
+            value={form.club_rival_id}
+            onChange={(e) =>
+              setForm({ ...form, club_rival_id: e.target.value })
+            }
+            className="adm-input"
+          >
+            <option value="">Selecciona un club...</option>
+            {clubes.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Jornada (liga) */}
       {form.tipo === "liga" && (
@@ -221,7 +289,6 @@ export default function FormPartido({
             ))}
           </div>
 
-          {/* Preview victoria/derrota */}
           {form.puntos_local !== "" &&
             form.puntos_visitante !== "" &&
             (() => {

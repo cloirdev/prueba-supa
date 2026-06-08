@@ -43,7 +43,7 @@ export default function AdminJugadores({ supabase, perfil }) {
     const [{ data: jugs }, { data: eqs }, { data: temps }] = await Promise.all([
       supabase
         .from("jugadores")
-        .select("id, nombre, apellido, posicion, genero")
+        .select("id, nombre, apellido, posicion, genero, foto_dni_url")
         .order("apellido"),
       supabase
         .from("equipos")
@@ -349,7 +349,19 @@ export default function AdminJugadores({ supabase, perfil }) {
               pointerEvents: "none",
             }}
           >
-            🔍
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="m21 21-4.35-4.35" />
+            </svg>
           </span>
           <input
             ref={searchRef}
@@ -579,25 +591,42 @@ export default function AdminJugadores({ supabase, perfil }) {
                   textAlign: vistaCards ? "center" : "left",
                 }}
               >
-                <div
-                  style={{
-                    width: vistaCards ? "44px" : "38px",
-                    height: vistaCards ? "44px" : "38px",
-                    borderRadius: "50%",
-                    background: seleccionado
-                      ? "#F97316"
-                      : "var(--azul-oscuro, #0f172a)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: vistaCards ? "14px" : "12px",
-                    fontWeight: 800,
-                    color: "white",
-                    flexShrink: 0,
-                  }}
-                >
-                  {iniciales(j)}
-                </div>
+                {j.foto_dni_url ? (
+                  <img
+                    src={j.foto_dni_url}
+                    alt={`${j.nombre} ${j.apellido}`}
+                    style={{
+                      width: vistaCards ? "44px" : "38px",
+                      height: vistaCards ? "44px" : "38px",
+                      borderRadius: "50%",
+                      objectFit: "cover",
+                      flexShrink: 0,
+                      border: seleccionado
+                        ? "2px solid var(--naranja)"
+                        : "2px solid var(--borde)",
+                    }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: vistaCards ? "44px" : "38px",
+                      height: vistaCards ? "44px" : "38px",
+                      borderRadius: "50%",
+                      background: seleccionado
+                        ? "#F97316"
+                        : "var(--azul-oscuro, #0f172a)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: vistaCards ? "14px" : "12px",
+                      fontWeight: 800,
+                      color: "white",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {iniciales(j)}
+                  </div>
+                )}
                 <div style={{ flex: 1, minWidth: 0, width: "100%" }}>
                   <div
                     style={{
@@ -665,23 +694,38 @@ export default function AdminJugadores({ supabase, perfil }) {
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-              <div
-                style={{
-                  width: "56px",
-                  height: "56px",
-                  borderRadius: "50%",
-                  background: "#F97316",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "18px",
-                  fontWeight: 900,
-                  color: "white",
-                  flexShrink: 0,
-                }}
-              >
-                {iniciales(jugadorSeleccionado)}
-              </div>
+              {jugadorSeleccionado.foto_dni_url ? (
+                <img
+                  src={jugadorSeleccionado.foto_dni_url}
+                  alt={`${jugadorSeleccionado.nombre} ${jugadorSeleccionado.apellido}`}
+                  style={{
+                    width: "56px",
+                    height: "56px",
+                    borderRadius: "50%",
+                    objectFit: "cover",
+                    flexShrink: 0,
+                    border: "2px solid var(--naranja)",
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    width: "56px",
+                    height: "56px",
+                    borderRadius: "50%",
+                    background: "#F97316",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "18px",
+                    fontWeight: 900,
+                    color: "white",
+                    flexShrink: 0,
+                  }}
+                >
+                  {iniciales(jugadorSeleccionado)}
+                </div>
+              )}
               <div>
                 <h2 style={{ margin: 0, fontSize: "18px" }}>
                   {jugadorSeleccionado.nombre} {jugadorSeleccionado.apellido}

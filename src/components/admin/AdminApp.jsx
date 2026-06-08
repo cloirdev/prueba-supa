@@ -13,7 +13,8 @@ import AdminEntrenadores from "./AdminEntrenadores.jsx";
 import AdminClasificacion from "./AdminClasificacion.jsx";
 import FormNuevoEquipo from "./FormNuevoEquipo.jsx";
 import AdminClubes from "./AdminClubes.jsx";
-import AdminEquiposRivales from "./AdminEquiposRivales.jsx";
+import AdminParticipantes from "./AdminParticipantes.jsx";
+import AdminSponsors from "./AdminSponsors.jsx";
 
 const supabase = createClient(
   import.meta.env.PUBLIC_SUPABASE_URL,
@@ -208,7 +209,6 @@ export default function AdminApp() {
               (e.currentTarget.style.background = tk.collapseBtn)
             }
           >
-            {/* chevron icon — flips direction */}
             <svg
               width="14"
               height="14"
@@ -314,11 +314,11 @@ export default function AdminApp() {
                 onClick={() => setVista("clubes")}
               />
               <NavItem
-                label="Equipos rivales"
-                icon="⚔️"
-                activa={vista === "rivales"}
+                label="Participantes"
+                icon="🏟️"
+                activa={vista === "participantes"}
                 collapsed={sidebarCollapsed}
-                onClick={() => setVista("rivales")}
+                onClick={() => setVista("participantes")}
               />
               <NavItem
                 label="Nuevo equipo"
@@ -326,6 +326,13 @@ export default function AdminApp() {
                 activa={vista === "nuevoEquipo"}
                 collapsed={sidebarCollapsed}
                 onClick={() => setVista("nuevoEquipo")}
+              />
+              <NavItem
+                label="Sponsors"
+                icon="🏷️"
+                activa={vista === "sponsors"}
+                collapsed={sidebarCollapsed}
+                onClick={() => setVista("sponsors")}
               />
             </NavSection>
           )}
@@ -351,7 +358,6 @@ export default function AdminApp() {
               justifyContent: sidebarCollapsed ? "center" : "flex-start",
             }}
           >
-            {/* Avatar */}
             <div
               title={perfil?.nombre ?? session.user.email}
               style={{
@@ -390,7 +396,6 @@ export default function AdminApp() {
                   </div>
                 </div>
 
-                {/* Theme toggle — only visible when expanded */}
                 <button
                   onClick={toggleTema}
                   aria-label="Cambiar tema"
@@ -444,7 +449,6 @@ export default function AdminApp() {
             )}
           </div>
 
-          {/* Theme toggle in collapsed mode */}
           {sidebarCollapsed && (
             <button
               onClick={toggleTema}
@@ -497,7 +501,6 @@ export default function AdminApp() {
             </button>
           )}
 
-          {/* Logout */}
           {!sidebarCollapsed ? (
             <button
               onClick={logout}
@@ -733,8 +736,11 @@ export default function AdminApp() {
           {vista === "clubes" && perfil?.rol === "admin" && (
             <AdminClubes supabase={supabase} perfil={perfil} />
           )}
-          {vista === "rivales" && perfil?.rol === "admin" && (
-            <AdminEquiposRivales supabase={supabase} perfil={perfil} />
+          {vista === "participantes" && perfil?.rol === "admin" && (
+            <AdminParticipantes supabase={supabase} perfil={perfil} />
+          )}
+          {vista === "sponsors" && perfil?.rol === "admin" && (
+            <AdminSponsors supabase={supabase} perfil={perfil} />
           )}
         </div>
       </div>
@@ -746,10 +752,7 @@ export default function AdminApp() {
 function NavSection({ label, children, collapsed, tk }) {
   return (
     <div
-      style={{
-        padding: "12px 0",
-        borderBottom: `0.5px solid ${tk.border}`,
-      }}
+      style={{ padding: "12px 0", borderBottom: `0.5px solid ${tk.border}` }}
     >
       {!collapsed && (
         <div
@@ -772,12 +775,7 @@ function NavSection({ label, children, collapsed, tk }) {
 }
 
 // ── NavItem ───────────────────────────────────────────────────────────────────
-function NavItem({ label, icon, activa, onClick, collapsed, tk }) {
-  // tk is not passed here — NavItem reads its own colours from props
-  // We need tk passed down; using a simpler approach: hardcode active orange,
-  // inactive depends on collapsed tooltip only. Colors stay CSS-variable-free
-  // since sidebar bg is custom. Pass tk down if needed, but for now active
-  // state is enough differentiation.
+function NavItem({ label, icon, activa, onClick, collapsed }) {
   return (
     <div
       onClick={onClick}

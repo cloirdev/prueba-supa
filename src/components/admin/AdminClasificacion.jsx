@@ -111,7 +111,7 @@ function ModalFases({
     setGuardando(true);
     const { error: err } = await supabase.from("fases_competicion").insert({
       competicion_id: equipo.competicion_id,
-      temporada_id: temporada.id, // ✅ corregido
+      temporada_id: temporada.id,
       nombre: nueva.nombre.trim(),
       tipo: nueva.tipo,
       orden: parseInt(nueva.orden),
@@ -134,7 +134,7 @@ function ModalFases({
     )
       return;
     await supabase.from("clasificacion").delete().eq("fase_id", id);
-    await supabase.from("participantes_competicion").delete().eq("fase_id", id);
+    await supabase.from("participantes").delete().eq("fase_id", id);
     await supabase.from("fases_competicion").delete().eq("id", id);
     onCambio();
   }
@@ -329,7 +329,6 @@ function ModalParticipante({
       setDropdownPos(null);
       return;
     }
-    // Calcular posición del dropdown relativa al viewport
     if (inputRef.current) {
       const rect = inputRef.current.getBoundingClientRect();
       setDropdownPos({
@@ -340,9 +339,7 @@ function ModalParticipante({
     }
     supabase
       .from("clubes")
-      .select(
-        "*, equipos_rivales(id, nombre_equipo, categoria_id, competicion_id, temporada_id)",
-      )
+      .select("id, nombre, ciudad, logo_url")
       .ilike("nombre", `%${query}%`)
       .limit(8)
       .then(({ data }) => setClubes(data ?? []));
@@ -350,23 +347,31 @@ function ModalParticipante({
 
   async function añadirMiEquipo() {
     setGuardando(true);
-    await supabase.from("participantes_competicion").insert({
-      competicion_id: equipo.competicion_id,
-      temporada_id: temporada.id, // ✅ corregido
+    const nombreEquipo = equipo.sponsor
+      ? `${equipo.sponsor} CB Jaca`
+      : (equipo.categorias?.nombre ?? "CB Jaca");
+    const { data: miClub } = await supabase
+      .from("clubes")
+      .select("id")
+      .eq("es_mi_club", true)
+      .single();
+    await supabase.from("participantes").insert({
       fase_id: faseId,
+      club_id: miClub.id,
       equipo_id: equipo.id,
+      nombre_equipo: nombreEquipo,
     });
     setGuardando(false);
     onGuardado();
   }
 
-  async function añadirRival(equipoRival) {
+  async function añadirClub(club) {
     setGuardando(true);
-    await supabase.from("participantes_competicion").insert({
-      competicion_id: equipo.competicion_id,
-      temporada_id: temporada.id,
+    await supabase.from("participantes").insert({
       fase_id: faseId,
-      equipo_rival_id: equipoRival.id,
+      club_id: club.id,
+      equipo_id: null,
+      nombre_equipo: club.nombre,
     });
     setGuardando(false);
     onGuardado();
@@ -375,31 +380,11 @@ function ModalParticipante({
     setDropdownPos(null);
   }
 
-  async function crearYAñadirRival(club) {
-    // Crea un nuevo equipo_rival para este club en esta competición y temporada
-    setGuardando(true);
-    const { data: nuevoEquipo, error } = await supabase
-      .from("equipos_rivales")
-      .insert({
-        club_id: club.id,
-        categoria_id: equipo.categoria_id,
-        competicion_id: equipo.competicion_id,
-        temporada_id: temporada.id,
-        // nombre_equipo null → el trigger lo rellena con el nombre del club
-      })
-      .select()
-      .single();
-    if (!error && nuevoEquipo) {
-      await añadirRival(nuevoEquipo);
-    }
-    setGuardando(false);
-  }
-
   const yaEstaMiEquipo = participantesExistentes.some(
     (p) => p.equipo_id === equipo.id,
   );
-  const idsRivalesExistentes = new Set(
-    participantesExistentes.map((p) => p.equipo_rival_id).filter(Boolean),
+  const clubIdsExistentes = new Set(
+    participantesExistentes.map((p) => p.club_id).filter(Boolean),
   );
 
   return (
@@ -449,7 +434,7 @@ function ModalParticipante({
           </div>
         )}
 
-        {/* Buscar rival */}
+        {/* Buscar club */}
         <div style={S.field}>
           <span style={S.label}>Buscar club rival</span>
           <div style={{ position: "relative" }}>
@@ -478,86 +463,35 @@ function ModalParticipante({
                 }}
               >
                 {clubes.map((c) => {
-                  // Filtrar por categoría + competición + temporada para distinguir equipos de distintos años
-                  const equiposExactos = (c.equipos_rivales ?? []).filter(
-                    (er) =>
-                      er.categoria_id === equipo.categoria_id &&
-                      er.competicion_id === equipo.competicion_id &&
-                      er.temporada_id === temporada.id &&
-                      !idsRivalesExistentes.has(er.id),
-                  );
-                  // Fallback: equipos del club en esta categoría sin competicion/temporada (datos históricos)
-                  const equiposFallback = (c.equipos_rivales ?? []).filter(
-                    (er) =>
-                      er.categoria_id === equipo.categoria_id &&
-                      !er.competicion_id &&
-                      !er.temporada_id &&
-                      !idsRivalesExistentes.has(er.id),
-                  );
-                  const equiposCategoria =
-                    equiposExactos.length > 0
-                      ? equiposExactos
-                      : equiposFallback;
-
-                  if (equiposCategoria.length === 0)
-                    return (
-                      <div
-                        key={c.id}
-                        style={{
-                          padding: "10px 14px",
-                          fontSize: "12px",
-                          color: "var(--muted)",
-                          borderBottom: "0.5px solid var(--borde)",
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                        }}
-                      >
-                        <span>
-                          {c.nombre} — sin equipo en esta temporada/competición
-                        </span>
-                        <button
-                          onClick={() => crearYAñadirRival(c)}
-                          style={{
-                            fontSize: "11px",
-                            fontWeight: 700,
-                            color: "var(--naranja, #F97316)",
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: "0",
-                          }}
-                        >
-                          + Crear equipo
-                        </button>
-                      </div>
-                    );
-                  return equiposCategoria.map((er) => (
+                  const yaExiste = clubIdsExistentes.has(c.id);
+                  return (
                     <div
-                      key={er.id}
-                      onClick={() => añadirRival(er)}
+                      key={c.id}
+                      onClick={() => !yaExiste && añadirClub(c)}
                       style={{
                         padding: "10px 14px",
-                        cursor: "pointer",
+                        cursor: yaExiste ? "default" : "pointer",
                         fontSize: "13px",
                         borderBottom: "0.5px solid var(--borde)",
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
+                        opacity: yaExiste ? 0.4 : 1,
                       }}
                       onMouseEnter={(e) =>
+                        !yaExiste &&
                         (e.currentTarget.style.background = "var(--fondo)")
                       }
                       onMouseLeave={(e) =>
                         (e.currentTarget.style.background = "transparent")
                       }
                     >
-                      <span>{er.nombre_equipo ?? c.nombre}</span>
+                      <span>{c.nombre}</span>
                       <span style={{ fontSize: "11px", color: "var(--muted)" }}>
-                        {c.ciudad}
+                        {yaExiste ? "Ya añadido" : c.ciudad}
                       </span>
                     </div>
-                  ));
+                  );
                 })}
               </div>
             )}
@@ -603,9 +537,7 @@ function TablaClasificacion({
       const esMiEquipo = p.equipo_id === equipo.id;
       const nombre = esMiEquipo
         ? (equipo.sponsor ?? equipo.categorias?.nombre ?? "Mi equipo")
-        : (p.equipos_rivales?.nombre_equipo ??
-          p.equipos_rivales?.clubes?.nombre ??
-          "–");
+        : (p.nombre_equipo ?? p.clubes?.nombre ?? "–");
       return { participante: p, cls, nombre, esMiEquipo };
     })
     .sort((a, b) => (a.cls?.posicion ?? 999) - (b.cls?.posicion ?? 999));
@@ -624,13 +556,10 @@ function TablaClasificacion({
 
   async function guardarEdicion(fila) {
     setGuardando(true);
-
     const posicion =
       valoresEdit.posicion !== "" ? parseInt(valoresEdit.posicion) : null;
     if (posicion !== null && posicion > participantes.length) {
-      alert(
-        `La posición no puede ser mayor que ${participantes.length} (número de equipos en esta fase)`,
-      );
+      alert(`La posición no puede ser mayor que ${participantes.length}`);
       setGuardando(false);
       return;
     }
@@ -639,25 +568,22 @@ function TablaClasificacion({
       setGuardando(false);
       return;
     }
-
     const posicionOcupada = clasificacion.find(
       (c) =>
         c.posicion === posicion && c.participante_id !== fila.participante.id,
     );
     if (posicionOcupada) {
-      const equipoConflicto =
+      const nombre =
         filas.find((f) => f.participante.id === posicionOcupada.participante_id)
           ?.nombre ?? "otro equipo";
-      alert(`La posición ${posicion} ya está ocupada por ${equipoConflicto}`);
+      alert(`La posición ${posicion} ya está ocupada por ${nombre}`);
       setGuardando(false);
       return;
     }
-
     const payload = {
       participante_id: fila.participante.id,
       fase_id: fase.id,
-      posicion:
-        valoresEdit.posicion !== "" ? parseInt(valoresEdit.posicion) : null,
+      posicion,
       partidos_jugados: parseInt(valoresEdit.partidos_jugados) || 0,
       victorias: parseInt(valoresEdit.victorias) || 0,
       derrotas: parseInt(valoresEdit.derrotas) || 0,
@@ -680,10 +606,7 @@ function TablaClasificacion({
   async function eliminarParticipante(participanteId, clsId) {
     if (!confirm("¿Quitar este equipo de la fase?")) return;
     if (clsId) await supabase.from("clasificacion").delete().eq("id", clsId);
-    await supabase
-      .from("participantes_competicion")
-      .delete()
-      .eq("id", participanteId);
+    await supabase.from("participantes").delete().eq("id", participanteId);
     onCambio();
   }
 
@@ -793,17 +716,9 @@ function TablaClasificacion({
                   )}
                 </td>
                 <td style={{ padding: "10px 10px" }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                    }}
-                  >
-                    <span style={{ fontWeight: fila.esMiEquipo ? 700 : 500 }}>
-                      {fila.nombre}
-                    </span>
-                  </div>
+                  <span style={{ fontWeight: fila.esMiEquipo ? 700 : 500 }}>
+                    {fila.nombre}
+                  </span>
                 </td>
                 {enEdicion ? (
                   <>
@@ -974,9 +889,7 @@ export default function AdminClasificacion({ supabase, equipo, temporada }) {
       .order("orden", { ascending: true });
     const fasesData = data ?? [];
     setFases(fasesData);
-
     if (fasesData.length > 0) {
-      // Si hay fase activa y existe aún, la mantenemos; si no, la primera
       const nuevaActiva =
         mantenerFaseActiva && faseActiva
           ? (fasesData.find((f) => f.id === faseActiva.id) ?? fasesData[0])
@@ -994,8 +907,8 @@ export default function AdminClasificacion({ supabase, equipo, temporada }) {
   async function cargarFase(faseId) {
     const [{ data: parts }, { data: cls }] = await Promise.all([
       supabase
-        .from("participantes_competicion")
-        .select(`*, equipos_rivales(id, nombre_equipo, clubes(nombre, ciudad))`)
+        .from("participantes")
+        .select("*, clubes(nombre, ciudad, logo_url)")
         .eq("fase_id", faseId),
       supabase.from("clasificacion").select("*").eq("fase_id", faseId),
     ]);
@@ -1017,7 +930,6 @@ export default function AdminClasificacion({ supabase, equipo, temporada }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      {/* Cabecera */}
       <div
         style={{
           display: "flex",
@@ -1051,7 +963,6 @@ export default function AdminClasificacion({ supabase, equipo, temporada }) {
         </button>
       </div>
 
-      {/* Sin fases */}
       {!cargando && fases.length === 0 ? (
         <div
           style={{
@@ -1076,7 +987,6 @@ export default function AdminClasificacion({ supabase, equipo, temporada }) {
         </div>
       ) : (
         <>
-          {/* Pestañas */}
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
             {Object.entries(niveles).map(([orden, fasesNivel]) => (
               <div
@@ -1130,7 +1040,6 @@ export default function AdminClasificacion({ supabase, equipo, temporada }) {
             ))}
           </div>
 
-          {/* Tabla de la fase activa */}
           {faseActiva && (
             <div style={S.card}>
               <div
@@ -1163,7 +1072,6 @@ export default function AdminClasificacion({ supabase, equipo, temporada }) {
                   + Añadir equipo
                 </button>
               </div>
-
               {cargando ? (
                 <div
                   style={{
@@ -1189,21 +1097,17 @@ export default function AdminClasificacion({ supabase, equipo, temporada }) {
         </>
       )}
 
-      {/* Modal fases */}
       {modalFases && (
         <ModalFases
           supabase={supabase}
           equipo={equipo}
           temporada={temporada}
           fases={fases}
-          onCambio={() => {
-            cargarFases(true);
-          }}
+          onCambio={() => cargarFases(true)}
           onCerrar={() => setModalFases(false)}
         />
       )}
 
-      {/* Modal participante */}
       {modalParticipante && faseActiva && (
         <ModalParticipante
           supabase={supabase}

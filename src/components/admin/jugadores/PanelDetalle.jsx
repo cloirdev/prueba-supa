@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import "./AdminJugadores.css";
-import PanelDetalle from "./PanelDetalle.jsx";
 import FormNuevoJugador from "./FormNuevoJugador.jsx";
 
 const POSICIONES = ["Base", "Escolta", "Alero", "Ala-Pívot", "Pívot"];

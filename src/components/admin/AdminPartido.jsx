@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import FormPartido from "./FormPartido.jsx";
 
-// ── Helpers globales ───────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────
 function minutosASegundos(val) {
   const str = String(val ?? "0");
   if (str.includes(":")) {
@@ -17,19 +17,18 @@ function segundosADisplay(totalSegs) {
   return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
 }
 
-// ── Función de valoración reutilizable ────────────────────────────────────
 function calcularValoracion(s) {
+  const tcAn =
+    parseInt(s.tiros_campo_anotados ?? 0) + parseInt(s.triples_anotados ?? 0);
+  const tcInt =
+    parseInt(s.tiros_campo_intentados ?? 0) +
+    parseInt(s.triples_intentados ?? 0);
   const pts =
     parseInt(s.tiros_libres_anotados ?? 0) * 1 +
     parseInt(s.tiros_campo_anotados ?? 0) * 2 +
     parseInt(s.triples_anotados ?? 0) * 3;
   const rt =
     parseInt(s.rebotes_ofensivos ?? 0) + parseInt(s.rebotes_defensivos ?? 0);
-  const tcAn =
-    parseInt(s.tiros_campo_anotados ?? 0) + parseInt(s.triples_anotados ?? 0);
-  const tcInt =
-    parseInt(s.tiros_campo_intentados ?? 0) +
-    parseInt(s.triples_intentados ?? 0);
   return (
     pts +
     rt +
@@ -45,266 +44,313 @@ function calcularValoracion(s) {
   );
 }
 
-// ── FilaJugador — FUERA del componente padre para evitar pérdida de foco ──
+// Resuelve el nombre de un participante: nombre_equipo manual ?? nombre del club
+function nombreParticipante(p) {
+  if (!p) return "—";
+  return p.nombre_equipo ?? p.clubes?.nombre ?? "—";
+}
+
+// ── Celda clicable simple ──────────────────────────────────────────────────
+function Celda({ value, onInc, onDec, color }) {
+  function handleContextMenu(e) {
+    e.preventDefault();
+    onDec();
+  }
+  return (
+    <td
+      onClick={onInc}
+      onContextMenu={handleContextMenu}
+      style={{
+        padding: "0",
+        textAlign: "center",
+        cursor: "pointer",
+        userSelect: "none",
+      }}
+    >
+      <div
+        style={{
+          padding: "10px 8px",
+          fontSize: "13px",
+          fontWeight: 700,
+          color: color ?? "var(--texto)",
+          borderRadius: "4px",
+          transition: "background .08s",
+        }}
+        onMouseEnter={(e) =>
+          (e.currentTarget.style.background =
+            "var(--color-background-secondary)")
+        }
+        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+      >
+        {value ?? 0}
+      </div>
+    </td>
+  );
+}
+
+// ── Celda de tiro: mitad izq = anotados, mitad der = intentados ─────────
+function CeldaTiro({ an, int_, onIncAn, onDecAn, onIncInt, onDecInt }) {
+  function getZone(e) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return e.clientX < rect.left + rect.width / 2 ? "an" : "int";
+  }
+  function handleClick(e) {
+    getZone(e) === "an" ? onIncAn() : onIncInt();
+  }
+  function handleContextMenu(e) {
+    e.preventDefault();
+    getZone(e) === "an" ? onDecAn() : onDecInt();
+  }
+  return (
+    <td
+      onClick={handleClick}
+      onContextMenu={handleContextMenu}
+      style={{
+        padding: "0",
+        textAlign: "center",
+        cursor: "pointer",
+        userSelect: "none",
+      }}
+    >
+      <div
+        style={{
+          padding: "10px 8px",
+          borderRadius: "4px",
+          transition: "background .08s",
+          whiteSpace: "nowrap",
+        }}
+        onMouseEnter={(e) =>
+          (e.currentTarget.style.background =
+            "var(--color-background-secondary)")
+        }
+        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+      >
+        <span
+          style={{ fontSize: "13px", fontWeight: 700, color: "var(--texto)" }}
+        >
+          {an}
+        </span>
+        <span
+          style={{ fontSize: "11px", color: "var(--borde)", margin: "0 2px" }}
+        >
+          /
+        </span>
+        <span
+          style={{ fontSize: "13px", fontWeight: 600, color: "var(--muted)" }}
+        >
+          {int_}
+        </span>
+      </div>
+    </td>
+  );
+}
+
+// ── Celda calculada (solo lectura) ────────────────────────────────────────
+function CeldaCalc({ value, color }) {
+  return (
+    <td
+      style={{
+        padding: "10px 8px",
+        textAlign: "center",
+        fontSize: "13px",
+        fontWeight: 800,
+        color: color ?? "var(--texto)",
+      }}
+    >
+      {value}
+    </td>
+  );
+}
+
+// ── FilaJugador ────────────────────────────────────────────────────────────
 function FilaJugador({ c, stats, setStats, toggleConvocado }) {
   const s = stats[c.jugadores.id] ?? {};
   const esTitular = s.titular ?? false;
 
-  // Puntos calculados automáticamente
   const ptsTotal =
-    parseInt(s.tiros_libres_anotados ?? 0) * 1 +
+    parseInt(s.tiros_libres_anotados ?? 0) +
     parseInt(s.tiros_campo_anotados ?? 0) * 2 +
     parseInt(s.triples_anotados ?? 0) * 3;
-
-  // FG total (T2 + triples)
-  const tcAnotados =
-    parseInt(s.tiros_campo_anotados ?? 0) + parseInt(s.triples_anotados ?? 0);
-  const tcIntentados =
-    parseInt(s.tiros_campo_intentados ?? 0) +
-    parseInt(s.triples_intentados ?? 0);
-
-  // Rebotes totales
   const rt =
     parseInt(s.rebotes_ofensivos ?? 0) + parseInt(s.rebotes_defensivos ?? 0);
-
-  // Valoración
   const val = calcularValoracion(s);
+  const masMenos = parseInt(s.mas_menos ?? 0);
 
-  function update(campo, val) {
+  function update(campo, v) {
     setStats((prev) => ({
       ...prev,
-      [c.jugadores.id]: { ...prev[c.jugadores.id], [campo]: val },
+      [c.jugadores.id]: { ...prev[c.jugadores.id], [campo]: v },
     }));
   }
-
-  const inputBase = {
-    padding: "4px",
-    borderRadius: "4px",
-    border: "none",
-    borderBottom: "1px solid var(--borde)",
-    background: "transparent",
-    color: "var(--texto)",
-    fontSize: "13px",
-    textAlign: "center",
-  };
-
-  const celda = (campo, width = "38px") => (
-    <td style={{ padding: "6px 8px", textAlign: "center" }}>
-      <input
-        type="text"
-        inputMode="numeric"
-        value={s[campo] ?? ""}
-        onChange={(e) => update(campo, e.target.value.replace(/[^0-9-]/g, ""))}
-        style={{ ...inputBase, width }}
-      />
-    </td>
-  );
-
-  const celdaMinutos = () => (
-    <td style={{ padding: "6px 8px", textAlign: "center" }}>
-      <input
-        type="text"
-        inputMode="numeric"
-        placeholder="00:00"
-        value={s.minutos ?? ""}
-        onChange={(e) => {
-          const val = e.target.value.replace(/[^0-9:]/g, "").slice(0, 5);
-          update("minutos", val);
-        }}
-        onBlur={(e) => {
-          const raw = e.target.value;
-          if (!raw) return;
-          let normalizado;
-          if (!raw.includes(":")) {
-            const mins = parseInt(raw) || 0;
-            normalizado = `${String(mins).padStart(2, "0")}:00`;
-          } else {
-            const [mm, ss] = raw.split(":");
-            const mins = parseInt(mm) || 0;
-            const secs = Math.min(parseInt(ss) || 0, 59);
-            normalizado = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-          }
-          update("minutos", normalizado);
-        }}
-        style={{ ...inputBase, width: "48px", fontFamily: "monospace" }}
-      />
-    </td>
-  );
-
-  const celdaTiro = (an, int_) => (
-    <td style={{ padding: "6px 8px", textAlign: "center" }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "1px",
-          justifyContent: "center",
-        }}
-      >
-        {[an, int_].map((campo, i) => (
-          <span key={campo} style={{ display: "flex", alignItems: "center" }}>
-            {i === 1 && (
-              <span
-                style={{
-                  color: "var(--muted)",
-                  fontSize: "12px",
-                  margin: "0 1px",
-                }}
-              >
-                -
-              </span>
-            )}
-            <input
-              type="text"
-              inputMode="numeric"
-              value={s[campo] ?? ""}
-              onChange={(e) =>
-                update(campo, e.target.value.replace(/[^0-9]/g, ""))
-              }
-              style={{ ...inputBase, width: "26px", padding: "4px 2px" }}
-            />
-          </span>
-        ))}
-      </div>
-    </td>
-  );
-
-  // FG calculado — solo lectura
-  const celdaTCCalc = () => (
-    <td style={{ padding: "6px 8px", textAlign: "center" }}>
-      <div
-        style={{
-          fontSize: "13px",
-          fontWeight: 700,
-          color: "var(--muted)",
-          fontFamily: "monospace",
-          letterSpacing: "0.02em",
-        }}
-      >
-        {tcAnotados}-{tcIntentados}
-      </div>
-    </td>
-  );
-
-  // PTS calculado — solo lectura
-  const celdaPuntos = () => (
-    <td
-      style={{
-        padding: "6px 8px",
-        textAlign: "center",
-        fontWeight: 800,
-        fontSize: "14px",
-        color: "var(--texto)",
-      }}
-    >
-      {ptsTotal || "0"}
-    </td>
-  );
-
-  // VAL calculado — solo lectura, con color
-  const celdaVal = () => (
-    <td
-      style={{
-        padding: "6px 8px",
-        textAlign: "center",
-        fontWeight: 800,
-        fontSize: "13px",
-        color: val > 0 ? "#0baa3b" : val < 0 ? "#ef4444" : "var(--muted)",
-      }}
-    >
-      {val > 0 ? `+${val}` : val}
-    </td>
-  );
+  function inc(campo, min = 0) {
+    update(campo, Math.max(min, parseInt(s[campo] ?? 0) + 1));
+  }
+  function dec(campo, min = 0) {
+    update(campo, Math.max(min, parseInt(s[campo] ?? 0) - 1));
+  }
 
   return (
-    <tr style={{ borderBottom: "0.5px solid var(--borde)" }}>
-      {/* Nombre + titular */}
-      <td style={{ padding: "10px 8px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <div
+    <tr
+      style={{
+        borderBottom: "1px solid var(--borde)",
+        background: esTitular ? "rgba(242,130,65,.03)" : "transparent",
+      }}
+    >
+      {/* Nombre */}
+      <td style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <button
             onClick={() => update("titular", !esTitular)}
+            title={esTitular ? "Quitar titular" : "Marcar titular"}
             style={{
-              width: "28px",
-              height: "28px",
+              width: "26px",
+              height: "26px",
               borderRadius: "50%",
+              flexShrink: 0,
               background: esTitular ? "#1e3a5f" : "transparent",
               border: esTitular ? "none" : "1px solid var(--borde)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "11px",
+              color: esTitular ? "var(--naranja)" : "var(--muted)",
               fontWeight: 800,
-              color: esTitular ? "#F97316" : "var(--muted)",
-              flexShrink: 0,
+              fontSize: "11px",
               cursor: "pointer",
             }}
           >
             {c.dorsal}
-          </div>
+          </button>
           <div>
-            <span style={{ fontWeight: 700, fontSize: "13px" }}>
+            <div style={{ fontSize: "13px", fontWeight: 700 }}>
               {c.jugadores.nombre[0]}. {c.jugadores.apellido}
-            </span>
-            <span
-              style={{
-                fontSize: "10px",
-                color: "var(--muted)",
-                marginLeft: "6px",
-              }}
-            >
-              {c.jugadores.posicion?.[0]}
-            </span>
+            </div>
+            <div style={{ fontSize: "10px", color: "var(--muted)" }}>
+              {c.jugadores.posicion ?? "—"}
+            </div>
           </div>
         </div>
       </td>
-      {celdaMinutos()}
-      {celdaPuntos()}
-      {celdaTCCalc()}
-      {celdaTiro("tiros_campo_anotados", "tiros_campo_intentados")}
-      {celdaTiro("triples_anotados", "triples_intentados")}
-      {celdaTiro("tiros_libres_anotados", "tiros_libres_intentados")}
-      {celda("rebotes_ofensivos", "36px")}
-      {celda("rebotes_defensivos", "36px")}
-      <td
-        style={{
-          padding: "6px 8px",
-          textAlign: "center",
-          fontWeight: 700,
-          fontSize: "13px",
-        }}
-      >
-        {rt || "0"}
-      </td>
-      {celda("asistencias", "36px")}
-      {celda("robos", "36px")}
-      {celda("perdidas", "36px")}
-      {celda("tapones", "36px")}
-      {celda("faltas_cometidas", "36px")}
-      {celda("faltas_recibidas", "36px")}
-      {celdaVal()}
-      {/* +/- */}
-      <td style={{ padding: "6px 8px", textAlign: "center" }}>
+
+      {/* MIN */}
+      <td style={{ padding: "6px", textAlign: "center" }}>
         <input
           type="text"
           inputMode="numeric"
-          value={s.mas_menos ?? ""}
+          placeholder="00:00"
+          value={s.minutos ?? ""}
           onChange={(e) =>
-            update("mas_menos", e.target.value.replace(/[^0-9-]/g, ""))
+            update(
+              "minutos",
+              e.target.value.replace(/[^0-9:]/g, "").slice(0, 5),
+            )
           }
+          onBlur={(e) => {
+            const raw = e.target.value;
+            if (!raw) return;
+            let norm;
+            if (!raw.includes(":")) {
+              norm = `${String(parseInt(raw) || 0).padStart(2, "0")}:00`;
+            } else {
+              const [mm, ss] = raw.split(":");
+              norm = `${String(parseInt(mm) || 0).padStart(2, "0")}:${String(Math.min(parseInt(ss) || 0, 59)).padStart(2, "0")}`;
+            }
+            update("minutos", norm);
+          }}
           style={{
-            ...inputBase,
-            width: "36px",
+            width: "46px",
+            padding: "5px 4px",
+            borderRadius: "5px",
+            border: "1px solid var(--borde)",
+            background: "var(--fondo)",
+            color: "var(--texto)",
+            fontSize: "12px",
             fontWeight: 700,
-            color:
-              parseInt(s.mas_menos ?? 0) > 0
-                ? "#0baa3b"
-                : parseInt(s.mas_menos ?? 0) < 0
-                  ? "#ef4444"
-                  : "var(--muted)",
+            fontFamily: "monospace",
+            textAlign: "center",
           }}
         />
       </td>
-      {/* Botón quitar */}
+
+      <CeldaCalc
+        value={ptsTotal}
+        color={ptsTotal > 0 ? "var(--naranja)" : "var(--muted)"}
+      />
+      <CeldaTiro
+        an={parseInt(s.tiros_campo_anotados ?? 0)}
+        int_={parseInt(s.tiros_campo_intentados ?? 0)}
+        onIncAn={() => inc("tiros_campo_anotados")}
+        onDecAn={() => dec("tiros_campo_anotados")}
+        onIncInt={() => inc("tiros_campo_intentados")}
+        onDecInt={() => dec("tiros_campo_intentados")}
+      />
+      <CeldaTiro
+        an={parseInt(s.triples_anotados ?? 0)}
+        int_={parseInt(s.triples_intentados ?? 0)}
+        onIncAn={() => inc("triples_anotados")}
+        onDecAn={() => dec("triples_anotados")}
+        onIncInt={() => inc("triples_intentados")}
+        onDecInt={() => dec("triples_intentados")}
+      />
+      <CeldaTiro
+        an={parseInt(s.tiros_libres_anotados ?? 0)}
+        int_={parseInt(s.tiros_libres_intentados ?? 0)}
+        onIncAn={() => inc("tiros_libres_anotados")}
+        onDecAn={() => dec("tiros_libres_anotados")}
+        onIncInt={() => inc("tiros_libres_intentados")}
+        onDecInt={() => dec("tiros_libres_intentados")}
+      />
+      <Celda
+        value={parseInt(s.rebotes_ofensivos ?? 0)}
+        onInc={() => inc("rebotes_ofensivos")}
+        onDec={() => dec("rebotes_ofensivos")}
+      />
+      <Celda
+        value={parseInt(s.rebotes_defensivos ?? 0)}
+        onInc={() => inc("rebotes_defensivos")}
+        onDec={() => dec("rebotes_defensivos")}
+      />
+      <CeldaCalc value={rt} color={rt > 0 ? "var(--azul)" : "var(--muted)"} />
+      <Celda
+        value={parseInt(s.asistencias ?? 0)}
+        onInc={() => inc("asistencias")}
+        onDec={() => dec("asistencias")}
+      />
+      <Celda
+        value={parseInt(s.robos ?? 0)}
+        onInc={() => inc("robos")}
+        onDec={() => dec("robos")}
+      />
+      <Celda
+        value={parseInt(s.perdidas ?? 0)}
+        onInc={() => inc("perdidas")}
+        onDec={() => dec("perdidas")}
+        color="var(--muted)"
+      />
+      <Celda
+        value={parseInt(s.tapones ?? 0)}
+        onInc={() => inc("tapones")}
+        onDec={() => dec("tapones")}
+      />
+      <Celda
+        value={parseInt(s.faltas_cometidas ?? 0)}
+        onInc={() => inc("faltas_cometidas")}
+        onDec={() => dec("faltas_cometidas")}
+        color="var(--muted)"
+      />
+      <Celda
+        value={parseInt(s.faltas_recibidas ?? 0)}
+        onInc={() => inc("faltas_recibidas")}
+        onDec={() => dec("faltas_recibidas")}
+      />
+      <CeldaCalc
+        value={val > 0 ? `+${val}` : val}
+        color={val > 0 ? "#0baa3b" : val < 0 ? "#ef4444" : "var(--muted)"}
+      />
+      <Celda
+        value={masMenos > 0 ? `+${masMenos}` : masMenos}
+        onInc={() => update("mas_menos", masMenos + 1)}
+        onDec={() => update("mas_menos", masMenos - 1)}
+        color={
+          masMenos > 0 ? "#0baa3b" : masMenos < 0 ? "#ef4444" : "var(--muted)"
+        }
+      />
       <td style={{ padding: "6px 8px", textAlign: "center" }}>
         <button
           onClick={() => toggleConvocado(c.jugadores.id)}
@@ -312,7 +358,7 @@ function FilaJugador({ c, stats, setStats, toggleConvocado }) {
             background: "transparent",
             border: "1px solid var(--borde)",
             borderRadius: "6px",
-            padding: "3px 8px",
+            padding: "3px 7px",
             cursor: "pointer",
             fontSize: "11px",
             color: "var(--muted)",
@@ -325,74 +371,76 @@ function FilaJugador({ c, stats, setStats, toggleConvocado }) {
   );
 }
 
-// ── FilaTotales — también fuera ────────────────────────────────────────────
+// ── Fila de totales ────────────────────────────────────────────────────────
 function FilaTotales({ lista, stats }) {
   const sum = (campo) =>
     lista.reduce(
       (a, c) => a + parseInt(stats[c.jugadores.id]?.[campo] ?? 0),
       0,
     );
-
-  const sumMinutos = () => {
-    const totalSegs = lista.reduce((a, c) => {
-      return a + minutosASegundos(stats[c.jugadores.id]?.minutos ?? "0");
-    }, 0);
-    return segundosADisplay(totalSegs);
-  };
-
-  const sumPuntos = () =>
+  const sumPts = () =>
     lista.reduce((a, c) => {
       const s = stats[c.jugadores.id] ?? {};
       return (
         a +
-        parseInt(s.tiros_libres_anotados ?? 0) * 1 +
+        parseInt(s.tiros_libres_anotados ?? 0) +
         parseInt(s.tiros_campo_anotados ?? 0) * 2 +
         parseInt(s.triples_anotados ?? 0) * 3
       );
     }, 0);
-
   const sumVal = () =>
     lista.reduce(
       (a, c) => a + calcularValoracion(stats[c.jugadores.id] ?? {}),
       0,
     );
+  const sumMin = () =>
+    segundosADisplay(
+      lista.reduce(
+        (a, c) => a + minutosASegundos(stats[c.jugadores.id]?.minutos ?? "0"),
+        0,
+      ),
+    );
 
   const st = {
-    padding: "8px",
+    padding: "8px 8px",
     textAlign: "center",
-    fontWeight: 700,
     fontSize: "12px",
+    fontWeight: 700,
     color: "var(--muted)",
+    background: "var(--color-background-secondary)",
   };
-
-  const valTotal = sumVal();
+  const tv = sumVal();
 
   return (
-    <tr
-      style={{
-        borderBottom: "2px solid var(--texto)",
-        background: "var(--fondo)",
-      }}
-    >
-      <td style={{ padding: "8px" }} />
-      <td style={{ ...st, fontFamily: "monospace" }}>{sumMinutos()}</td>
-      <td style={st}>{sumPuntos()}</td>
+    <tr style={{ borderTop: "1.5px solid var(--borde)" }}>
+      <td
+        style={{
+          ...st,
+          textAlign: "left",
+          padding: "8px 10px",
+          fontSize: "10px",
+          letterSpacing: ".06em",
+          textTransform: "uppercase",
+        }}
+      >
+        TOTAL
+      </td>
+      <td style={{ ...st, fontFamily: "monospace" }}>{sumMin()}</td>
+      <td style={{ ...st, color: "var(--naranja)" }}>{sumPts()}</td>
       <td style={st}>
-        {sum("tiros_campo_anotados") + sum("triples_anotados")}-
-        {sum("tiros_campo_intentados") + sum("triples_intentados")}
+        {sum("tiros_campo_anotados")}/{sum("tiros_campo_intentados")}
       </td>
       <td style={st}>
-        {sum("tiros_campo_anotados")}-{sum("tiros_campo_intentados")}
+        {sum("triples_anotados")}/{sum("triples_intentados")}
       </td>
       <td style={st}>
-        {sum("triples_anotados")}-{sum("triples_intentados")}
-      </td>
-      <td style={st}>
-        {sum("tiros_libres_anotados")}-{sum("tiros_libres_intentados")}
+        {sum("tiros_libres_anotados")}/{sum("tiros_libres_intentados")}
       </td>
       <td style={st}>{sum("rebotes_ofensivos")}</td>
       <td style={st}>{sum("rebotes_defensivos")}</td>
-      <td style={st}>{sum("rebotes_ofensivos") + sum("rebotes_defensivos")}</td>
+      <td style={{ ...st, color: "var(--azul)" }}>
+        {sum("rebotes_ofensivos") + sum("rebotes_defensivos")}
+      </td>
       <td style={st}>{sum("asistencias")}</td>
       <td style={st}>{sum("robos")}</td>
       <td style={st}>{sum("perdidas")}</td>
@@ -402,85 +450,76 @@ function FilaTotales({ lista, stats }) {
       <td
         style={{
           ...st,
-          color:
-            valTotal > 0
-              ? "#0baa3b"
-              : valTotal < 0
-                ? "#ef4444"
-                : "var(--muted)",
+          color: tv > 0 ? "#0baa3b" : tv < 0 ? "#ef4444" : "var(--muted)",
         }}
       >
-        {valTotal > 0 ? `+${valTotal}` : valTotal}
+        {tv > 0 ? `+${tv}` : tv}
       </td>
-      <td />
-      <td />
+      <td style={st} />
+      <td style={st} />
     </tr>
   );
 }
 
-// ── CabeceraSeccion — también fuera ───────────────────────────────────────
+// ── Cabecera de sección ────────────────────────────────────────────────────
 const HEADERS = [
   "MIN",
   "PTS",
-  "FG",
   "T2",
   "3PT",
-  "FT",
+  "TL",
   "OREB",
   "DREB",
   "REB",
   "AST",
-  "STL",
+  "ROB",
   "PER",
-  "BLK",
-  "PF",
+  "TAP",
+  "FC",
   "FR",
   "VAL",
-  "+/-",
+  "+/−",
   "",
 ];
 
 function CabeceraSeccion({ titulo }) {
+  const thSt = {
+    padding: "6px 8px",
+    fontSize: "10px",
+    fontWeight: 700,
+    color: "var(--muted)",
+    textAlign: "center",
+    whiteSpace: "nowrap",
+    letterSpacing: ".06em",
+  };
   return (
     <>
       <tr>
         <td
-          colSpan={17}
+          colSpan={HEADERS.length + 1}
           style={{
-            padding: "16px 8px 6px",
+            padding: "16px 10px 4px",
+            fontSize: "10px",
             fontWeight: 800,
-            fontSize: "11px",
             letterSpacing: ".1em",
-            color: "var(--texto)",
-            borderBottom: "2px solid var(--texto)",
+            color: "var(--naranja)",
+            textTransform: "uppercase",
           }}
         >
           {titulo}
         </td>
       </tr>
-      <tr style={{ borderBottom: "0.5px solid var(--borde)" }}>
+      <tr style={{ borderBottom: "1.5px solid var(--borde)" }}>
         <th
           style={{
+            ...thSt,
             textAlign: "left",
-            padding: "8px",
-            fontSize: "11px",
-            fontWeight: 700,
-            color: "var(--muted)",
             minWidth: "160px",
+            padding: "6px 10px",
           }}
         />
         {HEADERS.map((h) => (
-          <th
-            key={h}
-            style={{
-              padding: "8px",
-              fontSize: "11px",
-              fontWeight: 700,
-              color: "var(--muted)",
-              textAlign: "center",
-              whiteSpace: "nowrap",
-            }}
-          >
+          <th key={h} style={thSt}>
             {h}
           </th>
         ))}
@@ -496,10 +535,37 @@ export default function AdminPartido({
   equipo,
   temporada,
   partido,
-  rivales = [],
+  // participantes: lista completa de participantes de la fase/temporada
+  // (se usa para el selector de rival en "editar partido")
+  participantes = [],
+  clubes = [],
+  fases = [],
   onBack,
 }) {
   const [seccion, setSeccion] = useState("resultado");
+
+  // Participante rival: local o visitante según es_local
+  const participanteRival = partido.es_local
+    ? partido.participante_visitante
+    : partido.participante_local;
+
+  // Para amistosos sin participante, fallback al club_rival (si existe)
+  const nombreRivalPartido =
+    nombreParticipante(participanteRival) ??
+    partido.clubes_rival?.nombre ??
+    partido.rival ??
+    "Rival";
+
+  const nombreEquipo =
+    equipo.sponsor ?? equipo.categorias?.nombre ?? "Nosotros";
+
+  const labelLocal = partido.es_local
+    ? `${nombreEquipo} (local)`
+    : `${nombreRivalPartido} (local)`;
+  const labelVisitante = partido.es_local
+    ? `${nombreRivalPartido} (visitante)`
+    : `${nombreEquipo} (visitante)`;
+
   const [resultado, setResultado] = useState({
     puntos_local: partido.es_local
       ? (partido.puntos_favor ?? "")
@@ -508,14 +574,16 @@ export default function AdminPartido({
       ? (partido.puntos_contra ?? "")
       : (partido.puntos_favor ?? ""),
   });
+
   const [formEditar, setFormEditar] = useState({
-    rival_id: partido.equipo_rival_id ?? "",
-    tipo:
-      partido.ronda === "Amistoso"
-        ? "amistoso"
-        : partido.ronda
-          ? "playoff"
-          : "liga",
+    // Para partidos de competición usamos participante_id (el rival)
+    participante_id: partido.es_local
+      ? (partido.participante_visitante_id ?? "")
+      : (partido.participante_local_id ?? ""),
+    // Para amistosos usamos club_rival_id
+    club_rival_id: partido.club_rival_id_nuevo ?? partido.club_rival_id ?? "",
+    fase_id: partido.fase_id ?? partido.fase_competicion_id ?? "",
+    tipo: partido.tipo === "amistoso" ? "amistoso" : (partido.tipo ?? "liga"),
     jornada: partido.jornada ?? partido.ronda ?? "",
     fecha: partido.fecha ?? "",
     es_local: partido.es_local ?? true,
@@ -535,17 +603,6 @@ export default function AdminPartido({
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(true);
-
-  const nombreEquipo =
-    equipo.sponsor ?? equipo.categorias?.nombre ?? "Nosotros";
-  const nombreRivalPartido =
-    partido.equipos_rivales?.nombre_equipo ?? partido.rival;
-  const labelLocal = partido.es_local
-    ? `${nombreEquipo} (local)`
-    : `${nombreRivalPartido} (local)`;
-  const labelVisitante = partido.es_local
-    ? `${nombreRivalPartido} (visitante)`
-    : `${nombreEquipo} (visitante)`;
 
   useEffect(() => {
     cargar();
@@ -585,16 +642,13 @@ export default function AdminPartido({
       statsMap[c.jugadores.id] = { convocado: true };
     });
     (statsData ?? []).forEach((s) => {
-      const segs = parseInt(s.minutos ?? 0);
-      const minDisplay = segundosADisplay(segs);
       statsMap[s.jugador_id] = {
         ...statsMap[s.jugador_id],
         ...s,
-        // Los inputs de T2 leen tiros_2_*, no tiros_campo_* (que es el FG total)
         tiros_campo_anotados: s.tiros_2_anotados ?? s.tiros_campo_anotados ?? 0,
         tiros_campo_intentados:
           s.tiros_2_intentados ?? s.tiros_campo_intentados ?? 0,
-        minutos: minDisplay,
+        minutos: segundosADisplay(parseInt(s.minutos ?? 0)),
         convocado: true,
       };
     });
@@ -628,13 +682,19 @@ export default function AdminPartido({
     setError("");
     setMsg("");
     const f = formEditar;
-    if (!f.rival_id) {
+
+    // Validaciones
+    if (f.tipo !== "amistoso" && !f.participante_id) {
       setError("Selecciona un rival");
       return;
     }
+    if (f.tipo === "amistoso" && !f.club_rival_id) {
+      setError("Selecciona un club rival");
+      return;
+    }
     if (f.tipo === "liga") {
-      const j = Number.parseInt(f.jornada, 10);
-      if (!f.jornada || Number.isNaN(j) || j < 1) {
+      const j = parseInt(f.jornada, 10);
+      if (!f.jornada || isNaN(j) || j < 1) {
         setError("La jornada debe ser un número mayor que 0");
         return;
       }
@@ -648,8 +708,6 @@ export default function AdminPartido({
       return;
     }
 
-    const rivalObj = rivales.find((r) => r.id === f.rival_id);
-    const rivalNombre = rivalObj?.nombre_equipo ?? f.rival_id;
     const pLoc = parseInt(f.puntos_local) || 0;
     const pVis = parseInt(f.puntos_visitante) || 0;
     const { puntos_favor, puntos_contra } = f.disputado
@@ -659,13 +717,33 @@ export default function AdminPartido({
         }
       : { puntos_favor: null, puntos_contra: null };
 
+    // Construir local/visitante según es_local y tipo
+    // En partidos de competición, nuestro equipo siempre tiene su participante_id propio
+    // que viene del padre. El rival es el participante seleccionado.
+    const participanteLocalId =
+      f.tipo !== "amistoso"
+        ? f.es_local
+          ? null
+          : f.participante_id // null = nuestro equipo (se resuelve en BD)
+        : null;
+    const participanteVisitanteId =
+      f.tipo !== "amistoso" ? (f.es_local ? f.participante_id : null) : null;
+
+    // Nombre del rival para el campo texto (fallback legacy)
+    const rivalObj = participantes.find((p) => p.id === f.participante_id);
+    const rivalClub = clubes.find((c) => c.id === f.club_rival_id);
+    const rivalNombre =
+      f.tipo === "amistoso"
+        ? (rivalClub?.nombre ?? "Amistoso")
+        : (nombreParticipante(rivalObj) ?? "Rival");
+
     const { error: err } = await supabase
       .from("partidos")
       .update({
-        equipo_rival_id: f.rival_id,
         rival: rivalNombre,
-        fecha: f.fecha || null,
         es_local: f.es_local,
+        fecha: f.fecha || null,
+        tipo: f.tipo,
         puntos_favor,
         puntos_contra,
         jornada: f.tipo === "liga" ? parseInt(f.jornada) || null : null,
@@ -675,6 +753,21 @@ export default function AdminPartido({
             : f.tipo !== "liga"
               ? f.jornada || null
               : null,
+        fase_competicion_id: f.fase_id || null,
+        // Participantes local/visitante (competición)
+        participante_local_id: f.es_local
+          ? partido.participante_local_id // nuestro equipo, no cambia
+          : f.tipo !== "amistoso"
+            ? f.participante_id
+            : null,
+        participante_visitante_id: f.es_local
+          ? f.tipo !== "amistoso"
+            ? f.participante_id
+            : null
+          : partido.participante_visitante_id, // nuestro equipo, no cambia
+        // Amistoso: guardar club rival
+        club_rival_id_nuevo:
+          f.tipo === "amistoso" ? f.club_rival_id || null : null,
       })
       .eq("id", partido.id);
 
@@ -708,26 +801,17 @@ export default function AdminPartido({
 
   async function guardarStats(jugadorId) {
     const s = stats[jugadorId] ?? {};
-
-    // Puntos calculados desde tiros
     const ptsTotal =
-      parseInt(s.tiros_libres_anotados ?? 0) * 1 +
+      parseInt(s.tiros_libres_anotados ?? 0) +
       parseInt(s.tiros_campo_anotados ?? 0) * 2 +
       parseInt(s.triples_anotados ?? 0) * 3;
-
-    // FG total = T2 + triples
-    const tcAnotados =
+    const tcAn =
       parseInt(s.tiros_campo_anotados ?? 0) + parseInt(s.triples_anotados ?? 0);
-    const tcIntentados =
+    const tcInt =
       parseInt(s.tiros_campo_intentados ?? 0) +
       parseInt(s.triples_intentados ?? 0);
-
-    // Rebotes totales
     const rebTotales =
       parseInt(s.rebotes_ofensivos ?? 0) + parseInt(s.rebotes_defensivos ?? 0);
-
-    // Valoración
-    const valoracion = calcularValoracion(s);
 
     const { data: existing } = await supabase
       .from("convocatorias_partido")
@@ -747,8 +831,8 @@ export default function AdminPartido({
       triples_anotados: parseInt(s.triples_anotados ?? 0),
       tiros_2_intentados: parseInt(s.tiros_campo_intentados ?? 0),
       tiros_2_anotados: parseInt(s.tiros_campo_anotados ?? 0),
-      tiros_campo_intentados: tcIntentados,
-      tiros_campo_anotados: tcAnotados,
+      tiros_campo_intentados: tcInt,
+      tiros_campo_anotados: tcAn,
       tiros_libres_intentados: parseInt(s.tiros_libres_intentados ?? 0),
       tiros_libres_anotados: parseInt(s.tiros_libres_anotados ?? 0),
       rebotes_ofensivos: parseInt(s.rebotes_ofensivos ?? 0),
@@ -761,9 +845,8 @@ export default function AdminPartido({
       faltas_cometidas: parseInt(s.faltas_cometidas ?? 0),
       faltas_recibidas: parseInt(s.faltas_recibidas ?? 0),
       mas_menos: parseInt(s.mas_menos ?? 0),
-      valoracion,
+      valoracion: calcularValoracion(s),
     };
-
     if (existing) {
       await supabase
         .from("convocatorias_partido")
@@ -800,6 +883,35 @@ export default function AdminPartido({
     await supabase.storage.from("partidos").remove([nombre]);
     await supabase.from("fotos").delete().eq("id", foto.id);
     cargar();
+  }
+
+  async function eliminarPartido() {
+    if (
+      !confirm(
+        `¿Eliminar el partido vs ${nombreRivalPartido}? Esta acción no se puede deshacer.`,
+      )
+    )
+      return;
+    setError("");
+    if (fotos.length > 0) {
+      const nombres = fotos.map((f) => f.url.split("/").pop());
+      await supabase.storage.from("partidos").remove(nombres);
+      await supabase.from("fotos").delete().eq("partido_id", partido.id);
+    }
+    await supabase
+      .from("convocatorias_partido")
+      .delete()
+      .eq("partido_id", partido.id);
+    await supabase.from("cronicas").delete().eq("partido_id", partido.id);
+    const { error: err } = await supabase
+      .from("partidos")
+      .delete()
+      .eq("id", partido.id);
+    if (err) {
+      setError("Error al eliminar el partido: " + err.message);
+      return;
+    }
+    onBack();
   }
 
   function toggleConvocado(jugadorId) {
@@ -1034,10 +1146,8 @@ export default function AdminPartido({
                   marginTop: "2px",
                 }}
               >
-                Boxscore ·{" "}
-                {partido.jornada
-                  ? `J${partido.jornada}`
-                  : (partido.ronda ?? "Amistoso")}
+                Click izq +1 · Click der −1 · En tiros: mitad izq = anotados,
+                mitad der = intentados
               </div>
             </div>
             {partido.puntos_favor !== null && (
@@ -1088,143 +1198,40 @@ export default function AdminPartido({
                 width: "100%",
                 borderCollapse: "collapse",
                 fontSize: "13px",
-                minWidth: "1000px",
+                minWidth: "900px",
               }}
             >
               <tbody>
-                <CabeceraSeccion titulo="TITULARES" />
-                {titulares.map((c) => (
-                  <FilaJugador
-                    key={c.jugadores.id}
-                    c={c}
-                    stats={stats}
-                    setStats={setStats}
-                    toggleConvocado={toggleConvocado}
-                  />
-                ))}
-                <FilaTotales lista={titulares} stats={stats} />
-                <CabeceraSeccion titulo="SUPLENTES" />
-                {suplentes.map((c) => (
-                  <FilaJugador
-                    key={c.jugadores.id}
-                    c={c}
-                    stats={stats}
-                    setStats={setStats}
-                    toggleConvocado={toggleConvocado}
-                  />
-                ))}
-                <FilaTotales lista={suplentes} stats={stats} />
-
-                {/* Totales globales */}
-                {(() => {
-                  const sum = (campo) =>
-                    convocados.reduce(
-                      (a, c) =>
-                        a + parseInt(stats[c.jugadores.id]?.[campo] ?? 0),
-                      0,
-                    );
-                  const totalSegs = convocados.reduce(
-                    (a, c) =>
-                      a +
-                      minutosASegundos(stats[c.jugadores.id]?.minutos ?? "0"),
-                    0,
-                  );
-                  const totalPts = convocados.reduce((a, c) => {
-                    const s = stats[c.jugadores.id] ?? {};
-                    return (
-                      a +
-                      parseInt(s.tiros_libres_anotados ?? 0) * 1 +
-                      parseInt(s.tiros_campo_anotados ?? 0) * 2 +
-                      parseInt(s.triples_anotados ?? 0) * 3
-                    );
-                  }, 0);
-                  const totalVal = convocados.reduce(
-                    (a, c) =>
-                      a + calcularValoracion(stats[c.jugadores.id] ?? {}),
-                    0,
-                  );
-                  const st = {
-                    padding: "10px 8px",
-                    textAlign: "center",
-                    fontWeight: 800,
-                  };
-                  return (
-                    <tr style={{ borderTop: "2px solid var(--texto)" }}>
-                      <td
-                        style={{
-                          padding: "10px 8px",
-                          fontWeight: 800,
-                          fontSize: "12px",
-                          letterSpacing: ".08em",
-                        }}
-                      >
-                        TOTALES
-                      </td>
-                      <td style={{ ...st, fontFamily: "monospace" }}>
-                        {segundosADisplay(totalSegs)}
-                      </td>
-                      {/* PTS */}
-                      <td style={{ ...st, color: "#F97316", fontSize: "15px" }}>
-                        {totalPts}
-                      </td>
-                      {/* FG calculado */}
-                      <td style={st}>
-                        {sum("tiros_campo_anotados") + sum("triples_anotados")}-
-                        {sum("tiros_campo_intentados") +
-                          sum("triples_intentados")}
-                      </td>
-                      {/* T2 en bruto */}
-                      <td style={st}>
-                        {sum("tiros_campo_anotados")}-
-                        {sum("tiros_campo_intentados")}
-                      </td>
-                      {/* 3PT */}
-                      <td style={st}>
-                        {sum("triples_anotados")}-{sum("triples_intentados")}
-                      </td>
-                      {/* FT */}
-                      <td style={st}>
-                        {sum("tiros_libres_anotados")}-
-                        {sum("tiros_libres_intentados")}
-                      </td>
-                      {/* OREB */}
-                      <td style={st}>{sum("rebotes_ofensivos")}</td>
-                      {/* DREB */}
-                      <td style={st}>{sum("rebotes_defensivos")}</td>
-                      {/* REB total */}
-                      <td style={st}>
-                        {sum("rebotes_ofensivos") + sum("rebotes_defensivos")}
-                      </td>
-                      {/* AST */}
-                      <td style={st}>{sum("asistencias")}</td>
-                      {/* STL */}
-                      <td style={st}>{sum("robos")}</td>
-                      {/* PER */}
-                      <td style={st}>{sum("perdidas")}</td>
-                      {/* BLK */}
-                      <td style={st}>{sum("tapones")}</td>
-                      {/* PF */}
-                      <td style={st}>{sum("faltas_cometidas")}</td>
-                      {/* FR */}
-                      <td style={st}>{sum("faltas_recibidas")}</td>
-                      {/* VAL */}
-                      <td
-                        style={{
-                          ...st,
-                          color:
-                            totalVal > 0
-                              ? "#0baa3b"
-                              : totalVal < 0
-                                ? "#ef4444"
-                                : "var(--muted)",
-                        }}
-                      >
-                        {totalVal > 0 ? `+${totalVal}` : totalVal}
-                      </td>
-                      <td />
-                    </tr>
-                  );
-                })()}
+                {titulares.length > 0 && (
+                  <>
+                    <CabeceraSeccion titulo="Titulares" />
+                    {titulares.map((c) => (
+                      <FilaJugador
+                        key={c.jugadores.id}
+                        c={c}
+                        stats={stats}
+                        setStats={setStats}
+                        toggleConvocado={toggleConvocado}
+                      />
+                    ))}
+                    <FilaTotales lista={titulares} stats={stats} />
+                  </>
+                )}
+                {suplentes.length > 0 && (
+                  <>
+                    <CabeceraSeccion titulo="Suplentes" />
+                    {suplentes.map((c) => (
+                      <FilaJugador
+                        key={c.jugadores.id}
+                        c={c}
+                        stats={stats}
+                        setStats={setStats}
+                        toggleConvocado={toggleConvocado}
+                      />
+                    ))}
+                    <FilaTotales lista={suplentes} stats={stats} />
+                  </>
+                )}
               </tbody>
             </table>
           </div>
@@ -1249,7 +1256,7 @@ export default function AdminPartido({
                   marginBottom: "10px",
                 }}
               >
-                No convocados
+                No convocadas
               </p>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
                 {noConvocados.map((c) => (
@@ -1280,7 +1287,6 @@ export default function AdminPartido({
             </div>
           )}
 
-          {/* Contador minutos + guardar */}
           {(() => {
             const totalSegs = convocados.reduce(
               (a, c) =>
@@ -1293,8 +1299,6 @@ export default function AdminPartido({
             const titularesOk = totalTitulares === 5;
             const todoOk = minutosOk && titularesOk;
             const diff = Math.abs(totalSegs - OBJETIVO);
-            const diffDisplay = segundosADisplay(diff);
-
             return (
               <div
                 style={{
@@ -1306,11 +1310,7 @@ export default function AdminPartido({
                 }}
               >
                 <div
-                  style={{
-                    display: "flex",
-                    gap: "16px",
-                    alignItems: "center",
-                  }}
+                  style={{ display: "flex", gap: "16px", alignItems: "center" }}
                 >
                   <div
                     style={{
@@ -1334,8 +1334,8 @@ export default function AdminPartido({
                         }}
                       >
                         {totalSegs < OBJETIVO
-                          ? `(faltan ${diffDisplay})`
-                          : `(sobran ${diffDisplay})`}
+                          ? `(faltan ${segundosADisplay(diff)})`
+                          : `(sobran ${segundosADisplay(diff)})`}
                       </span>
                     )}
                   </div>
@@ -1560,12 +1560,62 @@ export default function AdminPartido({
           <FormPartido
             form={formEditar}
             setForm={setFormEditar}
-            rivales={rivales}
+            participantes={participantes}
+            clubes={clubes}
+            fases={fases}
             equipo={equipo}
             vista="editar"
             onGuardar={guardarEdicionPartido}
             onCancelar={() => setSeccion("resultado")}
           />
+
+          <div
+            style={{
+              marginTop: "32px",
+              padding: "16px",
+              border: "1px solid #ef444440",
+              borderRadius: "10px",
+              background: "#ef444408",
+            }}
+          >
+            <p
+              style={{
+                fontSize: "12px",
+                fontWeight: 700,
+                color: "#ef4444",
+                marginBottom: "10px",
+                textTransform: "uppercase",
+                letterSpacing: ".06em",
+              }}
+            >
+              Zona peligrosa
+            </p>
+            <p
+              style={{
+                fontSize: "13px",
+                color: "var(--muted)",
+                marginBottom: "12px",
+              }}
+            >
+              Eliminar este partido borrará también todas sus estadísticas,
+              crónica y fotos asociadas.
+            </p>
+            <button
+              onClick={eliminarPartido}
+              style={{
+                background: "transparent",
+                border: "1px solid #ef4444",
+                color: "#ef4444",
+                padding: "9px 20px",
+                borderRadius: "8px",
+                fontSize: "13px",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Eliminar partido
+            </button>
+          </div>
         </div>
       )}
     </div>

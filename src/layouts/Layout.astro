@@ -14,77 +14,100 @@ const { titulo } = Astro.props;
   </head>
   <body>
     <nav class="main-nav">
+      <img src="/escudo-naranja.png" alt="Escudo del CB Jaca" />
       <a href="/" class="nav-logo">CB <span>Jaca</span></a>
       <div class="nav-links">
         <a href="/noticias">Noticias</a>
         <a href="/equipos">Equipos</a>
-        <Buscador client:load></Buscador>
       </div>
-      <button class="theme-btn" id="theme-btn" aria-label="Cambiar tema">
-        <svg id="sunmoon" width="40" height="40" viewBox="0 0 200 200">
-          <defs>
-            <mask id="hole">
-              <rect width="100%" height="100%" fill="white"></rect>
-              <circle id="overlay" r="80" cx="230" cy="-30" fill="black"
-              ></circle>
-            </mask>
-            <filter id="blur">
-              <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="white"
-              ></feDropShadow>
-            </filter>
-          </defs>
-          <g filter="url(#blur)">
-            <circle
-              fill="white"
-              id="donut"
-              r="80"
-              cx="100"
-              cy="100"
-              mask="url(#hole)"></circle>
-          </g>
-        </svg>
-      </button>
+      <div class="nav-actions">
+        <Buscador client:load />
+        <button class="menu-btn" id="menu-btn" aria-label="Abrir menú">
+          <span></span><span></span><span></span>
+        </button>
+        <button class="theme-btn" id="theme-btn" aria-label="Cambiar tema">
+          <svg id="sunmoon" width="40" height="40" viewBox="0 0 200 200">
+            <defs>
+              <mask id="hole">
+                <rect width="100%" height="100%" fill="white"></rect>
+                <circle id="overlay" r="80" cx="230" cy="-30" fill="black"
+                ></circle>
+              </mask>
+              <filter id="blur">
+                <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="white"
+                ></feDropShadow>
+              </filter>
+            </defs>
+            <g filter="url(#blur)">
+              <circle
+                fill="white"
+                id="donut"
+                r="80"
+                cx="100"
+                cy="100"
+                mask="url(#hole)"></circle>
+            </g>
+          </svg>
+        </button>
+      </div>
     </nav>
+    <div class="mobile-menu" id="mobile-menu">
+      <Buscador client:load />
+      <a href="/noticias">Noticias</a>
+      <a href="/equipos">Equipos</a>
+    </div>
     <main>
       <slot />
     </main>
     <Footer />
   </body>
-  <script>
-    const btn = document.getElementById("theme-btn");
-    const html = document.documentElement;
-
-    // 1. Cargar tema guardado
-    const saved = localStorage.getItem("tema") || "light";
-    html.setAttribute("data-theme", saved);
-
-    // 2. Evento de clic
-    btn.addEventListener("click", () => {
-      const actual = html.getAttribute("data-theme");
-      const nuevo = actual === "dark" ? "light" : "dark";
-
-      html.setAttribute("data-theme", nuevo);
-      localStorage.setItem("tema", nuevo);
-    });
-  </script>
 </html>
 
+<script>
+  const btn = document.getElementById("theme-btn");
+  const html = document.documentElement;
+  const saved = localStorage.getItem("tema") || "light";
+  html.setAttribute("data-theme", saved);
+  btn.addEventListener("click", () => {
+    const nuevo = html.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    html.setAttribute("data-theme", nuevo);
+    localStorage.setItem("tema", nuevo);
+  });
+
+  const menuBtn = document.getElementById("menu-btn");
+  const mobileMenu = document.getElementById("mobile-menu");
+  menuBtn?.addEventListener("click", () =>
+    mobileMenu?.classList.toggle("open"),
+  );
+
+  let lastScroll = 0;
+  const nav = document.querySelector(".main-nav");
+
+  window.addEventListener("scroll", () => {
+    const current = window.scrollY;
+    if (current > lastScroll && current > 56) {
+      nav.classList.add("hidden");
+    } else {
+      nav.classList.remove("hidden");
+    }
+    lastScroll = current;
+  });
+</script>
+
 <style is:global>
-  /* Estilos para el botón contenedor */
   .theme-btn {
-    background: transparent; /* Fondo transparente */
-    border: none; /* Sin bordes */
-    padding: 0; /* Sin espaciado interno */
-    cursor: pointer; /* Cursor de mano */
-    display: flex; /* Para alinear el SVG perfectamente */
-    outline: none; /* Quitar el recuadro de enfoque (puedes añadir uno customizado por accesibilidad) */
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    display: flex;
+    outline: none;
   }
 
-  /* Estilos para el SVG */
   #sunmoon {
-    width: 24px; /* Tamaño del sol/luna */
+    width: 24px;
     height: 24px;
-    overflow: visible; /* Crucial: permite que el brillo salga del recuadro del SVG */
+    overflow: visible;
   }
 
   #overlay {
@@ -93,12 +116,10 @@ const { titulo } = Astro.props;
       cy 0.5s ease;
   }
 
-  /* Animaciones de estado (igual que antes) */
   [data-theme="dark"] #overlay {
     cx: 140px;
     cy: 60px;
   }
-
   [data-theme="light"] #overlay {
     cx: 230px;
     cy: -30px;
@@ -114,6 +135,16 @@ const { titulo } = Astro.props;
     position: sticky;
     top: 0;
     z-index: 12;
+    gap: 32px;
+    transition: transform 0.3s ease;
+  }
+
+  .main-nav.hidden {
+    transform: translateY(-100%);
+  }
+
+  .main-nav img {
+    width: 40px;
   }
 
   .nav-logo {
@@ -142,5 +173,84 @@ const { titulo } = Astro.props;
   .nav-links a:hover,
   .nav-links a.active {
     color: white;
+  }
+
+  .nav-actions {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+    gap: 16px;
+    flex-grow: 1;
+    justify-content: flex-end;
+  }
+
+  .menu-btn {
+    display: none;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .menu-btn span {
+    display: block;
+    width: 20px;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 1px;
+    transition: all 0.2s;
+  }
+
+  .mobile-menu {
+    display: none;
+    position: absolute;
+    top: 56px;
+    left: 0;
+    right: 0;
+    background: var(--azul-oscuro);
+    padding: 12px 16px 16px;
+    z-index: 11;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .mobile-menu.open {
+    display: flex;
+  }
+
+  .mobile-menu a {
+    font-size: 15px;
+    color: rgba(255, 255, 255, 0.75);
+    padding: 12px 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    transition: color 0.2s;
+  }
+
+  .mobile-menu a:last-child {
+    border-bottom: none;
+  }
+  .mobile-menu a:hover {
+    color: white;
+  }
+
+  @media (max-width: 767px) {
+    .nav-links {
+      display: none;
+    }
+    .nav-actions {
+      flex-grow: 0;
+      margin-left: auto;
+      gap: 8px;
+    }
+    .nav-actions > :first-child {
+      display: none;
+    }
+
+    .menu-btn {
+      display: flex;
+    }
   }
 </style>

@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 
 export default function AdminPanel({
   supabase,
@@ -13,9 +13,33 @@ export default function AdminPanel({
   const [borrandoFoto, setBorrandoFoto] = useState(false);
   const [fotoError, setFotoError] = useState("");
   const inputFotoRef = useRef(null);
+  const [sponsors, setSponsors] = useState([]);
+  const [sponsorId, setSponsorId] = useState(equipo.sponsor_id ?? "");
+  const [guardandoSponsor, setGuardandoSponsor] = useState(false);
+  const [sponsorMsg, setSponsorMsg] = useState("");
 
-  const nombreEquipo = equipo.sponsor
-    ? `${equipo.sponsor} CB Jaca`
+  useEffect(() => {
+    supabase
+      .from("sponsors")
+      .select("id, nombre, logo_url")
+      .order("nombre")
+      .then(({ data }) => setSponsors(data ?? []));
+  }, []);
+
+  async function guardarSponsor() {
+    setGuardandoSponsor(true);
+    setSponsorMsg("");
+    await supabase
+      .from("equipos")
+      .update({ sponsor_id: sponsorId || null })
+      .eq("id", equipo.id);
+    setSponsorMsg("Guardado");
+    setGuardandoSponsor(false);
+    setTimeout(() => setSponsorMsg(""), 2000);
+  }
+
+  const nombreEquipo = equipo.sponsors?.nombre
+    ? `${equipo.sponsors.nombre} CB Jaca`
     : `CB Jaca ${equipo.categorias?.nombre ?? ""}`;
 
   async function onFotoChange(e) {
@@ -164,6 +188,90 @@ export default function AdminPanel({
           onChange={onFotoChange}
           style={{ display: "none" }}
         />
+      </div>
+
+      {/* ── Sponsor ── */}
+      <div style={{ marginBottom: "32px", maxWidth: "520px" }}>
+        <div className="adm-section-label" style={{ marginBottom: "10px" }}>
+          Sponsor
+        </div>
+        <div
+          className="card"
+          style={{ display: "flex", alignItems: "center", gap: "14px" }}
+        >
+          {/* Preview logo */}
+          <div
+            style={{
+              width: "52px",
+              height: "52px",
+              flexShrink: 0,
+              borderRadius: "8px",
+              border: "1px solid var(--borde)",
+              background: "var(--color-background-secondary)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              overflow: "hidden",
+            }}
+          >
+            {sponsors.find((s) => s.id === sponsorId)?.logo_url ? (
+              <img
+                src={sponsors.find((s) => s.id === sponsorId).logo_url}
+                alt="Logo"
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "contain",
+                  padding: "6px",
+                }}
+              />
+            ) : (
+              <span style={{ fontSize: "1.2rem", opacity: 0.3 }}>🏷️</span>
+            )}
+          </div>
+
+          {/* Select */}
+          <select
+            value={sponsorId}
+            onChange={(e) => setSponsorId(e.target.value)}
+            style={{
+              flex: 1,
+              padding: "9px 12px",
+              borderRadius: "8px",
+              border: "1px solid var(--borde)",
+              background: "var(--fondo)",
+              color: "var(--texto)",
+              fontSize: "13px",
+            }}
+          >
+            <option value="">Sin sponsor</option>
+            {sponsors.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.nombre}
+              </option>
+            ))}
+          </select>
+
+          {/* Guardar */}
+          <button
+            onClick={guardarSponsor}
+            disabled={guardandoSponsor}
+            style={{
+              background: sponsorMsg ? "#22c55e" : "var(--naranja)",
+              color: "white",
+              border: "none",
+              padding: "9px 16px",
+              borderRadius: "8px",
+              fontSize: "13px",
+              fontWeight: 700,
+              cursor: "pointer",
+              flexShrink: 0,
+              transition: "background .2s",
+            }}
+          >
+            {sponsorMsg ? "✓" : guardandoSponsor ? "..." : "Guardar"}
+          </button>
+        </div>
       </div>
 
       {/* ── Secciones ── */}
