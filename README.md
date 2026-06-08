@@ -1,43 +1,99 @@
-# Astro Starter Kit: Minimal
+# 🏀 CB Jaca — Web Oficial
 
-```sh
-npm create astro@latest -- --template minimal
+Sitio web oficial del **Club Baloncesto Jaca**, construido con Astro y React. Incluye noticias del club, información de equipos y un buscador integrado.
+
+---
+
+## ✨ Características
+
+- 📰 **Noticias** — Sección de noticias y novedades del club
+- 🏆 **Equipos** — Información sobre los equipos de la temporada
+- ⛹️ **Jugadores** — Información sobre los jugadores del club con sus estadísticas por temporada
+- 🆚 **Partidos** — Partidos con crónicas, estadísticas y galería de fotos
+- 🔍 **Buscador** — Búsqueda integrada con React
+- 🌙 **Tema oscuro/claro** — Preferencia guardada en `localStorage`
+- 📱 **Diseño responsive** — Menú adaptado para móvil
+
+---
+
+## 🛠️ Stack tecnológico
+
+| Tecnología                   | Uso                                         |
+| ---------------------------- | ------------------------------------------- |
+| [Astro](https://astro.build) | Framework principal y generación de páginas |
+| [React](https://react.dev)   | Componentes interactivos (buscador, menú)   |
+| CSS Variables                | Sistema de temas (claro/oscuro)             |
+
+---
+
+## 🚀 Instalación y uso
+
+### Prerrequisitos
+
+- Node.js 18+
+- npm o pnpm
+
+### Pasos
+
+```bash
+# 1. Clona el repositorio
+git clone https://github.com/tu-usuario/cb-jaca.git
+cd cb-jaca
+
+# 2. Instala las dependencias
+npm install
+
+# 3. Inicia el servidor de desarrollo
+npm run dev
 ```
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+El sitio estará disponible en `http://localhost:4321`.
 
-## 🚀 Project Structure
+### Otros comandos
 
-Inside of your Astro project, you'll see the following folders and files:
+```bash
+npm run build    # Genera la build de producción en /dist
+npm run preview  # Previsualiza la build localmente
+```
 
-```text
+---
+
+## 📁 Estructura del proyecto
+
+```
 /
 ├── public/
+│   └── escudo-naranja.png
 ├── src/
-│   └── pages/
-│       └── index.astro
-└── package.json
+│   ├── components/
+│   │   ├── Buscador.tsx       # Buscador (React)
+│   │   └── Footer.astro
+│   ├── layouts/
+│   │   └── Layout.astro       # Layout principal con nav
+│   ├── pages/
+│   │   ├── index.astro
+│   │   ├── noticias/
+│   │   └── equipos/
+│   └── styles/
+│       └── global.css
+└── astro.config.mjs
 ```
 
-Astro looks for `.astro` or `.md` files in the `src/pages/` directory. Each page is exposed as a route based on its file name.
+---
 
-There's nothing special about `src/components/`, but that's where we like to put any Astro/React/Vue/Svelte/Preact components.
+## 🎨 Temas
 
-Any static assets, like images, can be placed in the `public/` directory.
+El sitio soporta tema **claro** y **oscuro**. La preferencia se guarda automáticamente en `localStorage` y se aplica mediante el atributo `data-theme` en el elemento `<html>`.
 
-## 🧞 Commands
+Los colores principales se definen como variables CSS:
 
-All commands are run from the root of the project, from a terminal:
+```css
+--azul-oscuro: /* color de la barra de navegación */ --naranja:
+  /* color de acento del club */;
+```
 
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
+---
 
-## 👀 Want to learn more?
+## 📄 Licencia
 
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+Este proyecto es de uso interno del Club Baloncesto Jaca. Todos los derechos reservados.
