@@ -13,8 +13,15 @@ export default function AdminParticipantes({ supabase, perfil }) {
   const [cargando, setCargando] = useState(true);
   const [cargandoPart, setCargandoPart] = useState(false);
 
+  // Formulario añadir
   const [form, setForm] = useState({ club_id: "", nombre_equipo: "" });
-  const [editando, setEditando] = useState(null); // participante en edición inline
+  const [equiposRivalesClub, setEquiposRivalesClub] = useState([]);
+  const [equipoRivalId, setEquipoRivalId] = useState("");
+
+  // Edición inline — ahora incluye nombre_equipo editable
+  const [editando, setEditando] = useState(null);
+  // { id, club_id, nombre_equipo, equipo_id (el id del equipo_rival) }
+
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
 
@@ -45,7 +52,7 @@ export default function AdminParticipantes({ supabase, perfil }) {
     supabase
       .from("fases_competicion")
       .select(
-        "id, nombre, categoria_id, categorias(id, nombre), competiciones(nombre)",
+        "id, nombre, categoria_id, categorias(id, nombre), competiciones(id, nombre), temporada_id, competicion_id",
       )
       .eq("temporada_id", temporadaId)
       .order("nombre")
@@ -65,7 +72,7 @@ export default function AdminParticipantes({ supabase, perfil }) {
     setCargandoPart(true);
     supabase
       .from("participantes")
-      .select("id, nombre_equipo, clubes(id, nombre, logo_url)")
+      .select("id, nombre_equipo, equipo_id, clubes(id, nombre, logo_url)")
       .eq("fase_id", faseId)
       .order("created_at")
       .then(({ data }) => {
@@ -73,6 +80,20 @@ export default function AdminParticipantes({ supabase, perfil }) {
         setCargandoPart(false);
       });
   }, [faseId]);
+
+  // ── Cargar equipos rivales existentes al cambiar club en el form ─────────
+  useEffect(() => {
+    setEquipoRivalId("");
+    setEquiposRivalesClub([]);
+    if (!form.club_id || !faseActual) return;
+    supabase
+      .from("equipos_rivales")
+      .select("id, nombre_equipo")
+      .eq("club_id", form.club_id)
+      .eq("competicion_id", faseActual.competicion_id)
+      .eq("temporada_id", faseActual.temporada_id)
+      .then(({ data }) => setEquiposRivalesClub(data ?? []));
+  }, [form.club_id]);
 
   // ── Derivados ────────────────────────────────────────────────────────────
   const categorias = Array.from(
@@ -83,9 +104,13 @@ export default function AdminParticipantes({ supabase, perfil }) {
     ).entries(),
   ).map(([id, cat]) => ({ id, nombre: cat.nombre }));
 
-  const fasesFiltradas = categoriaId
-    ? fases.filter((f) => f.categoria_id === categoriaId)
-    : [];
+  const sinCategorias = categorias.length === 0;
+
+  const fasesFiltradas = sinCategorias
+    ? fases
+    : categoriaId
+      ? fases.filter((f) => f.categoria_id === categoriaId)
+      : [];
 
   const faseActual = fases.find((f) => f.id === faseId);
 
@@ -93,24 +118,78 @@ export default function AdminParticipantes({ supabase, perfil }) {
     return p.nombre_equipo ?? p.clubes?.nombre ?? "—";
   }
 
+  function previewNombreFor(club_id, nombre_equipo) {
+    return (
+      nombre_equipo.trim() ||
+      clubes.find((c) => c.id === club_id)?.nombre ||
+      "—"
+    );
+  }
+
   // ── Guardar nuevo participante ───────────────────────────────────────────
   async function guardar() {
     setError("");
     setMsg("");
     if (!form.club_id) {
-      setError("Selecciona un club");
+      setError("Selecciona un club.");
       return;
     }
-    const { error: err } = await supabase.from("participantes").insert({
+
+    let finalEquipoRivalId = equipoRivalId;
+
+    if (!equipoRivalId) {
+      const { data: nuevoRival, error: errRival } = await supabase
+        .from("equipos_rivales")
+        .insert({
+          club_id: form.club_id,
+          nombre_equipo: form.nombre_equipo.trim() || null,
+          competicion_id: faseActual.competicion_id,
+          temporada_id: faseActual.temporada_id,
+          categoria_id: faseActual.categoria_id,
+        })
+        .select("id")
+        .single();
+
+      if (errRival) {
+        if (errRival.code === "23505") {
+          const { data: existente } = await supabase
+            .from("equipos_rivales")
+            .select("id")
+            .eq("club_id", form.club_id)
+            .eq("competicion_id", faseActual.competicion_id)
+            .eq("temporada_id", faseActual.temporada_id)
+            .eq("nombre_equipo", form.nombre_equipo.trim() || "")
+            .single();
+          if (existente) {
+            finalEquipoRivalId = existente.id;
+          } else {
+            setError("Ya existe un equipo con ese nombre en esta competición.");
+            return;
+          }
+        } else {
+          setError(errRival.message);
+          return;
+        }
+      } else {
+        finalEquipoRivalId = nuevoRival.id;
+      }
+    }
+
+    const { error: errPart } = await supabase.from("participantes").insert({
       fase_id: faseId,
       club_id: form.club_id,
+      equipo_rival_id: finalEquipoRivalId,
       nombre_equipo: form.nombre_equipo.trim() || null,
     });
-    if (err) {
-      setError(err.message);
+
+    if (errPart) {
+      setError(errPart.message);
       return;
     }
+
     setForm({ club_id: "", nombre_equipo: "" });
+    setEquipoRivalId("");
+    setEquiposRivalesClub([]);
     setMsg("Participante añadido ✓");
     recargarParticipantes();
   }
@@ -119,17 +198,38 @@ export default function AdminParticipantes({ supabase, perfil }) {
   async function guardarEdicion(p) {
     setError("");
     setMsg("");
-    const { error: err } = await supabase
+
+    const nombreFinal = editando.nombre_equipo.trim() || null;
+
+    // 1. Si tiene equipo_rival vinculado, actualizarlo
+    if (editando.equipo_id) {
+      const { error: errRival } = await supabase
+        .from("equipos_rivales")
+        .update({
+          club_id: editando.club_id,
+          nombre_equipo: nombreFinal,
+        })
+        .eq("id", editando.equipo_id);
+      if (errRival) {
+        setError(errRival.message);
+        return;
+      }
+    }
+
+    // 2. Actualizar el participante
+    const { error: errPart } = await supabase
       .from("participantes")
       .update({
         club_id: editando.club_id,
-        nombre_equipo: editando.nombre_equipo.trim() || null,
+        nombre_equipo: nombreFinal,
       })
       .eq("id", p.id);
-    if (err) {
-      setError(err.message);
+
+    if (errPart) {
+      setError(errPart.message);
       return;
     }
+
     setEditando(null);
     setMsg("Guardado ✓");
     recargarParticipantes();
@@ -144,7 +244,7 @@ export default function AdminParticipantes({ supabase, perfil }) {
   async function recargarParticipantes() {
     const { data } = await supabase
       .from("participantes")
-      .select("id, nombre_equipo, clubes(id, nombre, logo_url)")
+      .select("id, nombre_equipo, equipo_id, clubes(id, nombre, logo_url)")
       .eq("fase_id", faseId)
       .order("created_at");
     setParticipantes(data ?? []);
@@ -175,7 +275,6 @@ export default function AdminParticipantes({ supabase, perfil }) {
           marginBottom: "28px",
         }}
       >
-        {/* Temporada */}
         <div className="adm-field" style={{ margin: 0 }}>
           <label className="adm-label">Temporada</label>
           <select
@@ -192,32 +291,32 @@ export default function AdminParticipantes({ supabase, perfil }) {
           </select>
         </div>
 
-        {/* Categoría */}
-        <div className="adm-field" style={{ margin: 0 }}>
-          <label className="adm-label">Categoría</label>
-          <select
-            value={categoriaId}
-            onChange={(e) => setCategoriaId(e.target.value)}
-            className="adm-input"
-            disabled={!temporadaId || categorias.length === 0}
-          >
-            <option value="">Selecciona...</option>
-            {categorias.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nombre}
-              </option>
-            ))}
-          </select>
-        </div>
+        {!sinCategorias && (
+          <div className="adm-field" style={{ margin: 0 }}>
+            <label className="adm-label">Categoría</label>
+            <select
+              value={categoriaId}
+              onChange={(e) => setCategoriaId(e.target.value)}
+              className="adm-input"
+              disabled={!temporadaId}
+            >
+              <option value="">Selecciona...</option>
+              {categorias.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
-        {/* Fase */}
         <div className="adm-field" style={{ margin: 0 }}>
           <label className="adm-label">Fase</label>
           <select
             value={faseId}
             onChange={(e) => setFaseId(e.target.value)}
             className="adm-input"
-            disabled={!categoriaId || fasesFiltradas.length === 0}
+            disabled={!temporadaId || fasesFiltradas.length === 0}
           >
             <option value="">Selecciona...</option>
             {fasesFiltradas.map((f) => (
@@ -241,11 +340,12 @@ export default function AdminParticipantes({ supabase, perfil }) {
             borderRadius: "10px",
           }}
         >
-          Selecciona temporada, categoría y fase para ver los participantes
+          Selecciona temporada{!sinCategorias && ", categoría"} y fase para ver
+          los participantes
         </div>
       ) : (
         <div>
-          {/* Cabecera de la fase */}
+          {/* Cabecera fase */}
           <div
             style={{
               fontSize: "11px",
@@ -297,9 +397,9 @@ export default function AdminParticipantes({ supabase, perfil }) {
                       letterSpacing: ".06em",
                     }}
                   >
-                    Club
+                    Club base
                   </th>
-                  <th style={{ width: "120px" }} />
+                  <th style={{ width: "140px" }} />
                 </tr>
               </thead>
               <tbody>
@@ -338,60 +438,111 @@ export default function AdminParticipantes({ supabase, perfil }) {
                       {editando?.id === p.id ? (
                         // ── Fila en edición ──
                         <>
-                          <td style={{ padding: "8px 14px" }}>
-                            <input
-                              type="text"
-                              value={editando.nombre_equipo}
-                              onChange={(e) =>
-                                setEditando((prev) => ({
-                                  ...prev,
-                                  nombre_equipo: e.target.value,
-                                }))
-                              }
-                              placeholder={
-                                clubes.find((c) => c.id === editando.club_id)
-                                  ?.nombre ?? "Nombre del equipo"
-                              }
-                              className="adm-input"
-                              style={{ margin: 0 }}
-                            />
-                            <p
+                          <td style={{ padding: "10px 14px" }} colSpan={2}>
+                            <div
                               style={{
-                                fontSize: "10px",
-                                color: "var(--muted)",
-                                marginTop: "4px",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "8px",
                               }}
                             >
-                              Se mostrará como:{" "}
-                              <strong style={{ color: "var(--texto)" }}>
-                                {editando.nombre_equipo.trim() ||
-                                  clubes.find((c) => c.id === editando.club_id)
-                                    ?.nombre ||
-                                  "—"}
-                              </strong>
-                            </p>
-                          </td>
-                          <td style={{ padding: "8px 14px" }}>
-                            <select
-                              value={editando.club_id}
-                              onChange={(e) =>
-                                setEditando((prev) => ({
-                                  ...prev,
-                                  club_id: e.target.value,
-                                }))
-                              }
-                              className="adm-input"
-                              style={{ margin: 0 }}
-                            >
-                              {clubes.map((c) => (
-                                <option key={c.id} value={c.id}>
-                                  {c.nombre}
-                                </option>
-                              ))}
-                            </select>
+                              {/* Club */}
+                              <div>
+                                <label
+                                  style={{
+                                    fontSize: "10px",
+                                    fontWeight: 700,
+                                    color: "var(--muted)",
+                                    textTransform: "uppercase",
+                                    letterSpacing: ".05em",
+                                    display: "block",
+                                    marginBottom: "3px",
+                                  }}
+                                >
+                                  Club
+                                </label>
+                                <select
+                                  value={editando.club_id}
+                                  onChange={(e) =>
+                                    setEditando((prev) => ({
+                                      ...prev,
+                                      club_id: e.target.value,
+                                    }))
+                                  }
+                                  className="adm-input"
+                                  style={{ margin: 0 }}
+                                >
+                                  {clubes.map((c) => (
+                                    <option key={c.id} value={c.id}>
+                                      {c.nombre}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              {/* Nombre comercial */}
+                              <div>
+                                <label
+                                  style={{
+                                    fontSize: "10px",
+                                    fontWeight: 700,
+                                    color: "var(--muted)",
+                                    textTransform: "uppercase",
+                                    letterSpacing: ".05em",
+                                    display: "block",
+                                    marginBottom: "3px",
+                                  }}
+                                >
+                                  Nombre del equipo{" "}
+                                  <span
+                                    style={{
+                                      fontWeight: 400,
+                                      textTransform: "none",
+                                    }}
+                                  >
+                                    — opcional
+                                  </span>
+                                </label>
+                                <input
+                                  type="text"
+                                  value={editando.nombre_equipo}
+                                  onChange={(e) =>
+                                    setEditando((prev) => ({
+                                      ...prev,
+                                      nombre_equipo: e.target.value,
+                                    }))
+                                  }
+                                  placeholder={
+                                    clubes.find(
+                                      (c) => c.id === editando.club_id,
+                                    )?.nombre ?? ""
+                                  }
+                                  className="adm-input"
+                                  style={{ margin: 0 }}
+                                />
+                                <p
+                                  style={{
+                                    fontSize: "10px",
+                                    color: "var(--muted)",
+                                    marginTop: "3px",
+                                  }}
+                                >
+                                  Se mostrará como:{" "}
+                                  <strong style={{ color: "var(--texto)" }}>
+                                    {previewNombreFor(
+                                      editando.club_id,
+                                      editando.nombre_equipo,
+                                    )}
+                                  </strong>
+                                </p>
+                              </div>
+                            </div>
                           </td>
                           <td
-                            style={{ padding: "8px 14px", textAlign: "right" }}
+                            style={{
+                              padding: "10px 14px",
+                              textAlign: "right",
+                              verticalAlign: "top",
+                            }}
                           >
                             <div
                               style={{
@@ -459,10 +610,7 @@ export default function AdminParticipantes({ supabase, perfil }) {
                             {p.nombre_equipo ? p.clubes?.nombre : "—"}
                           </td>
                           <td
-                            style={{
-                              padding: "10px 14px",
-                              textAlign: "right",
-                            }}
+                            style={{ padding: "10px 14px", textAlign: "right" }}
                           >
                             <div
                               style={{
@@ -477,6 +625,7 @@ export default function AdminParticipantes({ supabase, perfil }) {
                                     id: p.id,
                                     club_id: p.clubes?.id ?? "",
                                     nombre_equipo: p.nombre_equipo ?? "",
+                                    equipo_id: p.equipo_id ?? null,
                                   })
                                 }
                                 className="adm-btn-secondary"
@@ -525,6 +674,7 @@ export default function AdminParticipantes({ supabase, perfil }) {
               Añadir participante
             </p>
 
+            {/* 1. Club */}
             <div className="adm-field">
               <label className="adm-label">Club *</label>
               <select
@@ -543,50 +693,84 @@ export default function AdminParticipantes({ supabase, perfil }) {
               </select>
             </div>
 
-            <div className="adm-field">
-              <label className="adm-label">
-                Nombre del equipo{" "}
-                <span
+            {/* 2. Equipos rivales existentes del club */}
+            {form.club_id && (
+              <div className="adm-field">
+                <label className="adm-label">Equipo existente</label>
+                <select
+                  value={equipoRivalId}
+                  onChange={(e) => setEquipoRivalId(e.target.value)}
+                  className="adm-input"
+                >
+                  <option value="">— Crear nuevo —</option>
+                  {equiposRivalesClub.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.nombre_equipo ??
+                        clubes.find((c) => c.id === form.club_id)?.nombre ??
+                        "—"}
+                    </option>
+                  ))}
+                </select>
+                {equiposRivalesClub.length === 0 && (
+                  <p
+                    style={{
+                      fontSize: "11px",
+                      color: "var(--muted)",
+                      marginTop: "4px",
+                    }}
+                  >
+                    No hay equipos previos de este club en esta competición. Se
+                    creará uno nuevo.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* 3. Nombre comercial (solo al crear nuevo) */}
+            {form.club_id && !equipoRivalId && (
+              <div className="adm-field">
+                <label className="adm-label">
+                  Nombre del equipo{" "}
+                  <span
+                    style={{
+                      fontWeight: 400,
+                      fontSize: "11px",
+                      color: "var(--muted)",
+                      textTransform: "none",
+                    }}
+                  >
+                    — opcional
+                  </span>
+                </label>
+                <input
+                  type="text"
+                  value={form.nombre_equipo}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, nombre_equipo: e.target.value }))
+                  }
+                  placeholder={`Ej: McDonalds ${clubes.find((c) => c.id === form.club_id)?.nombre ?? ""}`}
+                  className="adm-input"
+                />
+                <p
                   style={{
-                    fontWeight: 400,
                     fontSize: "11px",
                     color: "var(--muted)",
-                    textTransform: "none",
+                    marginTop: "4px",
                   }}
                 >
-                  — opcional
-                </span>
-              </label>
-              <input
-                type="text"
-                value={form.nombre_equipo}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, nombre_equipo: e.target.value }))
-                }
-                placeholder={
-                  form.club_id
-                    ? `Ej: ${clubes.find((c) => c.id === form.club_id)?.nombre ?? ""} A`
-                    : "Ej: Fundación Alierta A"
-                }
-                className="adm-input"
-              />
-              <p
-                style={{
-                  fontSize: "11px",
-                  color: "var(--muted)",
-                  marginTop: "4px",
-                }}
-              >
-                Se mostrará como:{" "}
-                <strong style={{ color: "var(--texto)" }}>
-                  {form.nombre_equipo.trim() ||
-                    clubes.find((c) => c.id === form.club_id)?.nombre ||
-                    "—"}
-                </strong>
-              </p>
-            </div>
+                  Se mostrará como:{" "}
+                  <strong style={{ color: "var(--texto)" }}>
+                    {previewNombreFor(form.club_id, form.nombre_equipo)}
+                  </strong>
+                </p>
+              </div>
+            )}
 
-            <button onClick={guardar} className="adm-btn-primary">
+            <button
+              onClick={guardar}
+              className="adm-btn-primary"
+              disabled={!form.club_id}
+            >
               Añadir
             </button>
           </div>

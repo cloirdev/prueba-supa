@@ -56,6 +56,12 @@ const S = {
   field: { display: "flex", flexDirection: "column", gap: "4px" },
 };
 
+function nombreEquipoPropio(equipo) {
+  const sponsor = equipo.sponsors?.nombre ?? equipo.sponsor;
+  const categoria = equipo.categorias?.nombre ?? "";
+  return sponsor ? `${sponsor} CB Jaca` : `CB Jaca ${categoria}`.trim();
+}
+
 function Modal({ children, onClose }) {
   return (
     <div
@@ -347,9 +353,6 @@ function ModalParticipante({
 
   async function añadirMiEquipo() {
     setGuardando(true);
-    const nombreEquipo = equipo.sponsor
-      ? `${equipo.sponsor} CB Jaca`
-      : (equipo.categorias?.nombre ?? "CB Jaca");
     const { data: miClub } = await supabase
       .from("clubes")
       .select("id")
@@ -359,7 +362,7 @@ function ModalParticipante({
       fase_id: faseId,
       club_id: miClub.id,
       equipo_id: equipo.id,
-      nombre_equipo: nombreEquipo,
+      nombre_equipo: nombreEquipoPropio(equipo),
     });
     setGuardando(false);
     onGuardado();
@@ -409,7 +412,6 @@ function ModalParticipante({
           </button>
         </div>
 
-        {/* Mi equipo */}
         {!yaEstaMiEquipo && (
           <div
             style={{
@@ -421,7 +423,7 @@ function ModalParticipante({
             <div style={{ ...S.label, marginBottom: "8px" }}>Mi equipo</div>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <div style={{ flex: 1, fontSize: "13px", fontWeight: 600 }}>
-                {equipo.sponsor ?? equipo.categorias?.nombre ?? "Mi equipo"}
+                {nombreEquipoPropio(equipo)}
               </div>
               <button
                 style={S.btn()}
@@ -434,7 +436,6 @@ function ModalParticipante({
           </div>
         )}
 
-        {/* Buscar club */}
         <div style={S.field}>
           <span style={S.label}>Buscar club rival</span>
           <div style={{ position: "relative" }}>
@@ -535,9 +536,8 @@ function TablaClasificacion({
     .map((p) => {
       const cls = clasificacion.find((c) => c.participante_id === p.id);
       const esMiEquipo = p.equipo_id === equipo.id;
-      const nombre = esMiEquipo
-        ? (equipo.sponsor ?? equipo.categorias?.nombre ?? "Mi equipo")
-        : (p.nombre_equipo ?? p.clubes?.nombre ?? "–");
+      // Usar siempre nombre_equipo guardado en participantes como fuente de verdad
+      const nombre = p.nombre_equipo ?? p.clubes?.nombre ?? "–";
       return { participante: p, cls, nombre, esMiEquipo };
     })
     .sort((a, b) => (a.cls?.posicion ?? 999) - (b.cls?.posicion ?? 999));

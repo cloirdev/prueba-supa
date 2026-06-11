@@ -2,13 +2,19 @@ import { useState, useEffect } from "react";
 import AdminPartido from "./AdminPartido.jsx";
 import FormPartido from "./FormPartido.jsx";
 
-function crearFormInicial() {
+function crearFormInicial(temporada) {
+  const nombre = temporada?.temporadas?.nombre ?? temporada?.nombre ?? "";
+  // Extrae el primer año: "2009/10" → "2009", "2009-10" → "2009"
+  const anyo = nombre.match(/\d{4}/)?.[0] ?? new Date().getFullYear();
+  const fechaDefecto = `${anyo}-09-01`; // septiembre, inicio típico de temporada
+
   return {
+    tipo: "liga",
     participante_id: "",
     club_rival_id: "",
     fase_id: "",
     jornada: "",
-    fecha: "",
+    fecha: fechaDefecto,
     es_local: true,
     disputado: false,
     puntos_local: "",
@@ -30,7 +36,7 @@ export default function AdminCalendario({
   const [cargando, setCargando] = useState(true);
   const [partidoSeleccionado, setPartidoSeleccionado] = useState(null);
   const [vista, setVista] = useState("lista");
-  const [form, setForm] = useState(crearFormInicial);
+  const [form, setForm] = useState(() => crearFormInicial(temporada));
   const [editandoId, setEditandoId] = useState(null);
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
@@ -122,7 +128,7 @@ export default function AdminCalendario({
 
   function abrirNuevo() {
     setVista("nuevo");
-    setForm(crearFormInicial());
+    setForm(crearFormInicial(temporada));
     setEditandoId(null);
     setMsg("");
     setError("");
@@ -136,6 +142,7 @@ export default function AdminCalendario({
       ? p.participante_visitante
       : p.participante_local;
     setForm({
+      tipo: "liga",
       participante_id: participanteRival?.id ?? "",
       club_rival_id: "",
       fase_id: p.fase_id ?? "",
@@ -167,20 +174,39 @@ export default function AdminCalendario({
       setError("Selecciona un rival");
       return;
     }
-    if (form.participante_id && !form.fase_id) {
-      setError("Selecciona una fase");
-      return;
-    }
-    if (form.fase_id && !form.participante_id && !form.club_rival_id) {
-      setError("Selecciona un rival");
-      return;
-    }
 
     const { puntos_favor, puntos_contra } = form.disputado
       ? calcularPuntos(form)
       : { puntos_favor: null, puntos_contra: null };
 
-    // Buscar el participante propio (CB Jaca) en esa fase
+    // Para amistosos: buscar o crear participante sin fase
+    let participanteRivalId = form.participante_id;
+    if (form.tipo === "amistoso" && form.club_rival_id) {
+      const { data: existing } = await supabase
+        .from("participantes")
+        .select("id")
+        .eq("club_id", form.club_rival_id)
+        .is("fase_id", null)
+        .single();
+
+      if (existing) {
+        participanteRivalId = existing.id;
+      } else {
+        const club = clubes.find((c) => c.id === form.club_rival_id);
+        const { data: nuevo } = await supabase
+          .from("participantes")
+          .insert({
+            club_id: form.club_rival_id,
+            fase_id: null,
+            nombre_equipo: club?.nombre ?? null,
+          })
+          .select("id")
+          .single();
+        participanteRivalId = nuevo?.id ?? null;
+      }
+    }
+
+    // Buscar participante propio en la fase (solo si hay fase)
     let participantePropioId = null;
     if (form.fase_id) {
       const { data } = await supabase
@@ -200,16 +226,20 @@ export default function AdminCalendario({
       puntos_contra,
       fase_id: form.fase_id || null,
       jornada:
-        form.jornada && !isNaN(parseInt(form.jornada))
+        form.tipo === "liga" && !isNaN(parseInt(form.jornada))
           ? parseInt(form.jornada)
           : null,
       ronda:
-        form.jornada && isNaN(parseInt(form.jornada)) ? form.jornada : null,
+        form.tipo === "amistoso"
+          ? "Amistoso"
+          : form.tipo !== "liga"
+            ? form.jornada || null
+            : null,
       participante_local_id: form.es_local
         ? participantePropioId
-        : form.participante_id || null,
+        : participanteRivalId,
       participante_visitante_id: form.es_local
-        ? form.participante_id || null
+        ? participanteRivalId
         : participantePropioId,
     };
 

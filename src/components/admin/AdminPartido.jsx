@@ -44,7 +44,6 @@ function calcularValoracion(s) {
   );
 }
 
-// Resuelve el nombre de un participante: nombre_equipo manual ?? nombre del club
 function nombreParticipante(p) {
   if (!p) return "—";
   return p.nombre_equipo ?? p.clubes?.nombre ?? "—";
@@ -88,7 +87,7 @@ function Celda({ value, onInc, onDec, color }) {
   );
 }
 
-// ── Celda de tiro: mitad izq = anotados, mitad der = intentados ─────────
+// ── Celda de tiro ─────────────────────────────────────────────────────────
 function CeldaTiro({ an, int_, onIncAn, onDecAn, onIncInt, onDecInt }) {
   function getZone(e) {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -145,7 +144,6 @@ function CeldaTiro({ an, int_, onIncAn, onDecAn, onIncInt, onDecInt }) {
   );
 }
 
-// ── Celda calculada (solo lectura) ────────────────────────────────────────
 function CeldaCalc({ value, color }) {
   return (
     <td
@@ -166,7 +164,6 @@ function CeldaCalc({ value, color }) {
 function FilaJugador({ c, stats, setStats, toggleConvocado }) {
   const s = stats[c.jugadores.id] ?? {};
   const esTitular = s.titular ?? false;
-
   const ptsTotal =
     parseInt(s.tiros_libres_anotados ?? 0) +
     parseInt(s.tiros_campo_anotados ?? 0) * 2 +
@@ -182,11 +179,11 @@ function FilaJugador({ c, stats, setStats, toggleConvocado }) {
       [c.jugadores.id]: { ...prev[c.jugadores.id], [campo]: v },
     }));
   }
-  function inc(campo, min = 0) {
-    update(campo, Math.max(min, parseInt(s[campo] ?? 0) + 1));
+  function inc(campo) {
+    update(campo, Math.max(0, parseInt(s[campo] ?? 0) + 1));
   }
-  function dec(campo, min = 0) {
-    update(campo, Math.max(min, parseInt(s[campo] ?? 0) - 1));
+  function dec(campo) {
+    update(campo, Math.max(0, parseInt(s[campo] ?? 0) - 1));
   }
 
   return (
@@ -196,12 +193,10 @@ function FilaJugador({ c, stats, setStats, toggleConvocado }) {
         background: esTitular ? "rgba(242,130,65,.03)" : "transparent",
       }}
     >
-      {/* Nombre */}
       <td style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <button
             onClick={() => update("titular", !esTitular)}
-            title={esTitular ? "Quitar titular" : "Marcar titular"}
             style={{
               width: "26px",
               height: "26px",
@@ -227,8 +222,6 @@ function FilaJugador({ c, stats, setStats, toggleConvocado }) {
           </div>
         </div>
       </td>
-
-      {/* MIN */}
       <td style={{ padding: "6px", textAlign: "center" }}>
         <input
           type="text"
@@ -267,7 +260,6 @@ function FilaJugador({ c, stats, setStats, toggleConvocado }) {
           }}
         />
       </td>
-
       <CeldaCalc
         value={ptsTotal}
         color={ptsTotal > 0 ? "var(--naranja)" : "var(--muted)"}
@@ -400,7 +392,6 @@ function FilaTotales({ lista, stats }) {
         0,
       ),
     );
-
   const st = {
     padding: "8px 8px",
     textAlign: "center",
@@ -410,7 +401,6 @@ function FilaTotales({ lista, stats }) {
     background: "var(--color-background-secondary)",
   };
   const tv = sumVal();
-
   return (
     <tr style={{ borderTop: "1.5px solid var(--borde)" }}>
       <td
@@ -461,7 +451,6 @@ function FilaTotales({ lista, stats }) {
   );
 }
 
-// ── Cabecera de sección ────────────────────────────────────────────────────
 const HEADERS = [
   "MIN",
   "PTS",
@@ -535,8 +524,6 @@ export default function AdminPartido({
   equipo,
   temporada,
   partido,
-  // participantes: lista completa de participantes de la fase/temporada
-  // (se usa para el selector de rival en "editar partido")
   participantes = [],
   clubes = [],
   fases = [],
@@ -544,21 +531,12 @@ export default function AdminPartido({
 }) {
   const [seccion, setSeccion] = useState("resultado");
 
-  // Participante rival: local o visitante según es_local
   const participanteRival = partido.es_local
     ? partido.participante_visitante
     : partido.participante_local;
-
-  // Para amistosos sin participante, fallback al club_rival (si existe)
-  const nombreRivalPartido =
-    nombreParticipante(participanteRival) ??
-    partido.clubes_rival?.nombre ??
-    partido.rival ??
-    "Rival";
-
+  const nombreRivalPartido = nombreParticipante(participanteRival) ?? "Rival";
   const nombreEquipo =
     equipo.sponsor ?? equipo.categorias?.nombre ?? "Nosotros";
-
   const labelLocal = partido.es_local
     ? `${nombreEquipo} (local)`
     : `${nombreRivalPartido} (local)`;
@@ -576,14 +554,12 @@ export default function AdminPartido({
   });
 
   const [formEditar, setFormEditar] = useState({
-    // Para partidos de competición usamos participante_id (el rival)
     participante_id: partido.es_local
       ? (partido.participante_visitante_id ?? "")
       : (partido.participante_local_id ?? ""),
-    // Para amistosos usamos club_rival_id
-    club_rival_id: partido.club_rival_id_nuevo ?? partido.club_rival_id ?? "",
-    fase_id: partido.fase_id ?? partido.fase_competicion_id ?? "",
-    tipo: partido.tipo === "amistoso" ? "amistoso" : (partido.tipo ?? "liga"),
+    club_rival_id: "", // solo usado en UI para amistosos, nunca va a Supabase
+    fase_id: partido.fase_id ?? "",
+    tipo: partido.ronda === "Amistoso" ? "amistoso" : "liga",
     jornada: partido.jornada ?? partido.ronda ?? "",
     fecha: partido.fecha ?? "",
     es_local: partido.es_local ?? true,
@@ -633,10 +609,8 @@ export default function AdminPartido({
         .select("*")
         .eq("partido_id", partido.id),
     ]);
-
     setJugadores(conv ?? []);
     if (cronData) setCronica(cronData.contenido ?? "");
-
     const statsMap = {};
     (conv ?? []).forEach((c) => {
       statsMap[c.jugadores.id] = { convocado: true };
@@ -657,6 +631,7 @@ export default function AdminPartido({
     setCargando(false);
   }
 
+  // ── Guardar resultado ────────────────────────────────────────────────────
   async function guardarResultado() {
     setError("");
     setMsg("");
@@ -678,12 +653,12 @@ export default function AdminPartido({
     setMsg("Resultado guardado");
   }
 
+  // ── Guardar edición del partido ──────────────────────────────────────────
   async function guardarEdicionPartido() {
     setError("");
     setMsg("");
     const f = formEditar;
 
-    // Validaciones
     if (f.tipo !== "amistoso" && !f.participante_id) {
       setError("Selecciona un rival");
       return;
@@ -717,33 +692,37 @@ export default function AdminPartido({
         }
       : { puntos_favor: null, puntos_contra: null };
 
-    // Construir local/visitante según es_local y tipo
-    // En partidos de competición, nuestro equipo siempre tiene su participante_id propio
-    // que viene del padre. El rival es el participante seleccionado.
-    const participanteLocalId =
-      f.tipo !== "amistoso"
-        ? f.es_local
-          ? null
-          : f.participante_id // null = nuestro equipo (se resuelve en BD)
-        : null;
-    const participanteVisitanteId =
-      f.tipo !== "amistoso" ? (f.es_local ? f.participante_id : null) : null;
-
-    // Nombre del rival para el campo texto (fallback legacy)
-    const rivalObj = participantes.find((p) => p.id === f.participante_id);
-    const rivalClub = clubes.find((c) => c.id === f.club_rival_id);
-    const rivalNombre =
-      f.tipo === "amistoso"
-        ? (rivalClub?.nombre ?? "Amistoso")
-        : (nombreParticipante(rivalObj) ?? "Rival");
+    // Para amistosos: buscar o crear participante con fase_id = null
+    let participanteRivalId = f.participante_id;
+    if (f.tipo === "amistoso" && f.club_rival_id) {
+      const { data: existing } = await supabase
+        .from("participantes")
+        .select("id")
+        .eq("club_id", f.club_rival_id)
+        .is("fase_id", null)
+        .single();
+      if (existing) {
+        participanteRivalId = existing.id;
+      } else {
+        const club = clubes.find((c) => c.id === f.club_rival_id);
+        const { data: nuevo } = await supabase
+          .from("participantes")
+          .insert({
+            club_id: f.club_rival_id,
+            fase_id: null,
+            nombre_equipo: club?.nombre ?? null,
+          })
+          .select("id")
+          .single();
+        participanteRivalId = nuevo?.id ?? null;
+      }
+    }
 
     const { error: err } = await supabase
       .from("partidos")
       .update({
-        rival: rivalNombre,
         es_local: f.es_local,
         fecha: f.fecha || null,
-        tipo: f.tipo,
         puntos_favor,
         puntos_contra,
         jornada: f.tipo === "liga" ? parseInt(f.jornada) || null : null,
@@ -753,21 +732,13 @@ export default function AdminPartido({
             : f.tipo !== "liga"
               ? f.jornada || null
               : null,
-        fase_competicion_id: f.fase_id || null,
-        // Participantes local/visitante (competición)
+        fase_id: f.fase_id || null,
         participante_local_id: f.es_local
-          ? partido.participante_local_id // nuestro equipo, no cambia
-          : f.tipo !== "amistoso"
-            ? f.participante_id
-            : null,
+          ? partido.participante_local_id
+          : participanteRivalId,
         participante_visitante_id: f.es_local
-          ? f.tipo !== "amistoso"
-            ? f.participante_id
-            : null
-          : partido.participante_visitante_id, // nuestro equipo, no cambia
-        // Amistoso: guardar club rival
-        club_rival_id_nuevo:
-          f.tipo === "amistoso" ? f.club_rival_id || null : null,
+          ? participanteRivalId
+          : partido.participante_visitante_id,
       })
       .eq("id", partido.id);
 
@@ -812,14 +783,12 @@ export default function AdminPartido({
       parseInt(s.triples_intentados ?? 0);
     const rebTotales =
       parseInt(s.rebotes_ofensivos ?? 0) + parseInt(s.rebotes_defensivos ?? 0);
-
     const { data: existing } = await supabase
       .from("convocatorias_partido")
       .select("id")
       .eq("partido_id", partido.id)
       .eq("jugador_id", jugadorId)
       .single();
-
     const payload = {
       partido_id: partido.id,
       jugador_id: jugadorId,
@@ -941,7 +910,6 @@ export default function AdminPartido({
   const pConActual = partido.es_local
     ? partido.puntos_contra
     : partido.puntos_favor;
-
   const SECCIONES = [
     "resultado",
     "estadísticas",
@@ -993,7 +961,6 @@ export default function AdminPartido({
         · {partido.es_local ? "Local" : "Visitante"}
       </p>
 
-      {/* Tabs */}
       <div
         style={{
           display: "flex",
@@ -1191,7 +1158,6 @@ export default function AdminPartido({
               </div>
             )}
           </div>
-
           <div style={{ overflowX: "auto" }}>
             <table
               style={{
@@ -1235,7 +1201,6 @@ export default function AdminPartido({
               </tbody>
             </table>
           </div>
-
           {noConvocados.length > 0 && (
             <div
               style={{
@@ -1286,7 +1251,6 @@ export default function AdminPartido({
               </div>
             </div>
           )}
-
           {(() => {
             const totalSegs = convocados.reduce(
               (a, c) =>
@@ -1568,7 +1532,6 @@ export default function AdminPartido({
             onGuardar={guardarEdicionPartido}
             onCancelar={() => setSeccion("resultado")}
           />
-
           <div
             style={{
               marginTop: "32px",

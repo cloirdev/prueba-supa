@@ -192,8 +192,17 @@ export default function FormPartido({
 
       {/* Toggle disputado */}
       <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-        <div
+        <button
+          type="button"
+          role="switch"
+          aria-checked={form.disputado}
           onClick={() => setForm({ ...form, disputado: !form.disputado })}
+          onKeyDown={(e) => {
+            if (e.key === " " || e.key === "Enter") {
+              e.preventDefault();
+              setForm({ ...form, disputado: !form.disputado });
+            }
+          }}
           style={{
             width: "40px",
             height: "22px",
@@ -203,7 +212,14 @@ export default function FormPartido({
             cursor: "pointer",
             transition: "background .2s",
             flexShrink: 0,
+            border: "none",
+            padding: 0,
+            outline: "none",
           }}
+          onFocus={(e) =>
+            (e.currentTarget.style.boxShadow = "0 0 0 2px var(--naranja)")
+          }
+          onBlur={(e) => (e.currentTarget.style.boxShadow = "none")}
         >
           <div
             style={{
@@ -218,7 +234,7 @@ export default function FormPartido({
               boxShadow: "0 1px 3px rgba(0,0,0,.2)",
             }}
           />
-        </div>
+        </button>
         <span
           onClick={() => setForm({ ...form, disputado: !form.disputado })}
           style={{
