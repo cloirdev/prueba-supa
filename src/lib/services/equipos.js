@@ -12,8 +12,9 @@ function groupByEquipoId(rows = []) {
 export async function getEquipoTemporadaStaticPaths() {
   const { data: equipos, error } = await supabase.from("equipos").select(`
     id,
+    created_at,
     categorias (nombre, slug),
-    temporadas (nombre)
+    temporadas:temporadas!equipos_temporada_id_fkey (nombre)
   `);
 
   if (error || !equipos) {
@@ -21,43 +22,52 @@ export async function getEquipoTemporadaStaticPaths() {
     return [];
   }
 
-  const rutasMap = new Map();
+  const slugMap = resolverSlugsEquipos(equipos);
 
-  equipos.forEach((e) => {
-    const cSlug = e.categorias?.slug;
-    const tNombre = e.temporadas?.nombre;
-    if (!cSlug || !tNombre) return;
-    const key = `${cSlug}/${tNombre}`;
-    if (!rutasMap.has(key)) {
-      rutasMap.set(key, {
-        params: { categoria_slug: cSlug, temporada_slug: tNombre },
-        props: {
-          equipoIds: [e.id],
-          categoriaNombre: e.categorias.nombre,
-          categoriaSlug: cSlug,
-          temporadaNombre: tNombre,
-          temporadaSlug: tNombre,
-        },
-      });
-    } else {
-      rutasMap.get(key).props.equipoIds.push(e.id);
-    }
-  });
-
-  return Array.from(rutasMap.values());
+  return equipos
+    .filter((e) => e.categorias?.slug && e.temporadas?.nombre)
+    .map((e) => ({
+      params: {
+        categoria_slug: slugMap.get(e.id),
+        temporada_slug: e.temporadas.nombre,
+      },
+      props: {
+        equipoIds: [e.id], // ya no se fusiona, un equipo = una página
+        categoriaNombre: e.categorias.nombre,
+        categoriaSlug: slugMap.get(e.id),
+        temporadaNombre: e.temporadas.nombre,
+        temporadaSlug: e.temporadas.nombre,
+      },
+    }));
 }
 
-export async function getEquipoTemporadaPageData(equipoIds = []) {
-  const { data: equipos } = await supabase
+export async function getEquipoTemporadaPageData(
+  equipoIds = [],
+  categoriaSlug,
+) {
+  const { data: equipos, error: errEquipos } = await supabase
     .from("equipos")
-    .select(`
+    .select(
+      `
       *,
       categorias(nombre, slug),
-      temporadas(nombre, id),
-      competiciones(nombre, id),
-      sponsors(id, nombre, logo_url)
-    `)
+      temporadas:temporadas!equipos_temporada_id_fkey(nombre, id),
+      sponsors:sponsors!equipos_sponsor_id_fkey(id, nombre, logo_url),
+      equipo_competiciones(
+        competiciones(id, nombre)
+      )
+    `,
+    )
     .in("id", equipoIds);
+
+  if (errEquipos) {
+    console.error("❌ Error cargando equipos:", errEquipos);
+  }
+
+  // Helper: primera competición asociada a un equipo (o null)
+  function competicionDe(equipo) {
+    return equipo?.equipo_competiciones?.[0]?.competiciones ?? null;
+  }
 
   const { data: convocatorias } = await supabase
     .from("convocatorias_temporada")
@@ -78,7 +88,8 @@ export async function getEquipoTemporadaPageData(equipoIds = []) {
 
   const { data: partidos } = await supabase
     .from("partidos")
-    .select(`
+    .select(
+      `
       id, es_local, fecha, jornada, ronda, puntos_favor, puntos_contra, equipo_id,
       participante_local:participantes!participante_local_id (
         id, nombre_equipo, clubes(nombre, logo_url)
@@ -86,14 +97,22 @@ export async function getEquipoTemporadaPageData(equipoIds = []) {
       participante_visitante:participantes!participante_visitante_id (
         id, nombre_equipo, clubes(nombre, logo_url)
       )
-    `)
+    `,
+    )
     .in("equipo_id", equipoIds)
     .order("fecha", { ascending: true });
 
   const partidosPorEquipo = groupByEquipoId(partidos ?? []);
 
+  // IDs de todas las competiciones de todos los equipos (vía tabla puente)
   const competicionIds = [
-    ...new Set((equipos ?? []).map((e) => e.competiciones?.id).filter(Boolean)),
+    ...new Set(
+      (equipos ?? [])
+        .flatMap((e) =>
+          (e.equipo_competiciones ?? []).map((ec) => ec.competiciones?.id),
+        )
+        .filter(Boolean),
+    ),
   ];
 
   let fasesPorEquipo = new Map();
@@ -110,8 +129,11 @@ export async function getEquipoTemporadaPageData(equipoIds = []) {
 
     if (fases?.length) {
       (equipos ?? []).forEach((e) => {
-        const fasesEquipo = (fases ?? []).filter(
-          (f) => f.competicion_id === e.competiciones?.id,
+        const idsCompeticionesEquipo = (e.equipo_competiciones ?? [])
+          .map((ec) => ec.competiciones?.id)
+          .filter(Boolean);
+        const fasesEquipo = (fases ?? []).filter((f) =>
+          idsCompeticionesEquipo.includes(f.competicion_id),
         );
         fasesPorEquipo.set(e.id, fasesEquipo);
       });
@@ -120,7 +142,9 @@ export async function getEquipoTemporadaPageData(equipoIds = []) {
 
       const { data: participantes } = await supabase
         .from("participantes")
-        .select("id, fase_id, equipo_id, nombre_equipo, clubes(nombre, logo_url)")
+        .select(
+          "id, fase_id, equipo_id, nombre_equipo, clubes(nombre, logo_url)",
+        )
         .in("fase_id", faseIds);
 
       const { data: clasificacion } = await supabase
@@ -143,11 +167,17 @@ export async function getEquipoTemporadaPageData(equipoIds = []) {
 
   const { data: otrasTemporadas } = await supabase
     .from("equipos")
-    .select(`id, temporadas(nombre)`)
+    .select(
+      `id, created_at, temporadas:temporadas!equipos_temporada_id_fkey(id, nombre), categorias(slug)`,
+    )
     .eq("categoria_id", equipos?.[0]?.categoria_id);
 
+  const slugMapOtras = resolverSlugsEquipos(otrasTemporadas ?? []);
+
   const temporadasOrdenadas = (otrasTemporadas ?? [])
-    .filter((e) => e.temporadas?.nombre)
+    .filter(
+      (e) => e.temporadas?.nombre && slugMapOtras.get(e.id) === categoriaSlug,
+    )
     .map((e) => ({ nombre: e.temporadas.nombre, slug: e.temporadas.nombre }))
     .sort((a, b) => b.nombre.localeCompare(a.nombre))
     .filter((t, i, arr) => arr.findIndex((x) => x.slug === t.slug) === i);
@@ -162,4 +192,33 @@ export async function getEquipoTemporadaPageData(equipoIds = []) {
     clasificacionPorFase,
     temporadasOrdenadas,
   };
+}
+
+// Agrupa equipos por categoría+temporada y devuelve un Map
+// equipo.id -> slug final de categoría (con sufijo si hay colisión)
+export function resolverSlugsEquipos(equipos = []) {
+  const grupos = new Map(); // key: "catSlug|tempNombre" -> [equipo, ...]
+
+  equipos.forEach((e) => {
+    const catSlug = e.categorias?.slug;
+    const tempNombre = e.temporadas?.nombre;
+    if (!catSlug || !tempNombre) return;
+    const key = `${catSlug}|${tempNombre}`;
+    if (!grupos.has(key)) grupos.set(key, []);
+    grupos.get(key).push(e);
+  });
+
+  const slugMap = new Map(); // equipo.id -> slug final
+  const sufijos = "bcdefghijk"; // hasta 11 equipos duplicados, de sobra
+
+  grupos.forEach((lista) => {
+    lista.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    lista.forEach((equipo, idx) => {
+      const base = equipo.categorias.slug;
+      const slugFinal = idx === 0 ? base : `${base}-${sufijos[idx - 1]}`;
+      slugMap.set(equipo.id, slugFinal);
+    });
+  });
+
+  return slugMap;
 }

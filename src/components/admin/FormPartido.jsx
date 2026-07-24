@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+
 export default function FormPartido({
   form,
   setForm,
@@ -29,10 +31,19 @@ export default function FormPartido({
     ? `${nombreRivalSel} (visitante)`
     : `${nombreEquipo} (visitante)`;
 
-  // Participantes de la fase seleccionada, excluyendo el equipo propio
   const participantesFase = participantes.filter(
     (p) => !form.fase_id || p.fase_id === form.fase_id,
   );
+
+  useEffect(() => {
+    if (!form.fecha) return;
+    const hoy = new Date().toISOString().split("T")[0];
+    if (form.fecha < hoy) {
+      setForm((f) => ({ ...f, disputado: true }));
+    } else {
+      setForm((f) => ({ ...f, disputado: false }));
+    }
+  }, [form.fecha]);
 
   return (
     <div className="card adm-form-card" style={{ maxWidth: "520px" }}>

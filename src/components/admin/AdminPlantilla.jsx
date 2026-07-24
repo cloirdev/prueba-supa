@@ -71,6 +71,8 @@ export default function AdminPlantilla({
   }
 
   async function asignarJugador() {
+    console.log("temporada.id:", temporada.id);
+    console.log("equipo.id:", equipo.id);
     setError("");
     setMsg("");
     if (!form.jugador_id || !form.dorsal) {

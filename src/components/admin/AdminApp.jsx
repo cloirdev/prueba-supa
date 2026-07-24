@@ -10,10 +10,10 @@ import AdminCalendario from "./AdminCalendario.jsx";
 import AdminNoticias from "./AdminNoticias.jsx";
 import AdminJugadores from "./jugadores/AdminJugadores.jsx";
 import AdminEntrenadores from "./AdminEntrenadores.jsx";
-import AdminClasificacion from "./AdminClasificacion.jsx";
+import AdminFase from "./AdminFase.jsx";
 import FormNuevoEquipo from "./FormNuevoEquipo.jsx";
 import AdminClubes from "./AdminClubes.jsx";
-import AdminParticipantes from "./AdminParticipantes.jsx";
+import AdminCompeticiones from "./AdminCompeticiones.jsx";
 import AdminSponsors from "./AdminSponsors.jsx";
 
 const supabase = createClient(
@@ -21,7 +21,6 @@ const supabase = createClient(
   import.meta.env.PUBLIC_SUPABASE_ANON_KEY,
 );
 
-// ── Sidebar theme tokens ──────────────────────────────────────────────────────
 function sidebarTokens(tema) {
   if (tema === "dark") {
     return {
@@ -64,6 +63,7 @@ export default function AdminApp() {
   const [equipoActual, setEquipoActual] = useState(null);
   const [temporadaActual, setTemporadaActual] = useState(null);
   const [vista, setVista] = useState("temporadas");
+  const [historial, setHistorial] = useState([]);
   const [tema, setTema] = useState(() => {
     if (typeof window === "undefined") return "light";
     return localStorage.getItem("tema") || "light";
@@ -114,6 +114,33 @@ export default function AdminApp() {
     setEquipoActual(null);
     setTemporadaActual(null);
     setVista("temporadas");
+    setHistorial([]);
+  }
+
+  // ── Navegación con historial ──────────────────────────────────────────────
+  function navegar(nuevaVista) {
+    setHistorial((h) => [...h, vista]);
+    setVista(nuevaVista);
+  }
+
+  function volver() {
+    if (historial.length === 0) return;
+    const anterior = historial[historial.length - 1];
+    setHistorial((h) => h.slice(0, -1));
+    setVista(anterior);
+  }
+
+  function irAlInicio() {
+    setEquipoActual(null);
+    setTemporadaActual(null);
+    setVista("temporadas");
+    setHistorial([]);
+  }
+
+  function irAEquipos() {
+    setEquipoActual(null);
+    setHistorial((h) => [...h, vista]);
+    setVista("equipos");
   }
 
   if (cargando)
@@ -123,8 +150,9 @@ export default function AdminApp() {
   if (!session) return <AdminLogin supabase={supabase} />;
 
   const tieneEquipo = equipoActual && temporadaActual;
-  const equipoLabel =
-    equipoActual?.categorias?.nombre ?? equipoActual?.sponsor ?? "Equipo";
+  const equipoLabel = equipoActual?.sponsors?.nombre
+    ? `${equipoActual.sponsors.nombre} CB Jaca`
+    : (equipoActual?.categorias?.nombre ?? equipoActual?.sponsor ?? "Equipo");
 
   const sidebarW = sidebarCollapsed ? "56px" : "220px";
 
@@ -136,7 +164,7 @@ export default function AdminApp() {
         fontFamily: "system-ui, sans-serif",
       }}
     >
-      {/* ── Sidebar ─────────────────────────────────────────────────────── */}
+      {/* ── Sidebar ── */}
       <div
         style={{
           width: sidebarW,
@@ -149,7 +177,7 @@ export default function AdminApp() {
           borderRight: `0.5px solid ${tk.border}`,
         }}
       >
-        {/* Logo row */}
+        {/* Logo */}
         <div
           style={{
             padding: "0 12px",
@@ -183,8 +211,6 @@ export default function AdminApp() {
               </div>
             </div>
           )}
-
-          {/* Collapse toggle */}
           <button
             onClick={() => setSidebarCollapsed((c) => !c)}
             title={sidebarCollapsed ? "Expandir menú" : "Colapsar menú"}
@@ -230,7 +256,7 @@ export default function AdminApp() {
           </button>
         </div>
 
-        {/* Nav sections */}
+        {/* Nav */}
         <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
           <NavSection label="General" collapsed={sidebarCollapsed} tk={tk}>
             <NavItem
@@ -238,11 +264,7 @@ export default function AdminApp() {
               icon="⌂"
               activa={vista === "temporadas"}
               collapsed={sidebarCollapsed}
-              onClick={() => {
-                setEquipoActual(null);
-                setTemporadaActual(null);
-                setVista("temporadas");
-              }}
+              onClick={irAlInicio}
             />
           </NavSection>
 
@@ -257,35 +279,35 @@ export default function AdminApp() {
                 icon="🏀"
                 activa={vista === "equipo"}
                 collapsed={sidebarCollapsed}
-                onClick={() => setVista("equipo")}
+                onClick={() => navegar("equipo")}
               />
               <NavItem
                 label="Plantilla"
                 icon="👥"
                 activa={vista === "plantilla"}
                 collapsed={sidebarCollapsed}
-                onClick={() => setVista("plantilla")}
+                onClick={() => navegar("plantilla")}
               />
               <NavItem
                 label="Calendario"
                 icon="📅"
                 activa={vista === "calendario"}
                 collapsed={sidebarCollapsed}
-                onClick={() => setVista("calendario")}
+                onClick={() => navegar("calendario")}
               />
               <NavItem
                 label="Clasificación"
                 icon="🏆"
                 activa={vista === "clasificacion"}
                 collapsed={sidebarCollapsed}
-                onClick={() => setVista("clasificacion")}
+                onClick={() => navegar("clasificacion")}
               />
               <NavItem
                 label="Noticias"
                 icon="📰"
                 activa={vista === "noticias"}
                 collapsed={sidebarCollapsed}
-                onClick={() => setVista("noticias")}
+                onClick={() => navegar("noticias")}
               />
             </NavSection>
           )}
@@ -297,48 +319,48 @@ export default function AdminApp() {
                 icon="🏅"
                 activa={vista === "jugadores"}
                 collapsed={sidebarCollapsed}
-                onClick={() => setVista("jugadores")}
+                onClick={() => navegar("jugadores")}
               />
               <NavItem
                 label="Entrenadores"
                 icon="📋"
                 activa={vista === "entrenadores"}
                 collapsed={sidebarCollapsed}
-                onClick={() => setVista("entrenadores")}
+                onClick={() => navegar("entrenadores")}
               />
               <NavItem
                 label="Clubes"
                 icon="🏛️"
                 activa={vista === "clubes"}
                 collapsed={sidebarCollapsed}
-                onClick={() => setVista("clubes")}
+                onClick={() => navegar("clubes")}
               />
               <NavItem
-                label="Participantes"
-                icon="🏟️"
-                activa={vista === "participantes"}
+                label="Competiciones"
+                icon="🏆"
+                activa={vista === "competiciones"}
                 collapsed={sidebarCollapsed}
-                onClick={() => setVista("participantes")}
+                onClick={() => navegar("competiciones")}
               />
               <NavItem
                 label="Nuevo equipo"
                 icon="➕"
                 activa={vista === "nuevoEquipo"}
                 collapsed={sidebarCollapsed}
-                onClick={() => setVista("nuevoEquipo")}
+                onClick={() => navegar("nuevoEquipo")}
               />
               <NavItem
                 label="Sponsors"
                 icon="🏷️"
                 activa={vista === "sponsors"}
                 collapsed={sidebarCollapsed}
-                onClick={() => setVista("sponsors")}
+                onClick={() => navegar("sponsors")}
               />
             </NavSection>
           )}
         </div>
 
-        {/* Footer: user + theme toggle + logout */}
+        {/* Footer */}
         <div
           style={{
             padding: sidebarCollapsed ? "12px 0" : "16px",
@@ -349,7 +371,6 @@ export default function AdminApp() {
             gap: "8px",
           }}
         >
-          {/* Avatar + info row */}
           <div
             style={{
               display: "flex",
@@ -376,7 +397,6 @@ export default function AdminApp() {
             >
               {session.user.email[0].toUpperCase()}
             </div>
-
             {!sidebarCollapsed && (
               <>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -395,7 +415,6 @@ export default function AdminApp() {
                     {perfil?.rol}
                   </div>
                 </div>
-
                 <button
                   onClick={toggleTema}
                   aria-label="Cambiar tema"
@@ -408,47 +427,11 @@ export default function AdminApp() {
                     flexShrink: 0,
                   }}
                 >
-                  <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 200 200"
-                    style={{ overflow: "visible" }}
-                  >
-                    <defs>
-                      <mask id="hole-admin">
-                        <rect width="100%" height="100%" fill="white" />
-                        <circle
-                          r="80"
-                          cx={tema === "dark" ? 140 : 230}
-                          cy={tema === "dark" ? 60 : -30}
-                          fill="black"
-                          style={{ transition: "cx 0.5s ease, cy 0.5s ease" }}
-                        />
-                      </mask>
-                      <filter id="blur-admin">
-                        <feDropShadow
-                          dx="0"
-                          dy="0"
-                          stdDeviation="8"
-                          floodColor={tema === "dark" ? "white" : "#334155"}
-                        />
-                      </filter>
-                    </defs>
-                    <g filter="url(#blur-admin)">
-                      <circle
-                        fill={tema === "dark" ? "white" : "#334155"}
-                        r="80"
-                        cx="100"
-                        cy="100"
-                        mask="url(#hole-admin)"
-                      />
-                    </g>
-                  </svg>
+                  <LunaSol tema={tema} id="admin" />
                 </button>
               </>
             )}
           </div>
-
           {sidebarCollapsed && (
             <button
               onClick={toggleTema}
@@ -462,45 +445,9 @@ export default function AdminApp() {
                 justifyContent: "center",
               }}
             >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 200 200"
-                style={{ overflow: "visible" }}
-              >
-                <defs>
-                  <mask id="hole-admin-c">
-                    <rect width="100%" height="100%" fill="white" />
-                    <circle
-                      r="80"
-                      cx={tema === "dark" ? 140 : 230}
-                      cy={tema === "dark" ? 60 : -30}
-                      fill="black"
-                      style={{ transition: "cx 0.5s ease, cy 0.5s ease" }}
-                    />
-                  </mask>
-                  <filter id="blur-admin-c">
-                    <feDropShadow
-                      dx="0"
-                      dy="0"
-                      stdDeviation="8"
-                      floodColor={tema === "dark" ? "white" : "#334155"}
-                    />
-                  </filter>
-                </defs>
-                <g filter="url(#blur-admin-c)">
-                  <circle
-                    fill={tema === "dark" ? "white" : "#334155"}
-                    r="80"
-                    cx="100"
-                    cy="100"
-                    mask="url(#hole-admin-c)"
-                  />
-                </g>
-              </svg>
+              <LunaSol tema={tema} id="admin-c" />
             </button>
           )}
-
           {!sidebarCollapsed ? (
             <button
               onClick={logout}
@@ -541,7 +488,7 @@ export default function AdminApp() {
         </div>
       </div>
 
-      {/* ── Main ────────────────────────────────────────────────────────── */}
+      {/* ── Main ── */}
       <div
         style={{
           flex: 1,
@@ -575,24 +522,11 @@ export default function AdminApp() {
           >
             {tieneEquipo ? (
               <>
-                <span
-                  style={{ cursor: "pointer" }}
-                  onClick={() => {
-                    setEquipoActual(null);
-                    setTemporadaActual(null);
-                    setVista("temporadas");
-                  }}
-                >
+                <span style={{ cursor: "pointer" }} onClick={irAlInicio}>
                   Temporadas
                 </span>
                 <span>›</span>
-                <span
-                  style={{ cursor: "pointer" }}
-                  onClick={() => {
-                    setEquipoActual(null);
-                    setVista("equipos");
-                  }}
-                >
+                <span style={{ cursor: "pointer" }} onClick={irAEquipos}>
                   {temporadaActual?.nombre}
                 </span>
                 <span>›</span>
@@ -602,13 +536,7 @@ export default function AdminApp() {
               </>
             ) : temporadaActual ? (
               <>
-                <span
-                  style={{ cursor: "pointer" }}
-                  onClick={() => {
-                    setTemporadaActual(null);
-                    setVista("temporadas");
-                  }}
-                >
+                <span style={{ cursor: "pointer" }} onClick={irAlInicio}>
                   Temporadas
                 </span>
                 <span>›</span>
@@ -622,26 +550,44 @@ export default function AdminApp() {
               </span>
             )}
           </div>
-          {tieneEquipo && (
-            <button
-              onClick={() => {
-                setEquipoActual(null);
-                setTemporadaActual(null);
-                setVista("temporadas");
-              }}
-              style={{
-                fontSize: "12px",
-                padding: "6px 14px",
-                borderRadius: "8px",
-                cursor: "pointer",
-                border: "0.5px solid var(--borde)",
-                background: "transparent",
-                color: "var(--muted)",
-              }}
-            >
-              Cambiar equipo
-            </button>
-          )}
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            {/* Botón volver si hay historial */}
+            {historial.length > 0 && (
+              <button
+                onClick={volver}
+                style={{
+                  fontSize: "12px",
+                  padding: "6px 14px",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  border: "0.5px solid var(--borde)",
+                  background: "transparent",
+                  color: "var(--muted)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                ← Volver
+              </button>
+            )}
+            {tieneEquipo && (
+              <button
+                onClick={irAlInicio}
+                style={{
+                  fontSize: "12px",
+                  padding: "6px 14px",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  border: "0.5px solid var(--borde)",
+                  background: "transparent",
+                  color: "var(--muted)",
+                }}
+              >
+                Cambiar equipo
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Content */}
@@ -651,6 +597,7 @@ export default function AdminApp() {
               supabase={supabase}
               onSelect={(temporada) => {
                 setTemporadaActual(temporada);
+                setHistorial([]);
                 setVista("equipos");
               }}
             />
@@ -662,21 +609,14 @@ export default function AdminApp() {
               temporada={temporadaActual}
               onSelect={(equipo) => {
                 setEquipoActual(equipo);
+                setHistorial((h) => [...h, "equipos"]);
                 setVista("equipo");
               }}
               onBack={() => {
                 setTemporadaActual(null);
                 setVista("temporadas");
+                setHistorial([]);
               }}
-            />
-          )}
-          {vista === "plantilla" && tieneEquipo && (
-            <AdminPlantilla
-              supabase={supabase}
-              perfil={perfil}
-              equipo={equipoActual}
-              temporada={temporadaActual}
-              onBack={() => setVista("calendario")}
             />
           )}
           {vista === "equipo" && tieneEquipo && (
@@ -685,11 +625,20 @@ export default function AdminApp() {
               perfil={perfil}
               equipo={equipoActual}
               temporada={temporadaActual}
-              onBack={() => {
-                setEquipoActual(null);
-                setVista("equipos");
-              }}
-              onIrA={(seccion) => setVista(seccion)}
+              onBack={volver}
+              onIrA={(seccion) => navegar(seccion)}
+              onSponsorGuardado={(equipoActualizado) =>
+                setEquipoActual(equipoActualizado)
+              }
+            />
+          )}
+          {vista === "plantilla" && tieneEquipo && (
+            <AdminPlantilla
+              supabase={supabase}
+              perfil={perfil}
+              equipo={equipoActual}
+              temporada={temporadaActual}
+              onBack={volver}
             />
           )}
           {vista === "calendario" && tieneEquipo && (
@@ -698,14 +647,11 @@ export default function AdminApp() {
               perfil={perfil}
               equipo={equipoActual}
               temporada={temporadaActual}
-              onBack={() => {
-                setEquipoActual(null);
-                setVista("equipos");
-              }}
+              onBack={volver}
             />
           )}
           {vista === "clasificacion" && tieneEquipo && (
-            <AdminClasificacion
+            <AdminFase
               supabase={supabase}
               equipo={equipoActual}
               temporada={temporadaActual}
@@ -717,14 +663,17 @@ export default function AdminApp() {
               perfil={perfil}
               equipo={equipoActual}
               temporada={temporadaActual}
-              onBack={() => setVista("calendario")}
+              onBack={volver}
             />
           )}
           {vista === "nuevoEquipo" && perfil?.rol === "admin" && (
             <FormNuevoEquipo
               supabase={supabase}
-              onCreado={() => setVista("temporadas")}
-              onCancelar={() => setVista("temporadas")}
+              onCreado={() => {
+                setVista("temporadas");
+                setHistorial([]);
+              }}
+              onCancelar={volver}
             />
           )}
           {vista === "jugadores" && perfil?.rol === "admin" && (
@@ -736,8 +685,8 @@ export default function AdminApp() {
           {vista === "clubes" && perfil?.rol === "admin" && (
             <AdminClubes supabase={supabase} perfil={perfil} />
           )}
-          {vista === "participantes" && perfil?.rol === "admin" && (
-            <AdminParticipantes supabase={supabase} perfil={perfil} />
+          {vista === "competiciones" && perfil?.rol === "admin" && (
+            <AdminCompeticiones supabase={supabase} perfil={perfil} />
           )}
           {vista === "sponsors" && perfil?.rol === "admin" && (
             <AdminSponsors supabase={supabase} perfil={perfil} />
@@ -748,7 +697,47 @@ export default function AdminApp() {
   );
 }
 
-// ── NavSection ────────────────────────────────────────────────────────────────
+function LunaSol({ tema, id }) {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 200 200"
+      style={{ overflow: "visible" }}
+    >
+      <defs>
+        <mask id={`hole-${id}`}>
+          <rect width="100%" height="100%" fill="white" />
+          <circle
+            r="80"
+            cx={tema === "dark" ? 140 : 230}
+            cy={tema === "dark" ? 60 : -30}
+            fill="black"
+            style={{ transition: "cx 0.5s ease, cy 0.5s ease" }}
+          />
+        </mask>
+        <filter id={`blur-${id}`}>
+          <feDropShadow
+            dx="0"
+            dy="0"
+            stdDeviation="8"
+            floodColor={tema === "dark" ? "white" : "#334155"}
+          />
+        </filter>
+      </defs>
+      <g filter={`url(#blur-${id})`}>
+        <circle
+          fill={tema === "dark" ? "white" : "#334155"}
+          r="80"
+          cx="100"
+          cy="100"
+          mask={`url(#hole-${id})`}
+        />
+      </g>
+    </svg>
+  );
+}
+
 function NavSection({ label, children, collapsed, tk }) {
   return (
     <div
@@ -774,7 +763,6 @@ function NavSection({ label, children, collapsed, tk }) {
   );
 }
 
-// ── NavItem ───────────────────────────────────────────────────────────────────
 function NavItem({ label, icon, activa, onClick, collapsed }) {
   return (
     <div

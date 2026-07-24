@@ -12,7 +12,6 @@ export default function FormNuevoEquipo({ supabase, onCreado, onCancelar }) {
     temporada_id: "",
     categoria_id: "",
     competicion_id: "",
-    sponsor: "",
   });
 
   // ── Foto ──────────────────────────────────────────────────────────────────
@@ -38,10 +37,9 @@ export default function FormNuevoEquipo({ supabase, onCreado, onCancelar }) {
     if (!fotoFile) return null;
     setSubiendoFoto(true);
     const ext = fotoFile.name.split(".").pop();
-    const path = `equipos/${equipoId}.${ext}`;
     const { error: uploadError } = await supabase.storage
       .from("equipos")
-      .upload(`${equipoId}.${ext}`, file, { upsert: true });
+      .upload(`${equipoId}.${ext}`, fotoFile, { upsert: true });
     setSubiendoFoto(false);
     if (uploadError) throw new Error(uploadError.message);
     const { data } = supabase.storage
@@ -91,23 +89,30 @@ export default function FormNuevoEquipo({ supabase, onCreado, onCancelar }) {
 
     setGuardando(true);
     try {
-      // 1. Crear el equipo sin foto primero
-      const payload = {
-        temporada_id: form.temporada_id,
-        categoria_id: form.categoria_id,
-        competicion_id: form.competicion_id,
-        sponsor: form.sponsor.trim() || null,
-      };
-
+      // 1. Crear el equipo sin competicion_id ni sponsor
       const { data, error: err } = await supabase
         .from("equipos")
-        .insert(payload)
-        .select("id, temporada_id, categoria_id, competicion_id, sponsor")
+        .insert({
+          temporada_id: form.temporada_id,
+          categoria_id: form.categoria_id,
+        })
+        .select("id, temporada_id, categoria_id")
         .single();
 
       if (err) throw new Error(err.message ?? "Error al crear el equipo");
 
-      // 2. Si hay foto, subirla y actualizar el registro
+      // 2. Vincular con la competición en la tabla puente
+      const { error: errComp } = await supabase
+        .from("equipo_competiciones")
+        .insert({
+          equipo_id: data.id,
+          competicion_id: form.competicion_id,
+        });
+
+      if (errComp)
+        throw new Error(errComp.message ?? "Error al vincular competición");
+
+      // 3. Si hay foto, subirla y actualizar
       if (fotoFile) {
         const foto_url = await subirFoto(data.id);
         if (foto_url) {
@@ -209,19 +214,6 @@ export default function FormNuevoEquipo({ supabase, onCreado, onCancelar }) {
         </select>
       </Field>
 
-      <Field
-        label="Sponsor"
-        hint="Nombre comercial del equipo esta temporada (ej. «Aloha Jaca»)"
-      >
-        <input
-          type="text"
-          value={form.sponsor}
-          onChange={(e) => set("sponsor", e.target.value)}
-          placeholder="Aloha Jaca"
-          style={inputStyle}
-        />
-      </Field>
-
       {/* ── Foto de equipo ── */}
       <Field
         label="Foto del equipo"
@@ -315,7 +307,7 @@ export default function FormNuevoEquipo({ supabase, onCreado, onCancelar }) {
       </Field>
 
       {/* Vista previa nombre */}
-      {(form.categoria_id || form.sponsor) && (
+      {form.categoria_id && (
         <div
           style={{
             padding: "12px 16px",
@@ -339,11 +331,9 @@ export default function FormNuevoEquipo({ supabase, onCreado, onCancelar }) {
             Vista previa
           </span>
           <span style={{ fontWeight: 700, color: "var(--naranja)" }}>
-            {form.sponsor.trim() ||
-              categorias.find((c) => c.id === form.categoria_id)?.nombre ||
-              "—"}
+            {categorias.find((c) => c.id === form.categoria_id)?.nombre || "—"}
           </span>
-          {form.categoria_id && (
+          {form.temporada_id && (
             <span
               style={{
                 color: "var(--muted)",
@@ -351,13 +341,7 @@ export default function FormNuevoEquipo({ supabase, onCreado, onCancelar }) {
                 fontSize: "12px",
               }}
             >
-              · {categorias.find((c) => c.id === form.categoria_id)?.nombre}
-              {form.temporada_id && (
-                <>
-                  {" "}
-                  · {temporadas.find((t) => t.id === form.temporada_id)?.nombre}
-                </>
-              )}
+              · {temporadas.find((t) => t.id === form.temporada_id)?.nombre}
             </span>
           )}
         </div>

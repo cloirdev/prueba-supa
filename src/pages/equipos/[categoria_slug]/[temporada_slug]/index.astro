@@ -6,13 +6,19 @@ import {
   getEquipoTemporadaStaticPaths,
 } from "@/lib/services/equipos.js";
 import Layout from "@/layouts/Layout.astro";
- 
+
 export async function getStaticPaths() {
   return getEquipoTemporadaStaticPaths();
 }
- 
-const { equipoIds, categoriaNombre, categoriaSlug, temporadaNombre, temporadaSlug } = Astro.props;
- 
+
+const {
+  equipoIds,
+  categoriaNombre,
+  categoriaSlug,
+  temporadaNombre,
+  temporadaSlug,
+} = Astro.props;
+
 const {
   equipos,
   jugadoresPorEquipo,
@@ -22,685 +28,894 @@ const {
   participantesPorFase,
   clasificacionPorFase,
   temporadasOrdenadas,
-} = await getEquipoTemporadaPageData(equipoIds);
- 
-// ── Helpers ────────────────────────────────────────────────────────────────
+} = await getEquipoTemporadaPageData(equipoIds, categoriaSlug);
+
 function nombreRival(p) {
   const rival = p.es_local ? p.participante_visitante : p.participante_local;
   return rival?.nombre_equipo ?? rival?.clubes?.nombre ?? "—";
 }
- 
+
 function escudoRival(p) {
   const rival = p.es_local ? p.participante_visitante : p.participante_local;
   return rival?.clubes?.logo_url ?? "/escudo.png";
 }
- 
+
 function formatFecha(fechaStr) {
   if (!fechaStr) return "Por confirmar";
   const [y, m, d] = fechaStr.split("-");
-  const meses = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
-  const dias = ["dom","lun","mar","mié","jue","vie","sáb"];
+  const meses = [
+    "ene",
+    "feb",
+    "mar",
+    "abr",
+    "may",
+    "jun",
+    "jul",
+    "ago",
+    "sep",
+    "oct",
+    "nov",
+    "dic",
+  ];
+  const dias = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
   const fecha = new Date(fechaStr + "T00:00:00");
-  return `${dias[fecha.getDay()]} ${d} ${meses[parseInt(m)-1]}`;
+  return `${dias[fecha.getDay()]} ${d} ${meses[parseInt(m) - 1]}`;
 }
- 
+
 function etiquetaJornada(p) {
   if (p.jornada) return `J${p.jornada}`;
   if (p.ronda && p.ronda !== "Amistoso") return p.ronda;
   return "Amistoso";
 }
- 
+
 function fotoJugador(jugador, preferida = "accion") {
-  const accionFields = ["foto_accion_url", "foto_dinamica_url", "foto_juego_url", "foto_url", "imagen_url"];
+  const accionFields = [
+    "foto_accion_url",
+    "foto_dinamica_url",
+    "foto_juego_url",
+    "foto_url",
+    "imagen_url",
+  ];
   const seriaFields = ["foto_dni_url", "foto_seria_url", "foto_perfil_url"];
-  const prioridad = preferida === "seria"
-    ? [...seriaFields, ...accionFields]
-    : [...accionFields, ...seriaFields];
+  const prioridad =
+    preferida === "seria"
+      ? [...seriaFields, ...accionFields]
+      : [...accionFields, ...seriaFields];
   return prioridad.map((field) => jugador?.[field]).find(Boolean) ?? null;
 }
- 
+
 const posicionLabel = {
-  base: "Base", escolta: "Escolta", alero: "Alero",
-  ala_pivot: "Ala-Pívot", pivot: "Pívot",
+  base: "Base",
+  escolta: "Escolta",
+  alero: "Alero",
+  ala_pivot: "Ala-Pívot",
+  pivot: "Pívot",
 };
+
+function competicionesDe(equipo) {
+  return (equipo.equipo_competiciones ?? [])
+    .map((ec) => ec.competiciones)
+    .filter(Boolean);
+}
 ---
 
-
 <Layout titulo={`${categoriaNombre} – ${temporadaNombre} | CB Jaca`}>
-
-<!-- ── HERO ── -->
-<div
-  class="equipo-hero"
-  style={`background-image:
+  <div
+    class="equipo-hero"
+    style={`background-image:
     linear-gradient(
       to bottom,
       rgba(0,0,0,0.35),
       rgba(0,0,0,0.88)
     ),
     url('${equipos?.[0]?.foto_url || "/placeholder-team.jpg"}')`}
->
-  <div class="equipo-hero-inner">
-    <a href="/equipos" class="volver">← Equipos</a>
+  >
+    <div class="equipo-hero-inner">
+      <a href="/equipos" class="volver">← Equipos</a>
 
-    <div class="hero-content">
-      <div class="hero-text">
-        <p class="categoria-label">{categoriaNombre}</p>
+      <div class="hero-content">
+        <div class="hero-text">
+          <p class="categoria-label">{categoriaNombre}</p>
 
-        <h1>
-          {equipos?.[0]?.sponsor
-            ? `${equipos[0].sponsor} CB Jaca`
-            : `CB Jaca ${categoriaNombre}`}
-        </h1>
+          <h1>
+            {
+              equipos?.[0]?.sponsors?.nombre
+                ? `${equipos[0].sponsors.nombre} CB Jaca`
+                : `CB Jaca ${categoriaNombre}`
+            }
+          </h1>
 
-        {equipos?.[0]?.competiciones?.nombre && (
-          <p class="hero-competicion">
-            {equipos[0].competiciones.nombre}
-          </p>
-        )}
+          {
+            competicionesDe(equipos?.[0] ?? {}).length > 0 && (
+              <p class="hero-competicion">
+                {competicionesDe(equipos[0])
+                  .map((c) => c.nombre)
+                  .join(" · ")}
+              </p>
+            )
+          }
+        </div>
 
-        {equipos?.[0]?.sponsors?.nombre && (
-          <p class="hero-sponsored">
-            Patrocinado por {equipos[0].sponsors.nombre}
-          </p>
-        )}
+        {
+          equipos?.[0]?.sponsors?.logo_url && (
+            <div class="hero-logo-wrap">
+              <img
+                src={equipos[0].sponsors.logo_url}
+                alt={`Logo ${equipos[0].sponsors.nombre}`}
+                class="hero-logo"
+              />
+            </div>
+          )
+        }
       </div>
 
-      {equipos?.[0]?.sponsors?.logo_url && (
-        <div class="hero-logo-wrap">
-          <img
-            src={equipos[0].sponsors.logo_url}
-            alt={`Logo ${equipos[0].sponsors.nombre}`}
-            class="hero-logo"
-          />
-        </div>
-      )}
-    </div>
-
-    {temporadasOrdenadas.length > 1 && (
-      <select
-        class="temporada-select"
-        onchange={`window.location.href='/equipos/${categoriaSlug}/' + this.value`}
-      >
-        {temporadasOrdenadas.map((t) => (
-          <option
-            value={t.slug}
-            selected={t.slug === temporadaSlug}
+      {
+        temporadasOrdenadas.length > 1 && (
+          <select
+            class="temporada-select"
+            onchange={`window.location.href='/equipos/${categoriaSlug}/' + this.value`}
           >
-            {t.nombre}
-          </option>
-        ))}
-      </select>
-    )}
+            {temporadasOrdenadas.map((t) => (
+              <option value={t.slug} selected={t.slug === temporadaSlug}>
+                {t.nombre}
+              </option>
+            ))}
+          </select>
+        )
+      }
 
-    <!-- ── TABS NAV ── -->
-    <nav class="tabs-nav" role="tablist">
-<button class="tab-btn" data-tab="plantilla">        Plantilla
-      </button>
-
-      <button class="tab-btn" data-tab="calendario" role="tab">
-        Calendario
-      </button>
-
-      <button class="tab-btn" data-tab="clasificacion" role="tab">
-        Clasificación
-      </button>
-    </nav>
-  </div>
-</div>
-
-  <!-- ── CONTENIDO POR EQUIPO ── -->
-  {(equipos ?? []).map((equipo) => {
-    const plantilla = jugadoresPorEquipo.get(equipo.id) ?? [];
-    const todosPartidos = partidosPorEquipo.get(equipo.id) ?? [];
-    const pendientes = todosPartidos.filter((p) => p.puntos_favor === null);
-    const disputados = [...todosPartidos.filter((p) => p.puntos_favor !== null)].reverse();
-    const nombreEquipo = equipo.sponsor ? `${equipo.sponsor} CB Jaca` : `CB Jaca ${categoriaNombre}`;
-    const fasesEquipo = fasesPorEquipo.get(equipo.id) ?? [];
-    const entrenadores = entrenadoresPorEquipo.get(equipo.id) ?? [];
-const entrenadorPrincipal = entrenadores.find(e => e.rol === "principal");
-const ayudantes = entrenadores.filter(e => e.rol === "ayudante");
-
-    // Agrupar fases por orden
-    const niveles = fasesEquipo.reduce((acc, f) => {
-      if (!acc[f.orden]) acc[f.orden] = [];
-      acc[f.orden].push(f);
-      return acc;
-    }, {});
-
-    return (
-      <div class="equipo-bloque">
-        {equipo.competiciones?.nombre && (
-          <p class="competicion-label">{equipo.competiciones.nombre}</p>
-        )}
-
-        <!-- ══ TAB: PLANTILLA ══ -->
-        <div id="tab-plantilla" class="tab-panel" role="tabpanel">
-          <section class="seccion">
-            <h2 class="seccion-titulo">Plantilla</h2>
-            {plantilla.length === 0 ? (
-              <p class="vacio">Sin jugadores registrados.</p>
-            ) : (
-              <div class="plantilla-grid">
-                {plantilla.map((c) => {
-                  const foto = fotoJugador(c.jugadores, "accion");
-                  const posicion =
-                    posicionLabel[c.jugadores?.posicion] ??
-                    c.jugadores?.posicion ??
-                    "—";
-                  return (
-                    <a href={`/jugadores/${c.jugadores?.id}`} class="jugador-card">
-                      {foto ? (
-                        <img
-                          src={foto}
-                          alt={`Foto de ${c.jugadores?.nombre ?? ""} ${c.jugadores?.apellido ?? ""}`}
-                          class="jugador-img"
-                          loading="lazy"
-                        />
-                      ) : (
-                        /* Si no hay foto, cargamos el SVG desde la carpeta public */
-                        <img 
-                          src="/avatar.svg" 
-                          alt="Avatar por defecto" 
-                          class="jugador-img avatar-placeholder" 
-                        />
-                      )}
-                      <div class="card-content">
-                        <span class="dorsal-pill">{c.dorsal ?? "—"}</span>
-                        <h3>
-                          <span class="nombre">{c.jugadores?.nombre}</span>
-                          <span class="apellido">{c.jugadores?.apellido}</span>
-                        </h3>
-                        <span class="position">{posicion}</span>
-                      </div>
-                    </a>
-                  );
-                })}
-              </div>
-            )}
-
-            {entrenadores.length > 0 && (
-  <div class="cuerpo-tecnico">
-    <h3 class="cuerpo-tecnico-titulo">Cuerpo técnico</h3>
-    <div class="cuerpo-tecnico-lista">
-      {entrenadorPrincipal && (
-        <div class="entrenador-card">
-          <div class="entrenador-icono">🏀</div>
-          <div>
-            <div class="entrenador-nombre">
-              {entrenadorPrincipal.entrenadores.nombre} {entrenadorPrincipal.entrenadores.apellido}
-            </div>
-            <div class="entrenador-rol">Entrenador principal</div>
-          </div>
-        </div>
-      )}
-      {ayudantes.map(e => (
-        <div class="entrenador-card">
-          <div class="entrenador-icono">📋</div>
-          <div>
-            <div class="entrenador-nombre">
-              {e.entrenadores.nombre} {e.entrenadores.apellido}
-            </div>
-            <div class="entrenador-rol">Ayudante</div>
-          </div>
-        </div>
-      ))}
+      <nav class="tabs-nav" role="tablist">
+        <button class="tab-btn" data-tab="plantilla" role="tab"
+          >Plantilla</button
+        >
+        <button class="tab-btn" data-tab="calendario" role="tab"
+          >Calendario</button
+        >
+        <button class="tab-btn" data-tab="clasificacion" role="tab"
+          >Clasificación</button
+        >
+      </nav>
     </div>
   </div>
-)}
-          </section>
-        </div>
 
-        <!-- ══ TAB: CALENDARIO ══ -->
-        <div id="tab-calendario" class="tab-panel" role="tabpanel">
-          <section class="seccion seccion-alt">
-            <h2 class="seccion-titulo">Calendario y Resultados</h2>
-            {todosPartidos.length === 0 ? (
-              <p class="vacio">Sin partidos registrados.</p>
-            ) : (
-              <div class="partidos-columnas">
-                {pendientes.length > 0 && (
-                  <div class="partidos-bloque">
-                    <h3 class="bloque-label">Próximos partidos</h3>
-                    <div class="partidos-lista">
-                      {pendientes.map((p) => (
-                        <div class="partido-card">
-                          <div class="partido-meta">
-                            <span class="jornada">{etiquetaJornada(p)}</span>
-                            <span class="fecha">{formatFecha(p.fecha)}</span>
-                          </div>
-                          <div class="partido-vs">
-  <span class:list={["rival-nombre", p.es_local && "propio"]}>
-    {p.es_local ? nombreEquipo : nombreRival(p)}
-  </span>
+  {
+    (equipos ?? []).map((equipo) => {
+      const plantilla = jugadoresPorEquipo.get(equipo.id) ?? [];
+      const todosPartidos = partidosPorEquipo.get(equipo.id) ?? [];
+      const pendientes = todosPartidos.filter((p) => p.puntos_favor === null);
+      const disputados = [
+        ...todosPartidos.filter((p) => p.puntos_favor !== null),
+      ].reverse();
+      const nombreEquipo = equipo.sponsors?.nombre
+        ? `${equipo.sponsors.nombre} CB Jaca`
+        : `CB Jaca ${categoriaNombre}`;
+      const fasesEquipo = fasesPorEquipo.get(equipo.id) ?? [];
+      const entrenadores = entrenadoresPorEquipo.get(equipo.id) ?? [];
+      const entrenadorPrincipal = entrenadores.find(
+        (e) => e.rol === "principal",
+      );
+      const ayudantes = entrenadores.filter((e) => e.rol === "ayudante");
 
-  <!-- Escudos enfrentados -->
-  <div class="escudos-vs">
-    <img
-      src={p.es_local ? "/escudo-naranja.png" : escudoRival(p)}
-      alt={p.es_local ? "CB Jaca" : nombreRival(p)}
-      class="escudo-mini"
-      onerror="this.src='/escudo.png'"
-    />
-    <span class="vs-sep">vs</span>
-    <img
-      src={p.es_local ? escudoRival(p) : "/escudo-naranja.png"}
-      alt={p.es_local ? nombreRival(p) : "CB Jaca"}
-      class="escudo-mini"
-      onerror="this.src='/escudo.png'"
-    />
-  </div>
+      const competiciones = competicionesDe(equipo);
 
-  {p.puntos_favor !== null && (
-    <span class:list={["marcador", p.puntos_favor > p.puntos_contra ? "victoria" : "derrota"]}>
-      {p.es_local ? p.puntos_favor : p.puntos_contra}
-      {" – "}
-      {p.es_local ? p.puntos_contra : p.puntos_favor}
-    </span>
-  )}
+      const fasesPorCompeticion = competiciones
+        .map((comp) => ({
+          competicion: comp,
+          fases: fasesEquipo
+            .filter((f) => f.competicion_id === comp.id)
+            .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)),
+        }))
+        .filter((grupo) => grupo.fases.length > 0);
 
-  <span class:list={["rival-nombre", !p.es_local && "propio"]}>
-    {p.es_local ? nombreRival(p) : nombreEquipo}
-  </span>
-</div>
-                          <span class:list={["condicion-pill", p.es_local ? "local" : "visitante"]}>
-                            {p.es_local ? "Local" : "Visitante"}
-                          </span>
+      return (
+        <div class="equipo-bloque">
+          {competiciones.length > 0 && (
+            <p class="competicion-label">
+              {competiciones.map((c) => c.nombre).join(" · ")}
+            </p>
+          )}
+
+          <div id="tab-plantilla" class="tab-panel" role="tabpanel">
+            <section class="seccion">
+              <h2 class="seccion-titulo">Plantilla</h2>
+              {plantilla.length === 0 ? (
+                <p class="vacio">Sin jugadores registrados.</p>
+              ) : (
+                <div class="plantilla-grid">
+                  {plantilla.map((c) => {
+                    const foto = fotoJugador(c.jugadores, "accion");
+                    const posicion =
+                      posicionLabel[c.jugadores?.posicion] ??
+                      c.jugadores?.posicion ??
+                      "—";
+                    return (
+                      <a
+                        href={`/jugadores/${c.jugadores?.id}`}
+                        class="jugador-card"
+                      >
+                        {foto ? (
+                          <img
+                            src={foto}
+                            alt={`Foto de ${c.jugadores?.nombre ?? ""} ${c.jugadores?.apellido ?? ""}`}
+                            class="jugador-img"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <img
+                            src="/avatar.svg"
+                            alt="Avatar por defecto"
+                            class="jugador-img avatar-placeholder"
+                          />
+                        )}
+                        <div class="card-content">
+                          <span class="dorsal-pill">{c.dorsal ?? "—"}</span>
+                          <h3>
+                            <span class="nombre">{c.jugadores?.nombre}</span>
+                            <span class="apellido">
+                              {c.jugadores?.apellido}
+                            </span>
+                          </h3>
+                          <span class="position">{posicion}</span>
                         </div>
-                      ))}
-                    </div>
+                      </a>
+                    );
+                  })}
+                </div>
+              )}
+
+              {entrenadores.length > 0 && (
+                <div class="cuerpo-tecnico">
+                  <h3 class="cuerpo-tecnico-titulo">Cuerpo técnico</h3>
+                  <div class="cuerpo-tecnico-lista">
+                    {entrenadorPrincipal && (
+                      <div class="entrenador-card">
+                        <div class="entrenador-icono">🏀</div>
+                        <div>
+                          <div class="entrenador-nombre">
+                            {entrenadorPrincipal.entrenadores.nombre}{" "}
+                            {entrenadorPrincipal.entrenadores.apellido}
+                          </div>
+                          <div class="entrenador-rol">Entrenador principal</div>
+                        </div>
+                      </div>
+                    )}
+                    {ayudantes.map((e) => (
+                      <div class="entrenador-card">
+                        <div class="entrenador-icono">📋</div>
+                        <div>
+                          <div class="entrenador-nombre">
+                            {e.entrenadores.nombre} {e.entrenadores.apellido}
+                          </div>
+                          <div class="entrenador-rol">Ayudante</div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                )}
-                {disputados.length > 0 && (
-                  <div class="partidos-bloque">
-                    <h3 class="bloque-label">Resultados</h3>
-                    <div class="partidos-lista">
-                      {disputados.map((p) => {
-                        const victoria = p.puntos_favor > p.puntos_contra;
-                        return (
-                          <a href={`/partidos/${p.id}`} class:list={["partido-card", victoria ? "victoria" : "derrota"]}>
+                </div>
+              )}
+            </section>
+          </div>
+
+          <div id="tab-calendario" class="tab-panel" role="tabpanel">
+            <section class="seccion seccion-alt">
+              <h2 class="seccion-titulo">Calendario y Resultados</h2>
+              {todosPartidos.length === 0 ? (
+                <p class="vacio">Sin partidos registrados.</p>
+              ) : (
+                <div class="partidos-columnas">
+                  {pendientes.length > 0 && (
+                    <div class="partidos-bloque">
+                      <h3 class="bloque-label">Próximos partidos</h3>
+                      <div class="partidos-lista">
+                        {pendientes.map((p) => (
+                          <div class="partido-card">
                             <div class="partido-meta">
                               <span class="jornada">{etiquetaJornada(p)}</span>
                               <span class="fecha">{formatFecha(p.fecha)}</span>
                             </div>
                             <div class="partido-vs">
-  <span class:list={["rival-nombre", p.es_local && "propio"]}>
-    {p.es_local ? nombreEquipo : nombreRival(p)}
-  </span>
-  <div class="escudos-vs">
-    <img
-      src={p.es_local ? "/escudo-naranja.png" : escudoRival(p)}
-      alt={p.es_local ? "CB Jaca" : nombreRival(p)}
-      class="escudo-mini"
-      onerror="this.src='/escudo.png'"
-    />
-    <span class:list={["marcador", victoria ? "victoria" : "derrota"]}>
-      {p.es_local ? p.puntos_favor : p.puntos_contra}
-      {" – "}
-      {p.es_local ? p.puntos_contra : p.puntos_favor}
-    </span>
-    <img
-      src={p.es_local ? escudoRival(p) : "/escudo-naranja.png"}
-      alt={p.es_local ? nombreRival(p) : "CB Jaca"}
-      class="escudo-mini"
-      onerror="this.src='/escudo.png'"
-    />
-  </div>
-  <span class:list={["rival-nombre", !p.es_local && "propio"]}>
-    {p.es_local ? nombreRival(p) : nombreEquipo}
-  </span>
-</div>
-                            <span class:list={["resultado-badge", victoria ? "victoria" : "derrota"]}>
-                              {victoria ? "V" : "D"}
-                            </span>
-                          </a>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </section>
-        </div>
-
-        <!-- ══ TAB: CLASIFICACIÓN ══ -->
-        <div id="tab-clasificacion" class="tab-panel" role="tabpanel">
-          <section class="seccion">
-            <h2 class="seccion-titulo">Clasificación</h2>
-
-            {fasesEquipo.length === 0 ? (
-              <p class="vacio">La clasificación aún no está disponible.</p>
-            ) : (
-              <div class="clasificacion-wrapper">
-                <!-- Pestañas de fase -->
-                {Object.keys(niveles).length > 0 && (
-                  <div class="fases-nav" role="tablist">
-                    {Object.entries(niveles).map(([orden, fasesNivel], nivelIdx) => (
-                      <>
-                        <span class="fases-nivel-label">
-                          {fasesNivel[0].tipo === "playoff" ? "Final" : `Fase ${orden}`}
-                        </span>
-                        {fasesNivel.map((f, fi) => {
-                          const globalIdx = fasesEquipo.findIndex(x => x.id === f.id);
-                          return (
-                            <button
-                              class:list={["fase-btn", globalIdx === 0 && "active"]}
-                              data-fase={f.id}
-                              role="tab"
+                              <span
+                                class:list={[
+                                  "rival-nombre",
+                                  p.es_local && "propio",
+                                ]}
+                              >
+                                {p.es_local ? nombreEquipo : nombreRival(p)}
+                              </span>
+                              <div class="escudos-vs">
+                                <img
+                                  src={
+                                    p.es_local
+                                      ? "/escudo-naranja.png"
+                                      : escudoRival(p)
+                                  }
+                                  alt={p.es_local ? "CB Jaca" : nombreRival(p)}
+                                  class="escudo-mini"
+                                  onerror="this.src='/escudo.png'"
+                                />
+                                <span class="vs-sep">vs</span>
+                                <img
+                                  src={
+                                    p.es_local
+                                      ? escudoRival(p)
+                                      : "/escudo-naranja.png"
+                                  }
+                                  alt={p.es_local ? nombreRival(p) : "CB Jaca"}
+                                  class="escudo-mini"
+                                  onerror="this.src='/escudo.png'"
+                                />
+                              </div>
+                              {p.puntos_favor !== null && (
+                                <span
+                                  class:list={[
+                                    "marcador",
+                                    p.puntos_favor > p.puntos_contra
+                                      ? "victoria"
+                                      : "derrota",
+                                  ]}
+                                >
+                                  {p.es_local
+                                    ? p.puntos_favor
+                                    : p.puntos_contra}
+                                  {" – "}
+                                  {p.es_local
+                                    ? p.puntos_contra
+                                    : p.puntos_favor}
+                                </span>
+                              )}
+                              <span
+                                class:list={[
+                                  "rival-nombre",
+                                  !p.es_local && "propio",
+                                ]}
+                              >
+                                {p.es_local ? nombreRival(p) : nombreEquipo}
+                              </span>
+                            </div>
+                            <span
+                              class:list={[
+                                "condicion-pill",
+                                p.es_local ? "local" : "visitante",
+                              ]}
                             >
-                              {f.nombre}
-                            </button>
+                              {p.es_local ? "Local" : "Visitante"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {disputados.length > 0 && (
+                    <div class="partidos-bloque">
+                      <h3 class="bloque-label">Resultados</h3>
+                      <div class="partidos-lista">
+                        {disputados.map((p) => {
+                          const victoria = p.puntos_favor > p.puntos_contra;
+                          return (
+                            <a
+                              href={`/partidos/${p.id}`}
+                              class:list={[
+                                "partido-card",
+                                victoria ? "victoria" : "derrota",
+                              ]}
+                            >
+                              <div class="partido-meta">
+                                <span class="jornada">
+                                  {etiquetaJornada(p)}
+                                </span>
+                                <span class="fecha">
+                                  {formatFecha(p.fecha)}
+                                </span>
+                              </div>
+                              <div class="partido-vs">
+                                <span
+                                  class:list={[
+                                    "rival-nombre",
+                                    p.es_local && "propio",
+                                  ]}
+                                >
+                                  {p.es_local ? nombreEquipo : nombreRival(p)}
+                                </span>
+                                <div class="escudos-vs">
+                                  <img
+                                    src={
+                                      p.es_local
+                                        ? "/escudo-naranja.png"
+                                        : escudoRival(p)
+                                    }
+                                    alt={
+                                      p.es_local ? "CB Jaca" : nombreRival(p)
+                                    }
+                                    class="escudo-mini"
+                                    onerror="this.src='/escudo.png'"
+                                  />
+                                  <span
+                                    class:list={[
+                                      "marcador",
+                                      victoria ? "victoria" : "derrota",
+                                    ]}
+                                  >
+                                    {p.es_local
+                                      ? p.puntos_favor
+                                      : p.puntos_contra}
+                                    {" – "}
+                                    {p.es_local
+                                      ? p.puntos_contra
+                                      : p.puntos_favor}
+                                  </span>
+                                  <img
+                                    src={
+                                      p.es_local
+                                        ? escudoRival(p)
+                                        : "/escudo-naranja.png"
+                                    }
+                                    alt={
+                                      p.es_local ? nombreRival(p) : "CB Jaca"
+                                    }
+                                    class="escudo-mini"
+                                    onerror="this.src='/escudo.png'"
+                                  />
+                                </div>
+                                <span
+                                  class:list={[
+                                    "rival-nombre",
+                                    !p.es_local && "propio",
+                                  ]}
+                                >
+                                  {p.es_local ? nombreRival(p) : nombreEquipo}
+                                </span>
+                              </div>
+                              <span
+                                class:list={[
+                                  "resultado-badge",
+                                  victoria ? "victoria" : "derrota",
+                                ]}
+                              >
+                                {victoria ? "V" : "D"}
+                              </span>
+                            </a>
                           );
                         })}
-                      </>
-                    ))}
-                  </div>
-                )}
-
-                <!-- Tablas por fase -->
-                {fasesEquipo.map((f, fi) => {
-                  const parts = participantesPorFase.get(f.id) ?? [];
-                  const cls = clasificacionPorFase.get(f.id) ?? [];
-
-                  // Construir filas ordenadas por posición
-                  const filas = parts.map(p => {
-                    const c = cls.find(c => c.participante_id === p.id);
-                    const esMiEquipo = p.equipo_id === equipo.id;
-                    const nombre = esMiEquipo
-  ? nombreEquipo
-  : (p.nombre_equipo ?? p.clubes?.nombre ?? "—");
-                    return { p, c, nombre, esMiEquipo };
-                  }).sort((a, b) => (a.c?.posicion ?? 999) - (b.c?.posicion ?? 999));
-
-                  const dif = (c) => (c?.puntos_favor ?? 0) - (c?.puntos_contra ?? 0);
-
-                  return (
-                    <div
-                      class:list={["fase-panel", fi === 0 && "active"]}
-                      data-fase-panel={f.id}
-                      role="tabpanel"
-                    >
-                      {filas.length === 0 ? (
-                        <p class="vacio">Sin equipos en esta fase.</p>
-                      ) : (
-                        <div class="tabla-wrapper">
-                          <table class="tabla-clasificacion">
-                            <thead>
-                              <tr>
-                                <th class="col-pos">#</th>
-                                <th class="col-nombre">Equipo</th>
-                                <th>PJ</th>
-                                <th>V</th>
-                                <th>D</th>
-                                <th>PF</th>
-                                <th>PC</th>
-                                <th>Dif</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {filas.map(({ p, c, nombre, esMiEquipo }) => {
-                                const d = dif(c);
-                                return (
-                                  <tr class:list={[esMiEquipo && "mi-equipo"]}>
-                                    <td class="col-pos">
-                                      <span class:list={["pos-badge", c?.posicion === 1 && "primero"]}>
-                                        {c?.posicion ?? "—"}
-                                      </span>
-                                    </td>
-                                    <td class="col-nombre">
-                                      <span class:list={[esMiEquipo && "nombre-destacado"]}>{nombre}</span>
-                                    </td>
-                                    <td>{c?.partidos_jugados ?? 0}</td>
-                                    <td class="col-v">{c?.victorias ?? 0}</td>
-                                    <td class="col-d">{c?.derrotas ?? 0}</td>
-                                    <td>{c?.puntos_favor ?? 0}</td>
-                                    <td>{c?.puntos_contra ?? 0}</td>
-                                    <td class:list={["col-dif", d > 0 ? "pos" : d < 0 ? "neg" : ""]}>
-                                      {d > 0 ? `+${d}` : d}
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
+                      </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
+                  )}
+                </div>
+              )}
+            </section>
+          </div>
+
+          <div id="tab-clasificacion" class="tab-panel" role="tabpanel">
+            <section class="seccion">
+              <h2 class="seccion-titulo">Clasificación</h2>
+
+              {fasesPorCompeticion.length === 0 ? (
+                <p class="vacio">La clasificación aún no está disponible.</p>
+              ) : (
+                <div class="competiciones-wrapper">
+                  {fasesPorCompeticion.map((grupo, grupoIdx) => {
+                    const niveles = grupo.fases.reduce((acc, f) => {
+                      if (!acc[f.orden]) acc[f.orden] = [];
+                      acc[f.orden].push(f);
+                      return acc;
+                    }, {});
+
+                    return (
+                      <div class="competicion-grupo">
+                        <h3 class="competicion-grupo-titulo">
+                          {grupo.competicion.nombre}
+                        </h3>
+
+                        <div class="clasificacion-wrapper">
+                          {Object.keys(niveles).length > 0 && (
+                            <div class="fases-nav" role="tablist">
+                              {Object.entries(niveles).map(
+                                ([orden, fasesNivel]) => (
+                                  <>
+                                    <span class="fases-nivel-label">
+                                      {fasesNivel[0].tipo === "playoff"
+                                        ? "Final"
+                                        : `Fase ${orden}`}
+                                    </span>
+                                    {fasesNivel.map((f) => {
+                                      const esLaPrimeraDeTodas =
+                                        grupoIdx === 0 &&
+                                        grupo.fases.findIndex(
+                                          (x) => x.id === f.id,
+                                        ) === 0;
+                                      return (
+                                        <button
+                                          class:list={[
+                                            "fase-btn",
+                                            esLaPrimeraDeTodas && "active",
+                                          ]}
+                                          data-fase={f.id}
+                                          role="tab"
+                                        >
+                                          {f.nombre}
+                                        </button>
+                                      );
+                                    })}
+                                  </>
+                                ),
+                              )}
+                            </div>
+                          )}
+
+                          {grupo.fases.map((f) => {
+                            const parts = participantesPorFase.get(f.id) ?? [];
+                            const cls = clasificacionPorFase.get(f.id) ?? [];
+
+                            const filas = parts
+                              .map((p) => {
+                                const c = cls.find(
+                                  (c) => c.participante_id === p.id,
+                                );
+                                const esMiEquipo = p.equipo_id === equipo.id;
+                                const nombre = esMiEquipo
+                                  ? nombreEquipo
+                                  : (p.nombre_equipo ??
+                                    p.clubes?.nombre ??
+                                    "—");
+                                return { p, c, nombre, esMiEquipo };
+                              })
+                              .sort(
+                                (a, b) =>
+                                  (a.c?.posicion ?? 999) -
+                                  (b.c?.posicion ?? 999),
+                              );
+
+                            const dif = (c) =>
+                              (c?.puntos_favor ?? 0) - (c?.puntos_contra ?? 0);
+
+                            const esLaPrimeraDeTodas =
+                              grupoIdx === 0 &&
+                              grupo.fases.findIndex((x) => x.id === f.id) === 0;
+
+                            return (
+                              <div
+                                class:list={[
+                                  "fase-panel",
+                                  esLaPrimeraDeTodas && "active",
+                                ]}
+                                data-fase-panel={f.id}
+                                role="tabpanel"
+                              >
+                                {filas.length === 0 ? (
+                                  <p class="vacio">Sin equipos en esta fase.</p>
+                                ) : (
+                                  <div class="tabla-wrapper">
+                                    <table class="tabla-clasificacion">
+                                      <thead>
+                                        <tr>
+                                          <th class="col-pos">#</th>
+                                          <th class="col-nombre">Equipo</th>
+                                          <th>PJ</th>
+                                          <th>V</th>
+                                          <th>D</th>
+                                          <th>PF</th>
+                                          <th>PC</th>
+                                          <th>Dif</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {filas.map(
+                                          ({ p, c, nombre, esMiEquipo }) => {
+                                            const d = dif(c);
+                                            return (
+                                              <tr
+                                                class:list={[
+                                                  esMiEquipo && "mi-equipo",
+                                                ]}
+                                              >
+                                                <td class="col-pos">
+                                                  <span
+                                                    class:list={[
+                                                      "pos-badge",
+                                                      c?.posicion === 1 &&
+                                                        "primero",
+                                                    ]}
+                                                  >
+                                                    {c?.posicion ?? "—"}
+                                                  </span>
+                                                </td>
+                                                <td class="col-nombre">
+                                                  <span
+                                                    class:list={[
+                                                      esMiEquipo &&
+                                                        "nombre-destacado",
+                                                    ]}
+                                                  >
+                                                    {nombre}
+                                                  </span>
+                                                </td>
+                                                <td>
+                                                  {c?.partidos_jugados ?? 0}
+                                                </td>
+                                                <td class="col-v">
+                                                  {c?.victorias ?? 0}
+                                                </td>
+                                                <td class="col-d">
+                                                  {c?.derrotas ?? 0}
+                                                </td>
+                                                <td>{c?.puntos_favor ?? 0}</td>
+                                                <td>{c?.puntos_contra ?? 0}</td>
+                                                <td
+                                                  class:list={[
+                                                    "col-dif",
+                                                    d > 0
+                                                      ? "pos"
+                                                      : d < 0
+                                                        ? "neg"
+                                                        : "",
+                                                  ]}
+                                                >
+                                                  {d > 0 ? `+${d}` : d}
+                                                </td>
+                                              </tr>
+                                            );
+                                          },
+                                        )}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          </div>
         </div>
-
-      </div>
-    );
-  })}
-
+      );
+    })
+  }
 </Layout>
 
 <script>
-  // ── Tabs principales ──────────────────────────────────────────────────
-  const tabBtns = document.querySelectorAll(".tab-btn");
-  const tabPanels = document.querySelectorAll(".tab-panel");
+  function initTabs() {
+    const tabBtns = document.querySelectorAll(".tab-btn");
+    const tabPanels = document.querySelectorAll(".tab-panel");
 
-  function activarTab(nombre) {
-    tabBtns.forEach((b) => b.classList.remove("active"));
-    tabPanels.forEach((p) => p.classList.remove("active"));
-    const btn = document.querySelector(`.tab-btn[data-tab="${nombre}"]`);
-    const panel = document.getElementById(`tab-${nombre}`);
-    if (btn && panel) {
-      btn.classList.add("active");
-      panel.classList.add("active");
+    function activarTab(nombre) {
+      tabBtns.forEach((b) => b.classList.remove("active"));
+      tabPanels.forEach((p) => p.classList.remove("active"));
+      const btn = document.querySelector(`.tab-btn[data-tab="${nombre}"]`);
+      const panel = document.getElementById(`tab-${nombre}`);
+      if (btn && panel) {
+        btn.classList.add("active");
+        panel.classList.add("active");
+      }
     }
+
+    const hashInicial = window.location.hash.replace("#", "");
+    const tabsValidas = ["plantilla", "calendario", "clasificacion"];
+    activarTab(tabsValidas.includes(hashInicial) ? hashInicial : "plantilla");
+
+    tabBtns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const target = btn.dataset.tab;
+        activarTab(target);
+        history.replaceState(null, "", `#${target}`);
+      });
+    });
+
+    const faseBtns = document.querySelectorAll(".fase-btn");
+    const fasePanels = document.querySelectorAll(".fase-panel");
+
+    faseBtns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const faseId = btn.dataset.fase;
+        faseBtns.forEach((b) => b.classList.remove("active"));
+        fasePanels.forEach((p) => p.classList.remove("active"));
+        btn.classList.add("active");
+        document
+          .querySelector(`[data-fase-panel="${faseId}"]`)
+          ?.classList.add("active");
+      });
+    });
   }
 
-  // Leer hash inicial
-  const hashInicial = window.location.hash.replace("#", "");
-  const tabsValidas = ["plantilla", "calendario", "clasificacion"];
-  activarTab(tabsValidas.includes(hashInicial) ? hashInicial : "plantilla");
-
-  tabBtns.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const target = btn.dataset.tab;
-      activarTab(target);
-      history.replaceState(null, "", `#${target}`);
-    });
-  });
-
-  // ── Tabs de fase ──────────────────────────────────────────────────────
-  const faseBtns = document.querySelectorAll(".fase-btn");
-  const fasePanels = document.querySelectorAll(".fase-panel");
-
-  faseBtns.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const faseId = btn.dataset.fase;
-      faseBtns.forEach((b) => b.classList.remove("active"));
-      fasePanels.forEach((p) => p.classList.remove("active"));
-      btn.classList.add("active");
-      document.querySelector(`[data-fase-panel="${faseId}"]`)?.classList.add("active");
-    });
-  });
+  initTabs();
+  document.addEventListener("astro:page-load", initTabs);
 </script>
 
 <style>
-  /* ── HERO ───────────────────────────────────── */
-.equipo-hero {
-  position: relative;
-  min-height: 480px;
-  display: flex;
-  align-items: flex-end;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  padding: 3rem 2rem 0;
-  color: white;
-}
-
-.equipo-hero-inner {
-  width: 100%;
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-.volver {
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--orange, #f97316);
-  text-decoration: none;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.hero-content {
-  margin-top: 2rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 2rem;
-  flex-wrap: wrap;
-}
-
-.hero-text {
-  max-width: 720px;
-}
-
-.categoria-label {
-  font-size: 0.8rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--orange, #f97316);
-  margin-bottom: 0.4rem;
-}
-
-h1 {
-  font-size: clamp(2rem, 5vw, 4rem);
-  font-weight: 900;
-  line-height: 1;
-  margin: 0;
-}
-
-.hero-competicion {
-  margin-top: 1rem;
-  font-size: 1rem;
-  font-weight: 600;
-  color: rgba(255,255,255,0.8);
-}
-
-.hero-sponsored {
-  margin-top: 0.5rem;
-  font-size: 0.85rem;
-  color: rgba(255,255,255,0.65);
-}
-
-.hero-logo-wrap {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.hero-logo {
-  width: 140px;
-  height: 140px;
-  object-fit: contain;
-
-  background: rgba(255,255,255,0.95);
-  padding: 1rem;
-  border-radius: 20px;
-
-  box-shadow: 0 10px 30px rgba(0,0,0,.35);
-
-  display: block;
-}
-
-.temporada-select {
-  margin-top: 2rem;
-  padding: 0.45rem 1rem;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 700;
-  background: rgba(255,255,255,0.08);
-  backdrop-filter: blur(10px);
-  color: white;
-  border: 1px solid rgba(255,255,255,0.15);
-  cursor: pointer;
-  outline: none;
-}
-
-.temporada-select option {
-  background: #0f172a;
-  color: white;
-}
-
-@media (max-width: 768px) {
   .equipo-hero {
-    min-height: 400px;
-    padding: 2rem 1rem 0;
+    position: relative;
+    min-height: 480px;
+    display: flex;
+    align-items: flex-end;
+    background-size: cover;
+    background-position: center 20%;
+    background-repeat: no-repeat;
+    padding: 3rem 2rem 0;
+    color: white;
   }
-
+  .equipo-hero-inner {
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  .volver {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--orange, #f97316);
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
   .hero-content {
-    flex-direction: column;
-    align-items: flex-start;
+    margin-top: 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 2rem;
+    flex-wrap: wrap;
   }
-
-  .hero-logo {
-    max-width: 180px;
-    max-height: 100px;
+  .hero-text {
+    max-width: 720px;
   }
-
+  .categoria-label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--orange, #f97316);
+    margin-bottom: 0.4rem;
+  }
   h1 {
-    font-size: 2.4rem;
+    font-size: clamp(2rem, 5vw, 4rem);
+    font-weight: 900;
+    line-height: 1;
+    margin: 0;
   }
-}
+  .hero-competicion {
+    margin-top: 1rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.8);
+  }
+  .hero-sponsored {
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.65);
+  }
+  .hero-logo-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .hero-logo {
+    width: 140px;
+    height: 140px;
+    object-fit: contain;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 1rem;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    display: block;
+  }
   .temporada-select {
-    padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.78rem;
-    font-weight: 600; background: transparent; color: var(--orange, #f97316);
-    border: 1px solid var(--orange, #f97316); cursor: pointer; outline: none;
+    margin-top: 2rem;
+    padding: 0.45rem 1rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(10px);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    cursor: pointer;
+    outline: none;
   }
-  .temporada-select option { background: #0f172a; color: white; }
+  .temporada-select option {
+    background: #0f172a;
+    color: white;
+  }
 
-  /* ── Tabs nav ── */
+  @media (max-width: 768px) {
+    .equipo-hero {
+      min-height: 400px;
+      padding: 2rem 1rem 0;
+    }
+    .hero-content {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .hero-logo {
+      max-width: 180px;
+      max-height: 100px;
+    }
+    h1 {
+      font-size: 2.4rem;
+    }
+  }
+
   .tabs-nav {
-    display: flex; gap: 0; margin-top: 2rem;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    gap: 0;
+    margin-top: 2rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   }
   .tab-btn {
-    padding: 0.75rem 1.25rem; font-size: 0.85rem; font-weight: 700;
-    color: rgba(255,255,255,0.5); background: transparent; border: none;
-    border-bottom: 2px solid transparent; cursor: pointer;
-    transition: color .2s, border-color .2s; margin-bottom: -1px;
-    text-transform: uppercase; letter-spacing: 0.05em;
+    padding: 0.75rem 1.25rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.5);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition:
+      color 0.2s,
+      border-color 0.2s;
+    margin-bottom: -1px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
-  .tab-btn:hover { color: rgba(255,255,255,0.8); }
-  .tab-btn.active { color: var(--orange, #f97316); border-bottom-color: var(--orange, #f97316); }
+  .tab-btn:hover {
+    color: rgba(255, 255, 255, 0.8);
+  }
+  .tab-btn.active {
+    color: var(--orange, #f97316);
+    border-bottom-color: var(--orange, #f97316);
+  }
 
-  /* ── Tab panels ── */
-  .tab-panel { display: none; }
-  .tab-panel.active { display: block; }
+  .tab-panel {
+    display: none;
+  }
+  .tab-panel.active {
+    display: block;
+  }
 
-  /* ── Misc ── */
-  .equipo-bloque {}
+  .equipo-bloque {
+  }
   .competicion-label {
-    text-align: center; font-size: 0.78rem; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 0.08em;
-    color: var(--orange, #f97316); padding: 0.75rem;
-    background: rgba(249,115,22,0.08); border-bottom: 1px solid rgba(249,115,22,0.2);
+    text-align: center;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--orange, #f97316);
+    padding: 0.75rem;
+    background: rgba(249, 115, 22, 0.08);
+    border-bottom: 1px solid rgba(249, 115, 22, 0.2);
   }
-  .seccion { padding: 3rem 2rem; margin: 0 auto; }
+  .seccion {
+    padding: 3rem 2rem;
+    margin: 0 auto;
+  }
   .seccion-alt {
     max-width: 100%;
     padding: 3rem 2rem;
   }
-  .seccion-alt > * { margin-left: auto; margin-right: auto; }
-  .seccion-titulo { font-size: 1.4rem; font-weight: 800; margin-bottom: 1.5rem; }
-  .bloque-label {
-    font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.08em; color: var(--orange, #f97316); margin-bottom: 0.75rem;
+  .seccion-alt > * {
+    margin-left: auto;
+    margin-right: auto;
   }
-  .vacio { color: var(--muted, #64748b); font-size: 0.9rem; }
+  .seccion-titulo {
+    font-size: 1.4rem;
+    font-weight: 800;
+    margin-bottom: 1.5rem;
+  }
+  .bloque-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--orange, #f97316);
+    margin-bottom: 0.75rem;
+  }
+  .vacio {
+    color: var(--muted, #64748b);
+    font-size: 0.9rem;
+  }
 
-  /* ── Plantilla ── */
   .plantilla-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -722,7 +937,10 @@ h1 {
     );
     --myColor1: transparent;
     --myColor2: #ff6c0e;
-    transition: --myColor1 0.3s, --myColor2 0.3s, transform 0.2s ease;
+    transition:
+      --myColor1 0.3s,
+      --myColor2 0.3s,
+      transform 0.2s ease;
     border-radius: 1rem;
     color: white;
     text-decoration: none;
@@ -760,19 +978,6 @@ h1 {
     transition: transform 0.3s ease-in-out;
     z-index: 0;
   }
-  .jugador-img-fallback {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: radial-gradient(circle at 30% 20%, #fb923c, #ea580c 70%);
-    -webkit-mask-image: none;
-    mask-image: none;
-  }
-  .jugador-img-fallback span {
-    font-size: 3rem;
-    font-weight: 900;
-    opacity: 0.7;
-  }
   .card-content {
     z-index: 2;
     text-align: center;
@@ -789,8 +994,8 @@ h1 {
     min-width: 38px;
     height: 28px;
     border-radius: 999px;
-    background: rgba(255,255,255,0.16);
-    border: 1px solid rgba(255,255,255,0.25);
+    background: rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.25);
     color: white;
     font-weight: 800;
     font-size: 0.85rem;
@@ -824,158 +1029,362 @@ h1 {
     opacity: 0.95;
   }
 
-  /* ── Partidos ── */
-  .partidos-columnas { display: flex; flex-direction: column; gap: 2.5rem; }
-  .partidos-lista { display: flex; flex-direction: column; gap: 0.5rem; }
+  .partidos-columnas {
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+  }
+  .partidos-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
   .partido-card {
-    display: flex; align-items: center; gap: 1rem;
-    padding: 0.8rem 1rem; background: var(--card, #1e293b);
-    border: 1px solid var(--borde, rgba(255,255,255,0.07));
-    border-left: 3px solid transparent; border-radius: 10px;
-    text-decoration: none; color: inherit;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.8rem 1rem;
+    background: var(--card, #1e293b);
+    border: 1px solid var(--borde, rgba(255, 255, 255, 0.07));
+    border-left: 3px solid transparent;
+    border-radius: 10px;
+    text-decoration: none;
+    color: inherit;
   }
-  .partido-card.victoria { border-left-color: #22c55e; }
-  .partido-card.derrota  { border-left-color: #3b82f6; }
-  .partido-meta { display: flex; flex-direction: column; gap: 0.1rem; min-width: 75px; }
-  .jornada { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; color: var(--muted, #64748b); }
-  .fecha { font-size: 0.8rem; font-weight: 600; }
-  .partido-vs { display: flex; align-items: center; gap: 0.6rem; flex: 1; min-width: 0; }
+  .partido-card.victoria {
+    border-left-color: #22c55e;
+  }
+  .partido-card.derrota {
+    border-left-color: #3b82f6;
+  }
+  .partido-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 75px;
+  }
+  .jornada {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--muted, #64748b);
+  }
+  .fecha {
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+  .partido-vs {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex: 1;
+    min-width: 0;
+  }
   .rival-nombre {
-    font-size: 0.85rem; color: var(--muted, #64748b); flex: 1;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-size: 0.85rem;
+    color: var(--muted, #64748b);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-  .rival-nombre.propio { font-weight: 700; color: inherit; }
-  .vs-sep { font-size: 0.72rem; color: var(--muted, #64748b); flex-shrink: 0; }
-  .marcador { font-size: 1rem; font-weight: 800; min-width: 55px; text-align: center; flex-shrink: 0; }
-  .marcador.victoria { color: #22c55e; }
-  .marcador.derrota  { color: #f6603b; }
-  .condicion-pill { font-size: 0.68rem; font-weight: 700; padding: 2px 8px; border-radius: 20px; flex-shrink: 0; }
-  .condicion-pill.local     { background: rgba(249,115,22,0.15); color: var(--orange, #f97316); }
-  .condicion-pill.visitante { background: rgba(59,130,246,0.15);  color: #60a5fa; }
+  .rival-nombre.propio {
+    font-weight: 700;
+    color: inherit;
+  }
+  .vs-sep {
+    font-size: 0.72rem;
+    color: var(--muted, #64748b);
+    flex-shrink: 0;
+  }
+  .marcador {
+    font-size: 1rem;
+    font-weight: 800;
+    min-width: 55px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .marcador.victoria {
+    color: #22c55e;
+  }
+  .marcador.derrota {
+    color: #f6603b;
+  }
+  .condicion-pill {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+    flex-shrink: 0;
+  }
+  .condicion-pill.local {
+    background: rgba(249, 115, 22, 0.15);
+    color: var(--orange, #f97316);
+  }
+  .condicion-pill.visitante {
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+  }
   .resultado-badge {
-    font-size: 0.72rem; font-weight: 800; width: 24px; height: 24px;
-    border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    font-size: 0.72rem;
+    font-weight: 800;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
   }
-  .resultado-badge.victoria { background: rgba(34,197,94,0.15); color: #22c55e; }
-  .resultado-badge.derrota  { background: rgba(59,130,246,0.15); color: #60a5fa; }
+  .resultado-badge.victoria {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+  }
+  .resultado-badge.derrota {
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+  }
 
-  /* ── Clasificación ── */
-  .clasificacion-wrapper { display: flex; flex-direction: column; gap: 1.5rem; }
+  .competiciones-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+  }
+  .competicion-grupo {
+    border: 1px solid var(--borde, rgba(255, 255, 255, 0.07));
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .competicion-grupo-titulo {
+    font-size: 0.95rem;
+    font-weight: 800;
+    padding: 0.9rem 1.2rem;
+    margin: 0;
+    background: rgba(249, 115, 22, 0.08);
+    border-bottom: 1px solid rgba(249, 115, 22, 0.2);
+    color: var(--orange, #f97316);
+  }
+  .competicion-grupo .clasificacion-wrapper {
+    padding: 1.2rem;
+  }
+
+  .clasificacion-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
 
   .fases-nav {
-    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-    padding-bottom: 0.5rem; border-bottom: 1px solid var(--borde, rgba(255,255,255,0.07));
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--borde, rgba(255, 255, 255, 0.07));
   }
   .fases-nivel-label {
-    font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .07em; color: var(--muted, #64748b);
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--muted, #64748b);
     padding-right: 4px;
   }
   .fase-btn {
-    padding: 5px 14px; border-radius: 20px; font-size: 0.78rem; font-weight: 600;
-    cursor: pointer; border: 1px solid var(--borde, rgba(255,255,255,0.1));
-    background: transparent; color: rgba(255,255,255,0.5); transition: all .15s;
+    padding: 5px 14px;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--borde, rgba(255, 255, 255, 0.1));
+    background: transparent;
+    color: rgba(255, 255, 255, 0.5);
+    transition: all 0.15s;
   }
-  .fase-btn:hover { color: white; border-color: rgba(255,255,255,0.3); }
+  .fase-btn:hover {
+    color: white;
+    border-color: rgba(255, 255, 255, 0.3);
+  }
   .fase-btn.active {
-    background: var(--orange, #f97316); border-color: var(--orange, #f97316); color: white;
+    background: var(--orange, #f97316);
+    border-color: var(--orange, #f97316);
+    color: white;
   }
 
-  .fase-panel { display: none; }
-  .fase-panel.active { display: block; }
+  .fase-panel {
+    display: none;
+  }
+  .fase-panel.active {
+    display: block;
+  }
 
-  .tabla-wrapper { overflow-x: auto; }
+  .tabla-wrapper {
+    overflow-x: auto;
+  }
   .tabla-clasificacion {
-    width: 100%; border-collapse: collapse; font-size: 0.85rem;
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
   }
   .tabla-clasificacion thead tr {
-    border-bottom: 1px solid var(--borde, rgba(255,255,255,0.07));
+    border-bottom: 1px solid var(--borde, rgba(255, 255, 255, 0.07));
   }
   .tabla-clasificacion th {
-    padding: 8px 10px; font-size: 0.65rem; font-weight: 700;
-    text-transform: uppercase; letter-spacing: .07em;
-    color: var(--muted, #64748b); text-align: center;
+    padding: 8px 10px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--muted, #64748b);
+    text-align: center;
   }
-  .tabla-clasificacion th.col-pos { width: 36px; }
-  .tabla-clasificacion th.col-nombre { text-align: left; }
+  .tabla-clasificacion th.col-pos {
+    width: 36px;
+  }
+  .tabla-clasificacion th.col-nombre {
+    text-align: left;
+  }
   .tabla-clasificacion td {
-    padding: 10px 10px; text-align: center;
-    border-bottom: 1px solid var(--borde, rgba(255,255,255,0.04));
+    padding: 10px 10px;
+    text-align: center;
+    border-bottom: 1px solid var(--borde, rgba(255, 255, 255, 0.04));
     font-variant-numeric: tabular-nums;
   }
-  .tabla-clasificacion td.col-nombre { text-align: left; }
-  .tabla-clasificacion td.col-pos { text-align: center; }
-  .tabla-clasificacion td.col-v { color: #22c55e; font-weight: 700; }
-  .tabla-clasificacion td.col-d { color: #f6603b; font-weight: 700; }
-  .tabla-clasificacion td.col-dif { font-weight: 700; }
-  .tabla-clasificacion td.col-dif.pos { color: #22c55e; }
-  .tabla-clasificacion td.col-dif.neg { color: #f6603b; }
+  .tabla-clasificacion td.col-nombre {
+    text-align: left;
+  }
+  .tabla-clasificacion td.col-pos {
+    text-align: center;
+  }
+  .tabla-clasificacion td.col-v {
+    color: #22c55e;
+    font-weight: 700;
+  }
+  .tabla-clasificacion td.col-d {
+    color: #f6603b;
+    font-weight: 700;
+  }
+  .tabla-clasificacion td.col-dif {
+    font-weight: 700;
+  }
+  .tabla-clasificacion td.col-dif.pos {
+    color: #22c55e;
+  }
+  .tabla-clasificacion td.col-dif.neg {
+    color: #f6603b;
+  }
 
   .tabla-clasificacion tr.mi-equipo {
-    background: rgba(249,115,22,0.26);
+    background: rgba(249, 115, 22, 0.26);
   }
-  .tabla-clasificacion tr.mi-equipo td { border-bottom-color: rgba(249,115,22,0.1); }
+  .tabla-clasificacion tr.mi-equipo td {
+    border-bottom-color: rgba(249, 115, 22, 0.1);
+  }
 
   .pos-badge {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 24px; height: 24px; border-radius: 6px; font-size: 0.75rem;
-    font-weight: 800; background: var(--card, #1e293b);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    background: var(--card, #1e293b);
   }
-  .pos-badge.primero { background: var(--orange, #f97316); color: white; }
-
-  .nosotros-badge {
-    color: var(--orange, #f97316); font-size: 0.6rem; margin-right: 4px;
+  .pos-badge.primero {
+    background: var(--orange, #f97316);
+    color: white;
   }
-  .nombre-destacado { font-weight: 700; }
+  .nombre-destacado {
+    font-weight: 700;
+  }
 
-  /* ── Responsive ── */
   @media (max-width: 640px) {
-    .header-top { flex-direction: column; align-items: flex-start; }
-    .tabs-nav { gap: 0; }
-    .tab-btn { padding: 0.75rem 0.9rem; font-size: 0.75rem; }
-    .plantilla-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
-    .jugador-card { min-height: 360px; }
-    .card-content h3 { font-size: 1rem; }
-    .partido-vs { flex-wrap: wrap; }
-    .rival-nombre { flex: unset; max-width: 120px; }
-    .tabla-clasificacion th, .tabla-clasificacion td { padding: 8px 6px; font-size: 0.78rem; }
+    .tabs-nav {
+      gap: 0;
+    }
+    .tab-btn {
+      padding: 0.75rem 0.9rem;
+      font-size: 0.75rem;
+    }
+    .plantilla-grid {
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    }
+    .jugador-card {
+      min-height: 360px;
+    }
+    .card-content h3 {
+      font-size: 1rem;
+    }
+    .partido-vs {
+      flex-wrap: wrap;
+    }
+    .rival-nombre {
+      flex: unset;
+      max-width: 120px;
+    }
+    .tabla-clasificacion th,
+    .tabla-clasificacion td {
+      padding: 8px 6px;
+      font-size: 0.78rem;
+    }
   }
 
   .escudos-vs {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-.escudo-mini {
-  width: 28px;
-  height: 28px;
-  object-fit: contain;
-  border-radius: 4px;
-}
-.cuerpo-tecnico {
-  margin-top: 2.5rem;
-  padding-top: 2rem;
-  border-top: 1px solid var(--borde, rgba(255,255,255,0.07));
-}
-.cuerpo-tecnico-titulo {
-  font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.08em; color: var(--orange, #f97316); margin-bottom: 1rem;
-}
-.cuerpo-tecnico-lista {
-  display: flex; flex-wrap: wrap; gap: 0.75rem;
-}
-.entrenador-card {
-  display: flex; align-items: center; gap: 0.75rem;
-  padding: 0.75rem 1.1rem;
-  background: var(--card, #1e293b);
-  border: 1px solid var(--borde, rgba(255,255,255,0.07));
-  border-radius: 10px; min-width: 220px;
-}
-.entrenador-icono { font-size: 1.3rem; }
-.entrenador-nombre { font-size: 0.9rem; font-weight: 700; }
-.entrenador-rol {
-  font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.06em; color: var(--muted, #64748b); margin-top: 2px;
-}
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .escudo-mini {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+    border-radius: 4px;
+  }
+
+  .cuerpo-tecnico {
+    margin-top: 2.5rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--borde, rgba(255, 255, 255, 0.07));
+  }
+  .cuerpo-tecnico-titulo {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--orange, #f97316);
+    margin-bottom: 1rem;
+  }
+  .cuerpo-tecnico-lista {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  .entrenador-card {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1.1rem;
+    background: var(--card, #1e293b);
+    border: 1px solid var(--borde, rgba(255, 255, 255, 0.07));
+    border-radius: 10px;
+    min-width: 220px;
+  }
+  .entrenador-icono {
+    font-size: 1.3rem;
+  }
+  .entrenador-nombre {
+    font-size: 0.9rem;
+    font-weight: 700;
+  }
+  .entrenador-rol {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted, #64748b);
+    margin-top: 2px;
+  }
 </style>

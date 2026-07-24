@@ -20,10 +20,8 @@ const ORDEN_CATEGORIAS = [
 function ordenCategoria(nombre) {
   if (!nombre) return 999;
   const norm = nombre.toLowerCase().trim();
-  // Búsqueda exacta primero
   const exacto = ORDEN_CATEGORIAS.indexOf(norm);
   if (exacto !== -1) return exacto;
-  // Si no hay exacta, buscar por base (senior, junior, cadete…)
   const bases = [
     "senior",
     "junior",
@@ -65,6 +63,14 @@ function normalizarIdsEquipo(perfil) {
   return [...new Set(ids)];
 }
 
+// Une los nombres de todas las competiciones de un equipo en un string legible
+function nombresCompeticiones(equipo) {
+  const nombres = (equipo.equipo_competiciones ?? [])
+    .map((ec) => ec.competiciones?.nombre)
+    .filter(Boolean);
+  return nombres.length > 0 ? nombres.join(", ") : "Sin competición";
+}
+
 export default function AdminEquipos({
   supabase,
   perfil,
@@ -78,28 +84,30 @@ export default function AdminEquipos({
   useEffect(() => {
     async function cargar() {
       try {
+        // Eliminado .order("sponsor") para evitar el fallo de columna inexistente
         let query = supabase
           .from("equipos")
           .select(
             `
-  id,
-  foto_url,
-  sponsor_id,
-  categoria_id,
-  competicion_id,
-  temporada_id,
-  categorias (nombre),
-  competiciones (nombre),
-  temporadas (nombre),
-  sponsors (
-    id,
-    nombre,
-    logo_url
-  )
-`,
+              id,
+              foto_url,
+              sponsor_id,
+              categoria_id,
+              temporada_id,
+              categorias (nombre),
+              temporadas:temporadas!equipos_temporada_id_fkey (nombre),
+              sponsors (
+                id,
+                nombre,
+                logo_url
+              ),
+              equipo_competiciones (
+                competicion_id,
+                competiciones:competiciones!equipo_competiciones_competicion_id_fkey (id, nombre)
+              )
+            `,
           )
-          .eq("temporada_id", temporada.id)
-          .order("sponsor", { ascending: true, nullsFirst: false });
+          .eq("temporada_id", temporada.id);
 
         if (perfil?.rol !== "admin") {
           const ids = normalizarIdsEquipo(perfil);
@@ -115,13 +123,14 @@ export default function AdminEquipos({
         const { data, error } = await query;
         if (error) throw error;
 
-        // Ordenar por categoría con prioridad personalizada
+        // Ordenamos en memoria: primero por el orden de la categoría, y en caso de empate, por el nombre del sponsor relacionado
         const ordenados = (data ?? []).sort((a, b) => {
           const oa = ordenCategoria(a.categorias?.nombre);
           const ob = ordenCategoria(b.categorias?.nombre);
           if (oa !== ob) return oa - ob;
-          // Dentro de la misma categoría, ordenar por sponsor alfabéticamente
-          return (a.sponsor ?? "").localeCompare(b.sponsor ?? "", "es");
+          const sa = a.sponsors?.nombre ?? "";
+          const sb = b.sponsors?.nombre ?? "";
+          return sa.localeCompare(sb, "es");
         });
 
         setEquipos(ordenados);
@@ -166,7 +175,7 @@ export default function AdminEquipos({
               </div>
             </div>
             <span className="adm-pill adm-pill--muted">
-              {e.competiciones?.nombre ?? "Sin competición"}
+              {nombresCompeticiones(e)}
             </span>
           </div>
         ))}

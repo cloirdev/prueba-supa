@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import AdminEquipoCompeticiones from "./AdminEquipoCompeticiones.jsx";
 
 export default function AdminPanel({
   supabase,
@@ -7,6 +8,7 @@ export default function AdminPanel({
   temporada,
   onBack,
   onIrA,
+  onSponsorGuardado,
 }) {
   const [fotoUrl, setFotoUrl] = useState(equipo.foto_url ?? null);
   const [subiendoFoto, setSubiendoFoto] = useState(false);
@@ -29,17 +31,42 @@ export default function AdminPanel({
   async function guardarSponsor() {
     setGuardandoSponsor(true);
     setSponsorMsg("");
-    await supabase
+
+    const sponsorSeleccionado = sponsors.find((s) => s.id === sponsorId);
+    const nuevoNombre = sponsorSeleccionado?.nombre
+      ? `${sponsorSeleccionado.nombre} CB Jaca`
+      : `CB Jaca ${equipo.categorias?.nombre ?? ""}`.trim();
+
+    await Promise.all([
+      supabase
+        .from("equipos")
+        .update({ sponsor_id: sponsorId || null })
+        .eq("id", equipo.id),
+      supabase
+        .from("participantes")
+        .update({ nombre_equipo: nuevoNombre })
+        .eq("equipo_id", equipo.id),
+    ]);
+
+    const { data: equipoActualizado } = await supabase
       .from("equipos")
-      .update({ sponsor_id: sponsorId || null })
-      .eq("id", equipo.id);
-    setSponsorMsg("Guardado");
+      .select(
+        "*, categorias(nombre), sponsors(id, nombre, logo_url), equipo_competiciones(competicion_id)",
+      )
+      .eq("id", equipo.id)
+      .single();
+
+    if (equipoActualizado && onSponsorGuardado)
+      onSponsorGuardado(equipoActualizado);
+
+    setSponsorMsg("Guardado ✓");
     setGuardandoSponsor(false);
     setTimeout(() => setSponsorMsg(""), 2000);
   }
 
-  const nombreEquipo = equipo.sponsors?.nombre
-    ? `${equipo.sponsors.nombre} CB Jaca`
+  const sponsorActual = sponsors.find((s) => s.id === sponsorId);
+  const nombreEquipo = sponsorActual?.nombre
+    ? `${sponsorActual.nombre} CB Jaca`
     : `CB Jaca ${equipo.categorias?.nombre ?? ""}`;
 
   async function onFotoChange(e) {
@@ -86,244 +113,328 @@ export default function AdminPanel({
     }
   }
 
+  const SECCIONES = [
+    {
+      key: "plantilla",
+      emoji: "👥",
+      label: "Plantilla",
+      sub: "Gestionar jugadores",
+    },
+    {
+      key: "calendario",
+      emoji: "📅",
+      label: "Calendario",
+      sub: "Partidos y resultados",
+    },
+    {
+      key: "clasificacion",
+      emoji: "🏆",
+      label: "Clasificación",
+      sub: "Tabla de la competición",
+    },
+    {
+      key: "noticias",
+      emoji: "📰",
+      label: "Noticias",
+      sub: "Crónicas y noticias",
+    },
+  ];
+
   return (
     <div>
       <button onClick={onBack} className="adm-back-btn">
         ← Volver
       </button>
 
-      <h1 className="adm-page-title">{nombreEquipo}</h1>
-      <p className="adm-page-subtitle">
-        {equipo.competiciones?.nombre ?? temporada.nombre} · {temporada.nombre}
+      <h1 className="adm-page-title" style={{ marginBottom: "4px" }}>
+        {nombreEquipo}
+      </h1>
+      <p className="adm-page-subtitle" style={{ marginBottom: "24px" }}>
+        {equipo.categorias?.nombre} ·{" "}
+        {temporada?.temporadas?.nombre ?? temporada?.nombre}
       </p>
 
-      {/* ── Foto ── */}
-      <div style={{ marginBottom: "32px", maxWidth: "520px" }}>
-        <div className="adm-section-label" style={{ marginBottom: "10px" }}>
-          Foto del equipo
-        </div>
-        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-          {fotoUrl ? (
-            <div style={{ position: "relative" }}>
-              <img
-                src={fotoUrl}
-                alt="Foto del equipo"
-                style={{
-                  width: "100%",
-                  height: "180px",
-                  objectFit: "cover",
-                  display: "block",
-                }}
-              />
-              <div
-                style={{
-                  position: "absolute",
-                  bottom: "10px",
-                  right: "10px",
-                  display: "flex",
-                  gap: "8px",
-                }}
-              >
-                <button
-                  onClick={() => inputFotoRef.current?.click()}
-                  disabled={subiendoFoto}
-                  style={btnFotoStyle}
-                >
-                  {subiendoFoto ? "Subiendo..." : "↑ Cambiar"}
-                </button>
-                <button
-                  onClick={borrarFoto}
-                  disabled={borrandoFoto}
+      {/* ── Layout principal ── */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: "16px",
+          alignItems: "start",
+        }}
+      >
+        {/* ── Columna izquierda ── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          {/* Foto */}
+          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+            <div
+              style={{
+                padding: "12px 16px",
+                fontSize: "11px",
+                fontWeight: 800,
+                color: "var(--muted)",
+                textTransform: "uppercase",
+                letterSpacing: ".06em",
+                borderBottom: "1px solid var(--borde)",
+              }}
+            >
+              Foto del equipo
+            </div>
+            {fotoUrl ? (
+              <div style={{ position: "relative" }}>
+                <img
+                  src={fotoUrl}
+                  alt="Foto del equipo"
                   style={{
-                    ...btnFotoStyle,
-                    borderColor: "rgba(255,99,99,0.5)",
-                    color: "#fca5a5",
+                    width: "100%",
+                    height: "220px",
+                    objectFit: "cover",
+                    display: "block",
+                  }}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: "10px",
+                    right: "10px",
+                    display: "flex",
+                    gap: "8px",
                   }}
                 >
-                  {borrandoFoto ? "..." : "✕ Borrar"}
-                </button>
+                  <button
+                    onClick={() => inputFotoRef.current?.click()}
+                    disabled={subiendoFoto}
+                    style={btnFotoStyle}
+                  >
+                    {subiendoFoto ? "Subiendo..." : "↑ Cambiar"}
+                  </button>
+                  <button
+                    onClick={borrarFoto}
+                    disabled={borrandoFoto}
+                    style={{
+                      ...btnFotoStyle,
+                      borderColor: "rgba(255,99,99,0.5)",
+                      color: "#fca5a5",
+                    }}
+                  >
+                    {borrandoFoto ? "..." : "✕ Borrar"}
+                  </button>
+                </div>
               </div>
-            </div>
-          ) : (
+            ) : (
+              <div
+                onClick={() => !subiendoFoto && inputFotoRef.current?.click()}
+                style={{
+                  height: "160px",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                  cursor: subiendoFoto ? "not-allowed" : "pointer",
+                  opacity: subiendoFoto ? 0.5 : 1,
+                }}
+              >
+                <span style={{ fontSize: "28px" }}>🖼️</span>
+                <span
+                  style={{
+                    fontSize: "13px",
+                    color: "var(--muted)",
+                    fontWeight: 600,
+                  }}
+                >
+                  {subiendoFoto
+                    ? "Subiendo foto..."
+                    : "Sin foto · haz clic para subir"}
+                </span>
+                <span style={{ fontSize: "11px", color: "var(--muted)" }}>
+                  JPG, PNG o WEBP · recomendado 1200×600 px
+                </span>
+              </div>
+            )}
+            {fotoError && (
+              <p
+                style={{
+                  fontSize: "12px",
+                  color: "#dc2626",
+                  padding: "8px 16px",
+                }}
+              >
+                {fotoError}
+              </p>
+            )}
+          </div>
+
+          {/* Sponsor */}
+          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
             <div
-              onClick={() => !subiendoFoto && inputFotoRef.current?.click()}
               style={{
-                height: "130px",
+                padding: "12px 16px",
+                fontSize: "11px",
+                fontWeight: 800,
+                color: "var(--muted)",
+                textTransform: "uppercase",
+                letterSpacing: ".06em",
+                borderBottom: "1px solid var(--borde)",
+              }}
+            >
+              Sponsor
+            </div>
+            <div
+              style={{
+                padding: "14px 16px",
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+              }}
+            >
+              <div
+                style={{
+                  width: "44px",
+                  height: "44px",
+                  flexShrink: 0,
+                  borderRadius: "8px",
+                  border: "1px solid var(--borde)",
+                  background: "var(--fondo)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  overflow: "hidden",
+                }}
+              >
+                {sponsorActual?.logo_url ? (
+                  <img
+                    src={sponsorActual.logo_url}
+                    alt="Logo"
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "contain",
+                      padding: "5px",
+                    }}
+                  />
+                ) : (
+                  <span style={{ fontSize: "1.1rem", opacity: 0.3 }}>🏷️</span>
+                )}
+              </div>
+              <select
+                value={sponsorId}
+                onChange={(e) => setSponsorId(e.target.value)}
+                className="adm-input"
+                style={{ flex: 1, margin: 0 }}
+              >
+                <option value="">Sin sponsor</option>
+                {sponsors.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.nombre}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={guardarSponsor}
+                disabled={guardandoSponsor}
+                style={{
+                  background: sponsorMsg ? "#22c55e" : "var(--naranja)",
+                  color: "white",
+                  border: "none",
+                  padding: "9px 14px",
+                  borderRadius: "8px",
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  flexShrink: 0,
+                  transition: "background .2s",
+                  minWidth: "72px",
+                }}
+              >
+                {sponsorMsg ? "✓" : guardandoSponsor ? "..." : "Guardar"}
+              </button>
+            </div>
+          </div>
+
+          {/* Competiciones adicionales */}
+          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+            <div
+              style={{
+                padding: "12px 16px",
+                fontSize: "11px",
+                fontWeight: 800,
+                color: "var(--muted)",
+                textTransform: "uppercase",
+                letterSpacing: ".06em",
+                borderBottom: "1px solid var(--borde)",
+              }}
+            >
+              Otras competiciones
+            </div>
+            <div style={{ padding: "14px 16px" }}>
+              <AdminEquipoCompeticiones supabase={supabase} equipo={equipo} />
+            </div>
+          </div>
+        </div>
+
+        {/* ── Columna derecha: cuadrícula 2×2 ── */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gridTemplateRows: "1fr 1fr",
+            gap: "16px",
+            height: "100%",
+          }}
+        >
+          {SECCIONES.map(({ key, emoji, label, sub }) => (
+            <div
+              key={key}
+              onClick={() => onIrA(key)}
+              className="card"
+              style={{
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
                 justifyContent: "center",
-                gap: "6px",
-                cursor: subiendoFoto ? "not-allowed" : "pointer",
-                opacity: subiendoFoto ? 0.5 : 1,
+                textAlign: "center",
+                cursor: "pointer",
+                minHeight: "160px",
+                gap: "10px",
+                transition: "border-color .15s, transform .15s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "var(--naranja)";
+                e.currentTarget.style.transform = "translateY(-2px)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "var(--borde)";
+                e.currentTarget.style.transform = "translateY(0)";
               }}
             >
-              <span style={{ fontSize: "28px" }}>🖼️</span>
-              <span
-                style={{
-                  fontSize: "13px",
-                  color: "var(--muted)",
-                  fontWeight: 600,
-                }}
-              >
-                {subiendoFoto
-                  ? "Subiendo foto..."
-                  : "Sin foto · haz clic para subir"}
-              </span>
-              <span style={{ fontSize: "11px", color: "var(--muted)" }}>
-                JPG, PNG o WEBP · recomendado 1200×600 px
-              </span>
+              <span style={{ fontSize: "32px" }}>{emoji}</span>
+              <div>
+                <div
+                  style={{
+                    fontWeight: 700,
+                    fontSize: "14px",
+                    marginBottom: "4px",
+                  }}
+                >
+                  {label}
+                </div>
+                <div style={{ fontSize: "12px", color: "var(--muted)" }}>
+                  {sub}
+                </div>
+              </div>
             </div>
-          )}
-        </div>
-        {fotoError && (
-          <p style={{ fontSize: "12px", color: "#dc2626", marginTop: "6px" }}>
-            {fotoError}
-          </p>
-        )}
-        <input
-          ref={inputFotoRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          onChange={onFotoChange}
-          style={{ display: "none" }}
-        />
-      </div>
-
-      {/* ── Sponsor ── */}
-      <div style={{ marginBottom: "32px", maxWidth: "520px" }}>
-        <div className="adm-section-label" style={{ marginBottom: "10px" }}>
-          Sponsor
-        </div>
-        <div
-          className="card"
-          style={{ display: "flex", alignItems: "center", gap: "14px" }}
-        >
-          {/* Preview logo */}
-          <div
-            style={{
-              width: "52px",
-              height: "52px",
-              flexShrink: 0,
-              borderRadius: "8px",
-              border: "1px solid var(--borde)",
-              background: "var(--color-background-secondary)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              overflow: "hidden",
-            }}
-          >
-            {sponsors.find((s) => s.id === sponsorId)?.logo_url ? (
-              <img
-                src={sponsors.find((s) => s.id === sponsorId).logo_url}
-                alt="Logo"
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "contain",
-                  padding: "6px",
-                }}
-              />
-            ) : (
-              <span style={{ fontSize: "1.2rem", opacity: 0.3 }}>🏷️</span>
-            )}
-          </div>
-
-          {/* Select */}
-          <select
-            value={sponsorId}
-            onChange={(e) => setSponsorId(e.target.value)}
-            style={{
-              flex: 1,
-              padding: "9px 12px",
-              borderRadius: "8px",
-              border: "1px solid var(--borde)",
-              background: "var(--fondo)",
-              color: "var(--texto)",
-              fontSize: "13px",
-            }}
-          >
-            <option value="">Sin sponsor</option>
-            {sponsors.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.nombre}
-              </option>
-            ))}
-          </select>
-
-          {/* Guardar */}
-          <button
-            onClick={guardarSponsor}
-            disabled={guardandoSponsor}
-            style={{
-              background: sponsorMsg ? "#22c55e" : "var(--naranja)",
-              color: "white",
-              border: "none",
-              padding: "9px 16px",
-              borderRadius: "8px",
-              fontSize: "13px",
-              fontWeight: 700,
-              cursor: "pointer",
-              flexShrink: 0,
-              transition: "background .2s",
-            }}
-          >
-            {sponsorMsg ? "✓" : guardandoSponsor ? "..." : "Guardar"}
-          </button>
+          ))}
         </div>
       </div>
 
-      {/* ── Secciones ── */}
-      <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-        {[
-          {
-            key: "plantilla",
-            emoji: "👥",
-            label: "Plantilla",
-            sub: "Gestionar jugadores",
-          },
-          {
-            key: "calendario",
-            emoji: "📅",
-            label: "Calendario",
-            sub: "Partidos y resultados",
-          },
-          {
-            key: "clasificacion",
-            emoji: "🏆",
-            label: "Clasificación",
-            sub: "Tabla de la competición",
-          },
-          {
-            key: "noticias",
-            emoji: "📰",
-            label: "Noticias",
-            sub: "Crónicas y noticias",
-          },
-        ].map(({ key, emoji, label, sub }) => (
-          <div
-            key={key}
-            onClick={() => onIrA(key)}
-            className="card"
-            style={{
-              flex: "1 1 140px",
-              textAlign: "center",
-              cursor: "pointer",
-            }}
-          >
-            <div style={{ fontSize: "28px", marginBottom: "10px" }}>
-              {emoji}
-            </div>
-            <div
-              style={{ fontWeight: 700, fontSize: "14px", marginBottom: "4px" }}
-            >
-              {label}
-            </div>
-            <div style={{ fontSize: "12px", color: "var(--muted)" }}>{sub}</div>
-          </div>
-        ))}
-      </div>
+      <input
+        ref={inputFotoRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        onChange={onFotoChange}
+        style={{ display: "none" }}
+      />
     </div>
   );
 }

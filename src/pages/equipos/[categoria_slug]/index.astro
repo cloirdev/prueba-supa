@@ -5,16 +5,25 @@ import { supabase } from "@/lib/supabase.js";
 import Layout from "@/layouts/Layout.astro";
 
 export async function getStaticPaths() {
-  const { data: categorias } = await supabase
-    .from("categorias")
-    .select("nombre, slug")
-    .not("slug", "is", null);
+  const { data: equipos } = await supabase.from("equipos").select(`
+    id, created_at,
+    categorias (nombre, slug),
+    temporadas:temporadas!equipos_temporada_id_fkey (nombre)
+  `);
 
-  if (!categorias) return [];
+  const slugMap = resolverSlugsEquipos(equipos ?? []);
+  const vistos = new Map(); // slugFinal -> nombreCategoria
 
-  return categorias.map((cat) => ({
-    params: { categoria_slug: cat.slug },
-    props: { nombreReal: cat.nombre, categoriaSlug: cat.slug },
+  (equipos ?? []).forEach((e) => {
+    const slugFinal = slugMap.get(e.id);
+    if (slugFinal && !vistos.has(slugFinal)) {
+      vistos.set(slugFinal, e.categorias.nombre);
+    }
+  });
+
+  return Array.from(vistos.entries()).map(([slug, nombre]) => ({
+    params: { categoria_slug: slug },
+    props: { nombreReal: nombre, categoriaSlug: slug },
   }));
 }
 
@@ -27,8 +36,8 @@ const { data: equipos, error } = await supabase
   .select(
     `
     id,
-    sponsor,
-    temporadas (id, nombre),
+    sponsors:sponsors!equipos_sponsor_id_fkey (nombre),
+    temporadas:temporadas!equipos_temporada_id_fkey (id, nombre),
     categorias!inner (nombre, slug)
   `,
   )
@@ -43,7 +52,7 @@ const temporadasMap = new Map();
     temporadasMap.set(e.temporadas.id, {
       ...e.temporadas,
       slug: e.temporadas.nombre,
-      sponsor: e.sponsor,
+      sponsor: e.sponsors?.nombre,
     });
   }
 });

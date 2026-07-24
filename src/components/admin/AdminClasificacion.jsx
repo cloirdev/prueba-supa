@@ -100,6 +100,7 @@ function Modal({ children, onClose }) {
 function ModalFases({
   supabase,
   equipo,
+  competicionId,
   temporada,
   fases,
   onCambio,
@@ -116,7 +117,7 @@ function ModalFases({
     }
     setGuardando(true);
     const { error: err } = await supabase.from("fases_competicion").insert({
-      competicion_id: equipo.competicion_id,
+      competicion_id: competicionId,
       temporada_id: temporada.id,
       nombre: nueva.nombre.trim(),
       tipo: nueva.tipo,
@@ -124,7 +125,8 @@ function ModalFases({
     });
     setGuardando(false);
     if (err) {
-      setError(err.message);
+      console.error("Error crear fase:", err);
+      setError(err.message ?? JSON.stringify(err));
       return;
     }
     setNueva({ nombre: "", tipo: "grupo", orden: 1 });
@@ -536,8 +538,9 @@ function TablaClasificacion({
     .map((p) => {
       const cls = clasificacion.find((c) => c.participante_id === p.id);
       const esMiEquipo = p.equipo_id === equipo.id;
-      // Usar siempre nombre_equipo guardado en participantes como fuente de verdad
-      const nombre = p.nombre_equipo ?? p.clubes?.nombre ?? "–";
+      const nombre = esMiEquipo
+        ? nombreEquipoPropio(equipo)
+        : (p.nombre_equipo ?? p.clubes?.nombre ?? "–");
       return { participante: p, cls, nombre, esMiEquipo };
     })
     .sort((a, b) => (a.cls?.posicion ?? 999) - (b.cls?.posicion ?? 999));
@@ -875,6 +878,11 @@ export default function AdminClasificacion({ supabase, equipo, temporada }) {
   const [modalFases, setModalFases] = useState(false);
   const [modalParticipante, setModalParticipante] = useState(false);
 
+  const competicionId =
+    equipo.competicion_id ??
+    equipo.equipo_competiciones?.[0]?.competicion_id ??
+    null;
+
   useEffect(() => {
     cargarFases();
   }, [equipo?.id, temporada?.id]);
@@ -884,7 +892,7 @@ export default function AdminClasificacion({ supabase, equipo, temporada }) {
     const { data } = await supabase
       .from("fases_competicion")
       .select("*")
-      .eq("competicion_id", equipo.competicion_id)
+      .eq("competicion_id", competicionId)
       .eq("temporada_id", temporada.id)
       .order("orden", { ascending: true });
     const fasesData = data ?? [];
@@ -1101,6 +1109,7 @@ export default function AdminClasificacion({ supabase, equipo, temporada }) {
         <ModalFases
           supabase={supabase}
           equipo={equipo}
+          competicionId={competicionId}
           temporada={temporada}
           fases={fases}
           onCambio={() => cargarFases(true)}

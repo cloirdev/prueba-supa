@@ -15,10 +15,12 @@ const { data: equipos } = await supabase
   .from("equipos")
   .select(
     `
-    id, sponsor, foto_url, temporada_id,
+    id, created_at,
+    foto_url,
+    temporada_id,
     categorias (id, nombre, slug, orden, genero),
-    temporadas (id, nombre),
-    sponsors (nombre, logo_url)
+    temporadas:temporadas!equipos_temporada_id_fkey (id, nombre),
+    sponsors:sponsors!equipos_sponsor_id_fkey (nombre, logo_url)
   `,
   )
   .order("temporada_id");
@@ -32,15 +34,38 @@ for (const e of equipos ?? []) {
 }
 
 function nombreEquipo(equipo) {
-  return equipo.sponsor
-    ? `${equipo.sponsor} CB Jaca`
+  return equipo.sponsors?.nombre
+    ? `${equipo.sponsors.nombre} CB Jaca`
     : `CB Jaca ${equipo.categorias?.nombre ?? ""}`;
 }
 
+import { resolverSlugsEquipos } from "@/lib/services/equipos.js";
+const slugMap = resolverSlugsEquipos(equipos ?? []);
+
 function urlEquipo(equipo) {
-  const cat = equipo.categorias?.slug;
+  const cat = slugMap.get(equipo.id);
   const temp = equipo.temporadas?.nombre;
   return cat && temp ? `/equipos/${cat}/${temp}` : null;
+}
+
+function sufijoEquipo(equipo) {
+  const slugFinal = slugMap.get(equipo.id);
+  const slugBase = equipo.categorias?.slug;
+  if (!slugFinal || !slugBase || slugFinal === slugBase) return null;
+  const sufijo = slugFinal.slice(slugBase.length + 1);
+  return sufijo ? sufijo.toUpperCase() : null;
+}
+
+function nombreCategoriaConSufijo(equipo, listaTemporada = []) {
+  const base = equipo.categorias?.nombre ?? "";
+  const sufijo = sufijoEquipo(equipo);
+
+  if (sufijo) return `${base} ${sufijo}`;
+
+  const hermanos = listaTemporada.filter(
+    (e) => e.categorias?.id === equipo.categorias?.id,
+  );
+  return hermanos.length > 1 ? `${base} A` : base;
 }
 ---
 
@@ -57,9 +82,14 @@ function urlEquipo(equipo) {
 
         {
           temporadas && temporadas.length > 1 && (
-            <select id="sel-temporada" class="temporada-select">
+            <select
+              id="sel-temporada"
+              class="temporada-select"
+              autocomplete="off"
+            >
               {temporadas.map((t) => (
                 <option value={t.id} selected={t.id === temporadaActual?.id}>
+                  {" "}
                   {t.nombre}
                 </option>
               ))}
@@ -73,9 +103,17 @@ function urlEquipo(equipo) {
       (temporadas ?? []).map((temp) => {
         const lista = porTemporada[temp.id] ?? [];
         if (lista.length === 0) return null;
-        lista.sort(
-          (a, b) => (a.categorias?.orden ?? 99) - (b.categorias?.orden ?? 99),
-        );
+        lista.sort((a, b) => {
+          const ordenA = a.categorias?.orden ?? 99;
+          const ordenB = b.categorias?.orden ?? 99;
+          if (ordenA !== ordenB) return ordenA - ordenB;
+
+          // Mismo orden de categoría (típicamente A vs B de la misma categoría real):
+          // sin sufijo (A) va antes que con sufijo (B, C...)
+          const sufijoA = sufijoEquipo(a) ?? "";
+          const sufijoB = sufijoEquipo(b) ?? "";
+          return sufijoA.localeCompare(sufijoB);
+        });
         return (
           <div
             class="equipos-grid"
@@ -85,7 +123,9 @@ function urlEquipo(equipo) {
             {lista.map((equipo) => {
               const href = urlEquipo(equipo);
               const foto = equipo.foto_url;
-              const nombre = nombreEquipo(equipo);
+              const nombre = equipo.sponsors?.nombre
+                ? `${equipo.sponsors.nombre} CB Jaca`
+                : `CB Jaca ${equipo.categorias?.nombre ?? ""}`;
               const genero = equipo.categorias?.genero;
               return href ? (
                 <a
@@ -97,7 +137,7 @@ function urlEquipo(equipo) {
                   <div class="card-inner">
                     <div class="card-top">
                       <span class="genero-badge">
-                        {equipo.categorias?.nombre}
+                        {nombreCategoriaConSufijo(equipo, lista)}
                       </span>
                       <span class="temporada-badge">{temp.nombre}</span>
                     </div>
