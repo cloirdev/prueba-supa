@@ -30,6 +30,11 @@ const {
   temporadasOrdenadas,
 } = await getEquipoTemporadaPageData(equipoIds, categoriaSlug);
 
+// Nombre de transición único por equipo+temporada.
+// DEBE coincidir exactamente con el generado en /equipos/index.astro:
+// `equipo-${categoriaSlug}-${temporadaSlug}`
+const nombreTransicion = `equipo-${categoriaSlug}-${temporadaSlug}`;
+
 function nombreRival(p) {
   const rival = p.es_local ? p.participante_visitante : p.participante_local;
   return rival?.nombre_equipo ?? rival?.clubes?.nombre ?? "—";
@@ -109,6 +114,7 @@ function competicionesDe(equipo) {
       rgba(0,0,0,0.88)
     ),
     url('${equipos?.[0]?.foto_url || "/placeholder-team.jpg"}')`}
+    transition:name={nombreTransicion}
   >
     <div class="equipo-hero-inner">
       <a href="/equipos" class="volver">← Equipos</a>
@@ -117,7 +123,7 @@ function competicionesDe(equipo) {
         <div class="hero-text">
           <p class="categoria-label">{categoriaNombre}</p>
 
-          <h1>
+          <h1 transition:name={`nombre-${nombreTransicion}`}>
             {
               equipos?.[0]?.sponsors?.nombre
                 ? `${equipos[0].sponsors.nombre} CB Jaca`
@@ -178,234 +184,141 @@ function competicionesDe(equipo) {
     </div>
   </div>
 
-  {
-    (equipos ?? []).map((equipo) => {
-      const plantilla = jugadoresPorEquipo.get(equipo.id) ?? [];
-      const todosPartidos = partidosPorEquipo.get(equipo.id) ?? [];
-      const pendientes = todosPartidos.filter((p) => p.puntos_favor === null);
-      const disputados = [
-        ...todosPartidos.filter((p) => p.puntos_favor !== null),
-      ].reverse();
-      const nombreEquipo = equipo.sponsors?.nombre
-        ? `${equipo.sponsors.nombre} CB Jaca`
-        : `CB Jaca ${categoriaNombre}`;
-      const fasesEquipo = fasesPorEquipo.get(equipo.id) ?? [];
-      const entrenadores = entrenadoresPorEquipo.get(equipo.id) ?? [];
-      const entrenadorPrincipal = entrenadores.find(
-        (e) => e.rol === "principal",
-      );
-      const ayudantes = entrenadores.filter((e) => e.rol === "ayudante");
+  <div transition:animate="fade">
+    {
+      (equipos ?? []).map((equipo) => {
+        const plantilla = jugadoresPorEquipo.get(equipo.id) ?? [];
+        const todosPartidos = partidosPorEquipo.get(equipo.id) ?? [];
+        const pendientes = todosPartidos.filter((p) => p.puntos_favor === null);
+        const disputados = [
+          ...todosPartidos.filter((p) => p.puntos_favor !== null),
+        ].reverse();
+        const nombreEquipo = equipo.sponsors?.nombre
+          ? `${equipo.sponsors.nombre} CB Jaca`
+          : `CB Jaca ${categoriaNombre}`;
+        const fasesEquipo = fasesPorEquipo.get(equipo.id) ?? [];
+        const entrenadores = entrenadoresPorEquipo.get(equipo.id) ?? [];
+        const entrenadorPrincipal = entrenadores.find(
+          (e) => e.rol === "principal",
+        );
+        const ayudantes = entrenadores.filter((e) => e.rol === "ayudante");
 
-      const competiciones = competicionesDe(equipo);
+        const competiciones = competicionesDe(equipo);
 
-      const fasesPorCompeticion = competiciones
-        .map((comp) => ({
-          competicion: comp,
-          fases: fasesEquipo
-            .filter((f) => f.competicion_id === comp.id)
-            .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)),
-        }))
-        .filter((grupo) => grupo.fases.length > 0);
+        const fasesPorCompeticion = competiciones
+          .map((comp) => ({
+            competicion: comp,
+            fases: fasesEquipo
+              .filter((f) => f.competicion_id === comp.id)
+              .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)),
+          }))
+          .filter((grupo) => grupo.fases.length > 0);
 
-      return (
-        <div class="equipo-bloque">
-          {competiciones.length > 0 && (
-            <p class="competicion-label">
-              {competiciones.map((c) => c.nombre).join(" · ")}
-            </p>
-          )}
+        return (
+          <div class="equipo-bloque">
+            {competiciones.length > 0 && (
+              <p class="competicion-label">
+                {competiciones.map((c) => c.nombre).join(" · ")}
+              </p>
+            )}
 
-          <div id="tab-plantilla" class="tab-panel" role="tabpanel">
-            <section class="seccion">
-              <h2 class="seccion-titulo">Plantilla</h2>
-              {plantilla.length === 0 ? (
-                <p class="vacio">Sin jugadores registrados.</p>
-              ) : (
-                <div class="plantilla-grid">
-                  {plantilla.map((c) => {
-                    const foto = fotoJugador(c.jugadores, "accion");
-                    const posicion =
-                      posicionLabel[c.jugadores?.posicion] ??
-                      c.jugadores?.posicion ??
-                      "—";
-                    return (
-                      <a
-                        href={`/jugadores/${c.jugadores?.id}`}
-                        class="jugador-card"
-                      >
-                        {foto ? (
-                          <img
-                            src={foto}
-                            alt={`Foto de ${c.jugadores?.nombre ?? ""} ${c.jugadores?.apellido ?? ""}`}
-                            class="jugador-img"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <img
-                            src="/avatar.svg"
-                            alt="Avatar por defecto"
-                            class="jugador-img avatar-placeholder"
-                          />
-                        )}
-                        <div class="card-content">
-                          <span class="dorsal-pill">{c.dorsal ?? "—"}</span>
-                          <h3>
-                            <span class="nombre">{c.jugadores?.nombre}</span>
-                            <span class="apellido">
-                              {c.jugadores?.apellido}
-                            </span>
-                          </h3>
-                          <span class="position">{posicion}</span>
-                        </div>
-                      </a>
-                    );
-                  })}
-                </div>
-              )}
-
-              {entrenadores.length > 0 && (
-                <div class="cuerpo-tecnico">
-                  <h3 class="cuerpo-tecnico-titulo">Cuerpo técnico</h3>
-                  <div class="cuerpo-tecnico-lista">
-                    {entrenadorPrincipal && (
-                      <div class="entrenador-card">
-                        <div class="entrenador-icono">🏀</div>
-                        <div>
-                          <div class="entrenador-nombre">
-                            {entrenadorPrincipal.entrenadores.nombre}{" "}
-                            {entrenadorPrincipal.entrenadores.apellido}
+            <div id="tab-plantilla" class="tab-panel" role="tabpanel">
+              <section class="seccion">
+                <h2 class="seccion-titulo">Plantilla</h2>
+                {plantilla.length === 0 ? (
+                  <p class="vacio">Sin jugadores registrados.</p>
+                ) : (
+                  <div class="plantilla-grid">
+                    {plantilla.map((c) => {
+                      const foto = fotoJugador(c.jugadores, "accion");
+                      const posicion =
+                        posicionLabel[c.jugadores?.posicion] ??
+                        c.jugadores?.posicion ??
+                        "—";
+                      return (
+                        <a
+                          href={`/jugadores/${c.jugadores?.id}`}
+                          class="jugador-card"
+                        >
+                          {foto ? (
+                            <img
+                              src={foto}
+                              alt={`Foto de ${c.jugadores?.nombre ?? ""} ${c.jugadores?.apellido ?? ""}`}
+                              class="jugador-img"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <img
+                              src="/avatar.svg"
+                              alt="Avatar por defecto"
+                              class="jugador-img avatar-placeholder"
+                            />
+                          )}
+                          <div class="card-content">
+                            <span class="dorsal-pill">{c.dorsal ?? "—"}</span>
+                            <h3>
+                              <span class="nombre">{c.jugadores?.nombre}</span>
+                              <span class="apellido">
+                                {c.jugadores?.apellido}
+                              </span>
+                            </h3>
+                            <span class="position">{posicion}</span>
                           </div>
-                          <div class="entrenador-rol">Entrenador principal</div>
-                        </div>
-                      </div>
-                    )}
-                    {ayudantes.map((e) => (
-                      <div class="entrenador-card">
-                        <div class="entrenador-icono">📋</div>
-                        <div>
-                          <div class="entrenador-nombre">
-                            {e.entrenadores.nombre} {e.entrenadores.apellido}
-                          </div>
-                          <div class="entrenador-rol">Ayudante</div>
-                        </div>
-                      </div>
-                    ))}
+                        </a>
+                      );
+                    })}
                   </div>
-                </div>
-              )}
-            </section>
-          </div>
+                )}
 
-          <div id="tab-calendario" class="tab-panel" role="tabpanel">
-            <section class="seccion seccion-alt">
-              <h2 class="seccion-titulo">Calendario y Resultados</h2>
-              {todosPartidos.length === 0 ? (
-                <p class="vacio">Sin partidos registrados.</p>
-              ) : (
-                <div class="partidos-columnas">
-                  {pendientes.length > 0 && (
-                    <div class="partidos-bloque">
-                      <h3 class="bloque-label">Próximos partidos</h3>
-                      <div class="partidos-lista">
-                        {pendientes.map((p) => (
-                          <div class="partido-card">
-                            <div class="partido-meta">
-                              <span class="jornada">{etiquetaJornada(p)}</span>
-                              <span class="fecha">{formatFecha(p.fecha)}</span>
+                {entrenadores.length > 0 && (
+                  <div class="cuerpo-tecnico">
+                    <h3 class="cuerpo-tecnico-titulo">Cuerpo técnico</h3>
+                    <div class="cuerpo-tecnico-lista">
+                      {entrenadorPrincipal && (
+                        <div class="entrenador-card">
+                          <div class="entrenador-icono">🏀</div>
+                          <div>
+                            <div class="entrenador-nombre">
+                              {entrenadorPrincipal.entrenadores.nombre}{" "}
+                              {entrenadorPrincipal.entrenadores.apellido}
                             </div>
-                            <div class="partido-vs">
-                              <span
-                                class:list={[
-                                  "rival-nombre",
-                                  p.es_local && "propio",
-                                ]}
-                              >
-                                {p.es_local ? nombreEquipo : nombreRival(p)}
-                              </span>
-                              <div class="escudos-vs">
-                                <img
-                                  src={
-                                    p.es_local
-                                      ? "/escudo-naranja.png"
-                                      : escudoRival(p)
-                                  }
-                                  alt={p.es_local ? "CB Jaca" : nombreRival(p)}
-                                  class="escudo-mini"
-                                  onerror="this.src='/escudo.png'"
-                                />
-                                <span class="vs-sep">vs</span>
-                                <img
-                                  src={
-                                    p.es_local
-                                      ? escudoRival(p)
-                                      : "/escudo-naranja.png"
-                                  }
-                                  alt={p.es_local ? nombreRival(p) : "CB Jaca"}
-                                  class="escudo-mini"
-                                  onerror="this.src='/escudo.png'"
-                                />
-                              </div>
-                              {p.puntos_favor !== null && (
-                                <span
-                                  class:list={[
-                                    "marcador",
-                                    p.puntos_favor > p.puntos_contra
-                                      ? "victoria"
-                                      : "derrota",
-                                  ]}
-                                >
-                                  {p.es_local
-                                    ? p.puntos_favor
-                                    : p.puntos_contra}
-                                  {" – "}
-                                  {p.es_local
-                                    ? p.puntos_contra
-                                    : p.puntos_favor}
-                                </span>
-                              )}
-                              <span
-                                class:list={[
-                                  "rival-nombre",
-                                  !p.es_local && "propio",
-                                ]}
-                              >
-                                {p.es_local ? nombreRival(p) : nombreEquipo}
-                              </span>
-                            </div>
-                            <span
-                              class:list={[
-                                "condicion-pill",
-                                p.es_local ? "local" : "visitante",
-                              ]}
-                            >
-                              {p.es_local ? "Local" : "Visitante"}
-                            </span>
+                            <div class="entrenador-rol">Entrenador principal</div>
                           </div>
-                        ))}
-                      </div>
+                        </div>
+                      )}
+                      {ayudantes.map((e) => (
+                        <div class="entrenador-card">
+                          <div class="entrenador-icono">📋</div>
+                          <div>
+                            <div class="entrenador-nombre">
+                              {e.entrenadores.nombre} {e.entrenadores.apellido}
+                            </div>
+                            <div class="entrenador-rol">Ayudante</div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  )}
-                  {disputados.length > 0 && (
-                    <div class="partidos-bloque">
-                      <h3 class="bloque-label">Resultados</h3>
-                      <div class="partidos-lista">
-                        {disputados.map((p) => {
-                          const victoria = p.puntos_favor > p.puntos_contra;
-                          return (
-                            <a
-                              href={`/partidos/${p.id}`}
-                              class:list={[
-                                "partido-card",
-                                victoria ? "victoria" : "derrota",
-                              ]}
-                            >
+                  </div>
+                )}
+              </section>
+            </div>
+
+            <div id="tab-calendario" class="tab-panel" role="tabpanel">
+              <section class="seccion seccion-alt">
+                <h2 class="seccion-titulo">Calendario y Resultados</h2>
+                {todosPartidos.length === 0 ? (
+                  <p class="vacio">Sin partidos registrados.</p>
+                ) : (
+                  <div class="partidos-columnas">
+                    {pendientes.length > 0 && (
+                      <div class="partidos-bloque">
+                        <h3 class="bloque-label">Próximos partidos</h3>
+                        <div class="partidos-lista">
+                          {pendientes.map((p) => (
+                            <div class="partido-card">
                               <div class="partido-meta">
-                                <span class="jornada">
-                                  {etiquetaJornada(p)}
-                                </span>
-                                <span class="fecha">
-                                  {formatFecha(p.fecha)}
-                                </span>
+                                <span class="jornada">{etiquetaJornada(p)}</span>
+                                <span class="fecha">{formatFecha(p.fecha)}</span>
                               </div>
                               <div class="partido-vs">
                                 <span
@@ -423,16 +336,29 @@ function competicionesDe(equipo) {
                                         ? "/escudo-naranja.png"
                                         : escudoRival(p)
                                     }
-                                    alt={
-                                      p.es_local ? "CB Jaca" : nombreRival(p)
-                                    }
+                                    alt={p.es_local ? "CB Jaca" : nombreRival(p)}
                                     class="escudo-mini"
                                     onerror="this.src='/escudo.png'"
                                   />
+                                  <span class="vs-sep">vs</span>
+                                  <img
+                                    src={
+                                      p.es_local
+                                        ? escudoRival(p)
+                                        : "/escudo-naranja.png"
+                                    }
+                                    alt={p.es_local ? nombreRival(p) : "CB Jaca"}
+                                    class="escudo-mini"
+                                    onerror="this.src='/escudo.png'"
+                                  />
+                                </div>
+                                {p.puntos_favor !== null && (
                                   <span
                                     class:list={[
                                       "marcador",
-                                      victoria ? "victoria" : "derrota",
+                                      p.puntos_favor > p.puntos_contra
+                                        ? "victoria"
+                                        : "derrota",
                                     ]}
                                   >
                                     {p.es_local
@@ -443,19 +369,7 @@ function competicionesDe(equipo) {
                                       ? p.puntos_contra
                                       : p.puntos_favor}
                                   </span>
-                                  <img
-                                    src={
-                                      p.es_local
-                                        ? escudoRival(p)
-                                        : "/escudo-naranja.png"
-                                    }
-                                    alt={
-                                      p.es_local ? nombreRival(p) : "CB Jaca"
-                                    }
-                                    class="escudo-mini"
-                                    onerror="this.src='/escudo.png'"
-                                  />
-                                </div>
+                                )}
                                 <span
                                   class:list={[
                                     "rival-nombre",
@@ -467,213 +381,307 @@ function competicionesDe(equipo) {
                               </div>
                               <span
                                 class:list={[
-                                  "resultado-badge",
+                                  "condicion-pill",
+                                  p.es_local ? "local" : "visitante",
+                                ]}
+                              >
+                                {p.es_local ? "Local" : "Visitante"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {disputados.length > 0 && (
+                      <div class="partidos-bloque">
+                        <h3 class="bloque-label">Resultados</h3>
+                        <div class="partidos-lista">
+                          {disputados.map((p) => {
+                            const victoria = p.puntos_favor > p.puntos_contra;
+                            return (
+                              <a
+                                href={`/partidos/${p.id}`}
+                                class:list={[
+                                  "partido-card",
                                   victoria ? "victoria" : "derrota",
                                 ]}
                               >
-                                {victoria ? "V" : "D"}
-                              </span>
-                            </a>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </section>
-          </div>
-
-          <div id="tab-clasificacion" class="tab-panel" role="tabpanel">
-            <section class="seccion">
-              <h2 class="seccion-titulo">Clasificación</h2>
-
-              {fasesPorCompeticion.length === 0 ? (
-                <p class="vacio">La clasificación aún no está disponible.</p>
-              ) : (
-                <div class="competiciones-wrapper">
-                  {fasesPorCompeticion.map((grupo, grupoIdx) => {
-                    const niveles = grupo.fases.reduce((acc, f) => {
-                      if (!acc[f.orden]) acc[f.orden] = [];
-                      acc[f.orden].push(f);
-                      return acc;
-                    }, {});
-
-                    return (
-                      <div class="competicion-grupo">
-                        <h3 class="competicion-grupo-titulo">
-                          {grupo.competicion.nombre}
-                        </h3>
-
-                        <div class="clasificacion-wrapper">
-                          {Object.keys(niveles).length > 0 && (
-                            <div class="fases-nav" role="tablist">
-                              {Object.entries(niveles).map(
-                                ([orden, fasesNivel]) => (
-                                  <>
-                                    <span class="fases-nivel-label">
-                                      {fasesNivel[0].tipo === "playoff"
-                                        ? "Final"
-                                        : `Fase ${orden}`}
+                                <div class="partido-meta">
+                                  <span class="jornada">
+                                    {etiquetaJornada(p)}
+                                  </span>
+                                  <span class="fecha">
+                                    {formatFecha(p.fecha)}
+                                  </span>
+                                </div>
+                                <div class="partido-vs">
+                                  <span
+                                    class:list={[
+                                      "rival-nombre",
+                                      p.es_local && "propio",
+                                    ]}
+                                  >
+                                    {p.es_local ? nombreEquipo : nombreRival(p)}
+                                  </span>
+                                  <div class="escudos-vs">
+                                    <img
+                                      src={
+                                        p.es_local
+                                          ? "/escudo-naranja.png"
+                                          : escudoRival(p)
+                                      }
+                                      alt={
+                                        p.es_local ? "CB Jaca" : nombreRival(p)
+                                      }
+                                      class="escudo-mini"
+                                      onerror="this.src='/escudo.png'"
+                                    />
+                                    <span
+                                      class:list={[
+                                        "marcador",
+                                        victoria ? "victoria" : "derrota",
+                                      ]}
+                                    >
+                                      {p.es_local
+                                        ? p.puntos_favor
+                                        : p.puntos_contra}
+                                      {" – "}
+                                      {p.es_local
+                                        ? p.puntos_contra
+                                        : p.puntos_favor}
                                     </span>
-                                    {fasesNivel.map((f) => {
-                                      const esLaPrimeraDeTodas =
-                                        grupoIdx === 0 &&
-                                        grupo.fases.findIndex(
-                                          (x) => x.id === f.id,
-                                        ) === 0;
-                                      return (
-                                        <button
-                                          class:list={[
-                                            "fase-btn",
-                                            esLaPrimeraDeTodas && "active",
-                                          ]}
-                                          data-fase={f.id}
-                                          role="tab"
-                                        >
-                                          {f.nombre}
-                                        </button>
-                                      );
-                                    })}
-                                  </>
-                                ),
-                              )}
-                            </div>
-                          )}
-
-                          {grupo.fases.map((f) => {
-                            const parts = participantesPorFase.get(f.id) ?? [];
-                            const cls = clasificacionPorFase.get(f.id) ?? [];
-
-                            const filas = parts
-                              .map((p) => {
-                                const c = cls.find(
-                                  (c) => c.participante_id === p.id,
-                                );
-                                const esMiEquipo = p.equipo_id === equipo.id;
-                                const nombre = esMiEquipo
-                                  ? nombreEquipo
-                                  : (p.nombre_equipo ??
-                                    p.clubes?.nombre ??
-                                    "—");
-                                return { p, c, nombre, esMiEquipo };
-                              })
-                              .sort(
-                                (a, b) =>
-                                  (a.c?.posicion ?? 999) -
-                                  (b.c?.posicion ?? 999),
-                              );
-
-                            const dif = (c) =>
-                              (c?.puntos_favor ?? 0) - (c?.puntos_contra ?? 0);
-
-                            const esLaPrimeraDeTodas =
-                              grupoIdx === 0 &&
-                              grupo.fases.findIndex((x) => x.id === f.id) === 0;
-
-                            return (
-                              <div
-                                class:list={[
-                                  "fase-panel",
-                                  esLaPrimeraDeTodas && "active",
-                                ]}
-                                data-fase-panel={f.id}
-                                role="tabpanel"
-                              >
-                                {filas.length === 0 ? (
-                                  <p class="vacio">Sin equipos en esta fase.</p>
-                                ) : (
-                                  <div class="tabla-wrapper">
-                                    <table class="tabla-clasificacion">
-                                      <thead>
-                                        <tr>
-                                          <th class="col-pos">#</th>
-                                          <th class="col-nombre">Equipo</th>
-                                          <th>PJ</th>
-                                          <th>V</th>
-                                          <th>D</th>
-                                          <th>PF</th>
-                                          <th>PC</th>
-                                          <th>Dif</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {filas.map(
-                                          ({ p, c, nombre, esMiEquipo }) => {
-                                            const d = dif(c);
-                                            return (
-                                              <tr
-                                                class:list={[
-                                                  esMiEquipo && "mi-equipo",
-                                                ]}
-                                              >
-                                                <td class="col-pos">
-                                                  <span
-                                                    class:list={[
-                                                      "pos-badge",
-                                                      c?.posicion === 1 &&
-                                                        "primero",
-                                                    ]}
-                                                  >
-                                                    {c?.posicion ?? "—"}
-                                                  </span>
-                                                </td>
-                                                <td class="col-nombre">
-                                                  <span
-                                                    class:list={[
-                                                      esMiEquipo &&
-                                                        "nombre-destacado",
-                                                    ]}
-                                                  >
-                                                    {nombre}
-                                                  </span>
-                                                </td>
-                                                <td>
-                                                  {c?.partidos_jugados ?? 0}
-                                                </td>
-                                                <td class="col-v">
-                                                  {c?.victorias ?? 0}
-                                                </td>
-                                                <td class="col-d">
-                                                  {c?.derrotas ?? 0}
-                                                </td>
-                                                <td>{c?.puntos_favor ?? 0}</td>
-                                                <td>{c?.puntos_contra ?? 0}</td>
-                                                <td
-                                                  class:list={[
-                                                    "col-dif",
-                                                    d > 0
-                                                      ? "pos"
-                                                      : d < 0
-                                                        ? "neg"
-                                                        : "",
-                                                  ]}
-                                                >
-                                                  {d > 0 ? `+${d}` : d}
-                                                </td>
-                                              </tr>
-                                            );
-                                          },
-                                        )}
-                                      </tbody>
-                                    </table>
+                                    <img
+                                      src={
+                                        p.es_local
+                                          ? escudoRival(p)
+                                          : "/escudo-naranja.png"
+                                      }
+                                      alt={
+                                        p.es_local ? nombreRival(p) : "CB Jaca"
+                                      }
+                                      class="escudo-mini"
+                                      onerror="this.src='/escudo.png'"
+                                    />
                                   </div>
-                                )}
-                              </div>
+                                  <span
+                                    class:list={[
+                                      "rival-nombre",
+                                      !p.es_local && "propio",
+                                    ]}
+                                  >
+                                    {p.es_local ? nombreRival(p) : nombreEquipo}
+                                  </span>
+                                </div>
+                                <span
+                                  class:list={[
+                                    "resultado-badge",
+                                    victoria ? "victoria" : "derrota",
+                                  ]}
+                                >
+                                  {victoria ? "V" : "D"}
+                                </span>
+                              </a>
                             );
                           })}
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
+                    )}
+                  </div>
+                )}
+              </section>
+            </div>
+
+            <div id="tab-clasificacion" class="tab-panel" role="tabpanel">
+              <section class="seccion">
+                <h2 class="seccion-titulo">Clasificación</h2>
+
+                {fasesPorCompeticion.length === 0 ? (
+                  <p class="vacio">La clasificación aún no está disponible.</p>
+                ) : (
+                  <div class="competiciones-wrapper">
+                    {fasesPorCompeticion.map((grupo, grupoIdx) => {
+                      const niveles = grupo.fases.reduce((acc, f) => {
+                        if (!acc[f.orden]) acc[f.orden] = [];
+                        acc[f.orden].push(f);
+                        return acc;
+                      }, {});
+
+                      return (
+                        <div class="competicion-grupo">
+                          <h3 class="competicion-grupo-titulo">
+                            {grupo.competicion.nombre}
+                          </h3>
+
+                          <div class="clasificacion-wrapper">
+                            {Object.keys(niveles).length > 0 && (
+                              <div class="fases-nav" role="tablist">
+                                {Object.entries(niveles).map(
+                                  ([orden, fasesNivel]) => (
+                                    <>
+                                      <span class="fases-nivel-label">
+                                        {fasesNivel[0].tipo === "playoff"
+                                          ? "Final"
+                                          : `Fase ${orden}`}
+                                      </span>
+                                      {fasesNivel.map((f) => {
+                                        const esLaPrimeraDeTodas =
+                                          grupoIdx === 0 &&
+                                          grupo.fases.findIndex(
+                                            (x) => x.id === f.id,
+                                          ) === 0;
+                                        return (
+                                          <button
+                                            class:list={[
+                                              "fase-btn",
+                                              esLaPrimeraDeTodas && "active",
+                                            ]}
+                                            data-fase={f.id}
+                                            role="tab"
+                                          >
+                                            {f.nombre}
+                                          </button>
+                                        );
+                                      })}
+                                    </>
+                                  ),
+                                )}
+                              </div>
+                            )}
+
+                            {grupo.fases.map((f) => {
+                              const parts = participantesPorFase.get(f.id) ?? [];
+                              const cls = clasificacionPorFase.get(f.id) ?? [];
+
+                              const filas = parts
+                                .map((p) => {
+                                  const c = cls.find(
+                                    (c) => c.participante_id === p.id,
+                                  );
+                                  const esMiEquipo = p.equipo_id === equipo.id;
+                                  const nombre = esMiEquipo
+                                    ? nombreEquipo
+                                    : (p.nombre_equipo ??
+                                      p.clubes?.nombre ??
+                                      "—");
+                                  return { p, c, nombre, esMiEquipo };
+                                })
+                                .sort(
+                                  (a, b) =>
+                                    (a.c?.posicion ?? 999) -
+                                    (b.c?.posicion ?? 999),
+                                );
+
+                              const dif = (c) =>
+                                (c?.puntos_favor ?? 0) - (c?.puntos_contra ?? 0);
+
+                              const esLaPrimeraDeTodas =
+                                grupoIdx === 0 &&
+                                grupo.fases.findIndex((x) => x.id === f.id) === 0;
+
+                              return (
+                                <div
+                                  class:list={[
+                                    "fase-panel",
+                                    esLaPrimeraDeTodas && "active",
+                                  ]}
+                                  data-fase-panel={f.id}
+                                  role="tabpanel"
+                                >
+                                  {filas.length === 0 ? (
+                                    <p class="vacio">Sin equipos en esta fase.</p>
+                                  ) : (
+                                    <div class="tabla-wrapper">
+                                      <table class="tabla-clasificacion">
+                                        <thead>
+                                          <tr>
+                                            <th class="col-pos">#</th>
+                                            <th class="col-nombre">Equipo</th>
+                                            <th>PJ</th>
+                                            <th>V</th>
+                                            <th>D</th>
+                                            <th>PF</th>
+                                            <th>PC</th>
+                                            <th>Dif</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {filas.map(
+                                            ({ p, c, nombre, esMiEquipo }) => {
+                                              const d = dif(c);
+                                              return (
+                                                <tr
+                                                  class:list={[
+                                                    esMiEquipo && "mi-equipo",
+                                                  ]}
+                                                >
+                                                  <td class="col-pos">
+                                                    <span
+                                                      class:list={[
+                                                        "pos-badge",
+                                                        c?.posicion === 1 &&
+                                                          "primero",
+                                                      ]}
+                                                    >
+                                                      {c?.posicion ?? "—"}
+                                                    </span>
+                                                  </td>
+                                                  <td class="col-nombre">
+                                                    <span
+                                                      class:list={[
+                                                        esMiEquipo &&
+                                                          "nombre-destacado",
+                                                      ]}
+                                                    >
+                                                      {nombre}
+                                                    </span>
+                                                  </td>
+                                                  <td>
+                                                    {c?.partidos_jugados ?? 0}
+                                                  </td>
+                                                  <td class="col-v">
+                                                    {c?.victorias ?? 0}
+                                                  </td>
+                                                  <td class="col-d">
+                                                    {c?.derrotas ?? 0}
+                                                  </td>
+                                                  <td>{c?.puntos_favor ?? 0}</td>
+                                                  <td>{c?.puntos_contra ?? 0}</td>
+                                                  <td
+                                                    class:list={[
+                                                      "col-dif",
+                                                      d > 0
+                                                        ? "pos"
+                                                        : d < 0
+                                                          ? "neg"
+                                                          : "",
+                                                    ]}
+                                                  >
+                                                    {d > 0 ? `+${d}` : d}
+                                                  </td>
+                                                </tr>
+                                              );
+                                            },
+                                          )}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+            </div>
           </div>
-        </div>
-      );
-    })
-  }
+        );
+      })
+    }
+  </div>
 </Layout>
 
 <script>
@@ -697,12 +705,12 @@ function competicionesDe(equipo) {
     activarTab(tabsValidas.includes(hashInicial) ? hashInicial : "plantilla");
 
     tabBtns.forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const target = btn.dataset.tab;
-        activarTab(target);
-        history.replaceState(null, "", `#${target}`);
-      });
-    });
+  btn.addEventListener("click", () => {
+    const target = btn.dataset.tab;
+    activarTab(target);
+    history.replaceState(history.state, "", `#${target}`);
+  });
+});
 
     const faseBtns = document.querySelectorAll(".fase-btn");
     const fasePanels = document.querySelectorAll(".fase-panel");

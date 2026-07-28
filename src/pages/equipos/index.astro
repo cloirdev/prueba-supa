@@ -48,6 +48,15 @@ function urlEquipo(equipo) {
   return cat && temp ? `/equipos/${cat}/${temp}` : null;
 }
 
+// Nombre de transición único por equipo+temporada.
+// DEBE coincidir exactamente con el generado en la página de ficha:
+// `equipo-${categoriaSlug}-${temporadaSlug}`
+function transitionNombre(equipo) {
+  const cat = slugMap.get(equipo.id);
+  const temp = equipo.temporadas?.nombre;
+  return cat && temp ? `equipo-${cat}-${temp}` : null;
+}
+
 function sufijoEquipo(equipo) {
   const slugFinal = slugMap.get(equipo.id);
   const slugBase = equipo.categorias?.slug;
@@ -70,7 +79,7 @@ function nombreCategoriaConSufijo(equipo, listaTemporada = []) {
 ---
 
 <Layout titulo="Equipos - CB Jaca">
-  <section class="equipos-section">
+  <section class="equipos-section" transition:animate="fade">
     <div class="equipos-header">
       <div class="header-top">
         <div>
@@ -122,6 +131,7 @@ function nombreCategoriaConSufijo(equipo, listaTemporada = []) {
           >
             {lista.map((equipo) => {
               const href = urlEquipo(equipo);
+              const nombreTransicion = transitionNombre(equipo);
               const foto = equipo.foto_url;
               const nombre = equipo.sponsors?.nombre
                 ? `${equipo.sponsors.nombre} CB Jaca`
@@ -133,6 +143,7 @@ function nombreCategoriaConSufijo(equipo, listaTemporada = []) {
                   class="equipo-card"
                   style={foto ? `--bg-img: url('${foto}')` : ""}
                   data-tiene-foto={foto ? "true" : "false"}
+                  transition:name={nombreTransicion}
                 >
                   <div class="card-inner">
                     <div class="card-top">
@@ -148,7 +159,12 @@ function nombreCategoriaConSufijo(equipo, listaTemporada = []) {
                           alt="CB Jaca"
                           class="escudo-card"
                         />
-                        <h2 class="card-nombre">{nombre}</h2>
+                        <h2
+                          class="card-nombre"
+                          transition:name={`nombre-${nombreTransicion}`}
+                        >
+                          {nombre}
+                        </h2>
                         {equipo.sponsors?.logo_url && (
                           <img
                             src={equipo.sponsors.logo_url}
@@ -399,15 +415,40 @@ function nombreCategoriaConSufijo(equipo, listaTemporada = []) {
 </style>
 
 <script>
-  const sel = document.getElementById("sel-temporada");
-  const grids = document.querySelectorAll(".equipos-grid");
+  function initSelectorTemporada() {
+    const sel = document.getElementById("sel-temporada");
+    const grids = document.querySelectorAll(".equipos-grid");
+    if (!sel || grids.length === 0) return;
 
-  if (sel) {
+    // ¿Esta carga viene de pulsar "atrás" en el navegador?
+    const esNavegacionAtras =
+      sessionStorage.getItem("astro-nav-direction") === "back";
+    sessionStorage.removeItem("astro-nav-direction"); // flag de un solo uso
+
+    const temporadaGuardada = sessionStorage.getItem("equipos-temporada-sel");
+
+    if (esNavegacionAtras && temporadaGuardada) {
+      const existe = Array.from(grids).some(
+        (g) => g.dataset.temporada === temporadaGuardada,
+      );
+      if (existe) {
+        sel.value = temporadaGuardada;
+        grids.forEach((g) => {
+          g.style.display =
+            g.dataset.temporada === temporadaGuardada ? "" : "none";
+        });
+      }
+    }
+
     sel.addEventListener("change", () => {
       const tid = sel.value;
       grids.forEach((g) => {
         g.style.display = g.dataset.temporada === tid ? "" : "none";
       });
+      sessionStorage.setItem("equipos-temporada-sel", tid);
     });
   }
+
+  initSelectorTemporada();
+  document.addEventListener("astro:page-load", initSelectorTemporada);
 </script>
