@@ -11,16 +11,18 @@ export async function getStaticPaths() {
 
 const { id } = Astro.params;
 
-const { data: partido } = await supabase
-  .from("partidos")
+const { data: partido, error: errPartido } = await supabase  .from("partidos")
   .select(`
     id, es_local, fecha, jornada, ronda,
     puntos_favor, puntos_contra,
     equipos (
-      id, sponsor,
+      id,
       categorias (nombre, slug),
-      temporadas (nombre),
-      competiciones (nombre)
+      temporadas:temporadas!equipos_temporada_id_fkey (nombre),
+      sponsors:sponsors!equipos_sponsor_id_fkey (nombre),
+      equipo_competiciones (
+        competiciones (nombre)
+      )
     ),
     participante_local:participantes!participante_local_id (
       id, nombre_equipo, clubes(nombre, logo_url)
@@ -31,7 +33,8 @@ const { data: partido } = await supabase
   `)
   .eq("id", id)
   .single();
-
+  
+if (errPartido) console.error("Error cargando partido:", errPartido);
 if (!partido) return Astro.redirect("/");
 
 const { data: cronica } = await supabase
@@ -77,8 +80,8 @@ const participanteRival = partido.es_local
   : partido.participante_local;
 
 const disputado = partido.puntos_favor !== null;
-const nombrePropio = partido.equipos?.sponsor
-  ? `${partido.equipos.sponsor} CB Jaca`
+const nombrePropio = partido.equipos?.sponsors?.nombre
+  ? `${partido.equipos.sponsors.nombre} CB Jaca`
   : `CB Jaca ${partido.equipos?.categorias?.nombre ?? ""}`;
 const nombreRival = participanteRival?.nombre_equipo ?? participanteRival?.clubes?.nombre ?? "Rival";
 const logoRival = participanteRival?.clubes?.logo_url ?? null;
@@ -150,9 +153,11 @@ const equipoHref = categoriaSlug && temporadaSlug
       <div class="hero-meta">
         <a href={equipoHref ?? "/equipos"} class="volver">← {nombrePropio}</a>
         <span class="hero-pill">{etiquetaJornada(partido)}</span>
-        {partido.equipos?.competiciones?.nombre && (
-          <span class="hero-pill muted">{partido.equipos.competiciones.nombre}</span>
-        )}
+        {partido.equipos?.equipo_competiciones?.[0]?.competiciones?.nombre && (
+  <span class="hero-pill muted">
+    {partido.equipos.equipo_competiciones[0].competiciones.nombre}
+  </span>
+)}
       </div>
 
       <div class="marcador-wrap">

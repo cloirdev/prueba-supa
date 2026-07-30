@@ -76,15 +76,28 @@ export default function AdminCalendario({
   async function cargarOpciones() {
     const temporadaId = temporada?.temporadas?.id ?? temporada?.id;
 
-    // Fases del equipo en esta temporada
-    const { data: fasesData } = await supabase
-      .from("fases_competicion")
-      .select("id, nombre, tipo, competicion_id, competiciones(nombre)")
-      .eq("temporada_id", temporadaId);
-    setFases(fasesData ?? []);
+    const { data: equipoComps, error: errComps } = await supabase
+      .from("equipo_competiciones")
+      .select("competicion_id")
+      .eq("equipo_id", equipo.id);
+
+    const competicionIds = (equipoComps ?? [])
+      .map((ec) => ec.competicion_id)
+      .filter(Boolean);
+
+    let fasesData = [];
+    if (competicionIds.length > 0) {
+      const { data, error: errFases } = await supabase
+        .from("fases_competicion")
+        .select("id, nombre, tipo, competicion_id, competiciones(nombre)")
+        .eq("temporada_id", temporadaId)
+        .in("competicion_id", competicionIds);
+      fasesData = data ?? [];
+    }
+    setFases(fasesData);
 
     // Participantes rivales (sin nuestro equipo)
-    if (fasesData?.length) {
+    if (fasesData.length) {
       const faseIds = fasesData.map((f) => f.id);
       const { data: partsData } = await supabase
         .from("participantes")
@@ -95,6 +108,8 @@ export default function AdminCalendario({
         .or(`equipo_id.is.null,equipo_id.neq.${equipo.id}`)
         .order("nombre_equipo");
       setParticipantes(partsData ?? []);
+    } else {
+      setParticipantes([]);
     }
 
     // Clubes para amistosos
