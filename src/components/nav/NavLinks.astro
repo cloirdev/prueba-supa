@@ -244,3 +244,21 @@ const { links = [], variant = "desktop" } = Astro.props;
     }
   }
 </style>
+
+<script>
+  function initCierreDropdowns() {
+    document.addEventListener("click", (event) => {
+      document
+        .querySelectorAll(
+          "details.nav-dropdown[open], details.nav-dropdown-mobile[open]",
+        )
+        .forEach((details) => {
+          if (!details.contains(event.target)) {
+            details.removeAttribute("open");
+          }
+        });
+    });
+  }
+
+  initCierreDropdowns();
+</script>

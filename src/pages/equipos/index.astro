@@ -127,6 +127,7 @@ function nombreCategoriaConSufijo(equipo, listaTemporada = []) {
           <div
             class="equipos-grid"
             data-temporada={temp.id}
+            data-temporada-nombre={temp.nombre}
             style={temp.id !== temporadaActual?.id ? "display:none" : ""}
           >
             {lista.map((equipo) => {
@@ -418,35 +419,60 @@ function nombreCategoriaConSufijo(equipo, listaTemporada = []) {
   function initSelectorTemporada() {
     const sel = document.getElementById("sel-temporada");
     const grids = document.querySelectorAll(".equipos-grid");
-    if (!sel || grids.length === 0) return;
+    if (grids.length === 0) return;
 
-    // ¿Esta carga viene de pulsar "atrás" en el navegador?
-    const esNavegacionAtras =
-      sessionStorage.getItem("astro-nav-direction") === "back";
-    sessionStorage.removeItem("astro-nav-direction"); // flag de un solo uso
+    let temporadaObjetivo = null;
 
-    const temporadaGuardada = sessionStorage.getItem("equipos-temporada-sel");
-
-    if (esNavegacionAtras && temporadaGuardada) {
-      const existe = Array.from(grids).some(
-        (g) => g.dataset.temporada === temporadaGuardada,
+    // 1) Prioridad: query param ?temporada= viene del breadcrumb de una ficha de equipo
+    const params = new URLSearchParams(window.location.search);
+    const temporadaParam = params.get("temporada");
+    if (temporadaParam) {
+      const gridCoincide = Array.from(grids).find(
+        (g) => g.dataset.temporadaNombre === temporadaParam,
       );
-      if (existe) {
-        sel.value = temporadaGuardada;
-        grids.forEach((g) => {
-          g.style.display =
-            g.dataset.temporada === temporadaGuardada ? "" : "none";
-        });
+      if (gridCoincide) temporadaObjetivo = gridCoincide.dataset.temporada;
+    }
+
+    // 2) Si no hay query param, mantenemos el flujo anterior (botón "atrás")
+    if (!temporadaObjetivo) {
+      const esNavegacionAtras =
+        sessionStorage.getItem("astro-nav-direction") === "back";
+      sessionStorage.removeItem("astro-nav-direction");
+      const temporadaGuardada = sessionStorage.getItem("equipos-temporada-sel");
+
+      if (esNavegacionAtras && temporadaGuardada) {
+        const existe = Array.from(grids).some(
+          (g) => g.dataset.temporada === temporadaGuardada,
+        );
+        if (existe) temporadaObjetivo = temporadaGuardada;
       }
     }
 
-    sel.addEventListener("change", () => {
-      const tid = sel.value;
+    if (temporadaObjetivo) {
+      if (sel) sel.value = temporadaObjetivo;
       grids.forEach((g) => {
-        g.style.display = g.dataset.temporada === tid ? "" : "none";
+        g.style.display =
+          g.dataset.temporada === temporadaObjetivo ? "" : "none";
       });
-      sessionStorage.setItem("equipos-temporada-sel", tid);
-    });
+      sessionStorage.setItem("equipos-temporada-sel", temporadaObjetivo);
+
+      // Limpiamos el ?temporada= de la URL sin recargar, para que quede una URL limpia
+      if (temporadaParam) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("temporada");
+        history.replaceState(history.state, "", url.pathname + url.hash);
+      }
+    }
+
+    if (sel) {
+      sel.addEventListener("change", () => {
+        const tid = sel.value;
+        grids.forEach((g) => {
+          g.style.display = g.dataset.temporada === tid ? "" : "none";
+        });
+        sessionStorage.setItem("equipos-temporada-sel", tid);
+      });
+    }
   }
 
   initSelectorTemporada();

@@ -117,8 +117,10 @@ function competicionesDe(equipo) {
     transition:name={nombreTransicion}
   >
     <div class="equipo-hero-inner">
-      <a href="/equipos" class="volver">← Equipos</a>
-
+      <a
+        href={`/equipos?temporada=${encodeURIComponent(temporadaSlug)}`}
+        class="volver">← Equipos</a
+      >
       <div class="hero-content">
         <div class="hero-text">
           <p class="categoria-label">{categoriaNombre}</p>
@@ -282,7 +284,9 @@ function competicionesDe(equipo) {
                               {entrenadorPrincipal.entrenadores.nombre}{" "}
                               {entrenadorPrincipal.entrenadores.apellido}
                             </div>
-                            <div class="entrenador-rol">Entrenador principal</div>
+                            <div class="entrenador-rol">
+                              Entrenador principal
+                            </div>
                           </div>
                         </div>
                       )}
@@ -317,8 +321,12 @@ function competicionesDe(equipo) {
                           {pendientes.map((p) => (
                             <div class="partido-card">
                               <div class="partido-meta">
-                                <span class="jornada">{etiquetaJornada(p)}</span>
-                                <span class="fecha">{formatFecha(p.fecha)}</span>
+                                <span class="jornada">
+                                  {etiquetaJornada(p)}
+                                </span>
+                                <span class="fecha">
+                                  {formatFecha(p.fecha)}
+                                </span>
                               </div>
                               <div class="partido-vs">
                                 <span
@@ -336,7 +344,9 @@ function competicionesDe(equipo) {
                                         ? "/escudo-naranja.png"
                                         : escudoRival(p)
                                     }
-                                    alt={p.es_local ? "CB Jaca" : nombreRival(p)}
+                                    alt={
+                                      p.es_local ? "CB Jaca" : nombreRival(p)
+                                    }
                                     class="escudo-mini"
                                     onerror="this.src='/escudo.png'"
                                   />
@@ -347,7 +357,9 @@ function competicionesDe(equipo) {
                                         ? escudoRival(p)
                                         : "/escudo-naranja.png"
                                     }
-                                    alt={p.es_local ? nombreRival(p) : "CB Jaca"}
+                                    alt={
+                                      p.es_local ? nombreRival(p) : "CB Jaca"
+                                    }
                                     class="escudo-mini"
                                     onerror="this.src='/escudo.png'"
                                   />
@@ -549,7 +561,8 @@ function competicionesDe(equipo) {
                             )}
 
                             {grupo.fases.map((f) => {
-                              const parts = participantesPorFase.get(f.id) ?? [];
+                              const parts =
+                                participantesPorFase.get(f.id) ?? [];
                               const cls = clasificacionPorFase.get(f.id) ?? [];
 
                               const filas = parts
@@ -572,11 +585,13 @@ function competicionesDe(equipo) {
                                 );
 
                               const dif = (c) =>
-                                (c?.puntos_favor ?? 0) - (c?.puntos_contra ?? 0);
+                                (c?.puntos_favor ?? 0) -
+                                (c?.puntos_contra ?? 0);
 
                               const esLaPrimeraDeTodas =
                                 grupoIdx === 0 &&
-                                grupo.fases.findIndex((x) => x.id === f.id) === 0;
+                                grupo.fases.findIndex((x) => x.id === f.id) ===
+                                  0;
 
                               return (
                                 <div
@@ -588,7 +603,9 @@ function competicionesDe(equipo) {
                                   role="tabpanel"
                                 >
                                   {filas.length === 0 ? (
-                                    <p class="vacio">Sin equipos en esta fase.</p>
+                                    <p class="vacio">
+                                      Sin equipos en esta fase.
+                                    </p>
                                   ) : (
                                     <div class="tabla-wrapper">
                                       <table class="tabla-clasificacion">
@@ -644,8 +661,12 @@ function competicionesDe(equipo) {
                                                   <td class="col-d">
                                                     {c?.derrotas ?? 0}
                                                   </td>
-                                                  <td>{c?.puntos_favor ?? 0}</td>
-                                                  <td>{c?.puntos_contra ?? 0}</td>
+                                                  <td>
+                                                    {c?.puntos_favor ?? 0}
+                                                  </td>
+                                                  <td>
+                                                    {c?.puntos_contra ?? 0}
+                                                  </td>
                                                   <td
                                                     class:list={[
                                                       "col-dif",
@@ -705,12 +726,12 @@ function competicionesDe(equipo) {
     activarTab(tabsValidas.includes(hashInicial) ? hashInicial : "plantilla");
 
     tabBtns.forEach((btn) => {
-  btn.addEventListener("click", () => {
-    const target = btn.dataset.tab;
-    activarTab(target);
-    history.replaceState(history.state, "", `#${target}`);
-  });
-});
+      btn.addEventListener("click", () => {
+        const target = btn.dataset.tab;
+        activarTab(target);
+        history.replaceState(history.state, "", `#${target}`);
+      });
+    });
 
     const faseBtns = document.querySelectorAll(".fase-btn");
     const fasePanels = document.querySelectorAll(".fase-panel");
@@ -794,35 +815,39 @@ function competicionesDe(equipo) {
     color: rgba(255, 255, 255, 0.65);
   }
   .hero-logo-wrap {
-  width: 172px;
-  height: 172px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
+    width: 172px;
+    height: 172px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
 
-  background: linear-gradient(180deg, rgba(30, 41, 59, 0.92), rgba(15, 23, 42, 0.92));
-  border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow:
-    0 12px 32px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  flex-shrink: 0;
-}
+    background: linear-gradient(
+      180deg,
+      rgba(30, 41, 59, 0.92),
+      rgba(15, 23, 42, 0.92)
+    );
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow:
+      0 12px 32px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    flex-shrink: 0;
+  }
 
-.hero-logo {
-  width: 140px;
-  height: 140px;
+  .hero-logo {
+    width: 140px;
+    height: 140px;
 
-  object-fit: contain;
-  display: block;
+    object-fit: contain;
+    display: block;
 
-  /* Mantener exactamente los colores originales */
-  background: transparent;
-  padding: 0;
-}
+    /* Mantener exactamente los colores originales */
+    background: transparent;
+    padding: 0;
+  }
   .temporada-select {
     margin-top: 2rem;
     padding: 0.45rem 1rem;
