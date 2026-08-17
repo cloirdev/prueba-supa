@@ -24,12 +24,8 @@ export default function FormPartido({
     return p?.nombre_equipo ?? p?.clubes?.nombre ?? "Rival";
   })();
 
-  const labelLocal = form.es_local
-    ? `${nombreEquipo} (local)`
-    : `${nombreRivalSel} (local)`;
-  const labelVisitante = form.es_local
-    ? `${nombreRivalSel} (visitante)`
-    : `${nombreEquipo} (visitante)`;
+  const labelLocal = form.es_local ? nombreEquipo : nombreRivalSel;
+  const labelVisitante = form.es_local ? nombreRivalSel : nombreEquipo;
 
   const participantesFase = participantes.filter(
     (p) => !form.fase_id || p.fase_id === form.fase_id,
