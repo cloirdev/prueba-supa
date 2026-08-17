@@ -2,6 +2,7 @@
 // src/pages/equipos/[categoria_slug]/index.astro
 // @ts-nocheck
 import { supabase } from "@/lib/supabase.js";
+import { resolverSlugsEquipos } from "@/lib/services/equipos";
 import Layout from "@/layouts/Layout.astro";
 
 export async function getStaticPaths() {

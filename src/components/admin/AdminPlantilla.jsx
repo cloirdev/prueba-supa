@@ -6,6 +6,16 @@ const ROLES_ENTRENADOR = [
   { val: "ayudante", label: "Ayudante" },
 ];
 
+const normalizarGenero = (g) => (g ?? "").toString().trim().toLowerCase();
+
+function esCompatibleConEquipo(jugador, equipo) {
+  const generoEquipo = normalizarGenero(equipo?.categorias?.genero);
+  const generoJugador = normalizarGenero(jugador?.genero);
+  if (!generoEquipo || generoEquipo === "mixto") return true;
+  if (!generoJugador) return true;
+  return generoEquipo === generoJugador;
+}
+
 export default function AdminPlantilla({
   supabase,
   perfil,
@@ -45,13 +55,13 @@ export default function AdminPlantilla({
     ] = await Promise.all([
       supabase
         .from("convocatorias_temporada")
-        .select(`dorsal, jugadores (id, nombre, apellido, posicion)`)
+        .select(`dorsal, jugadores (id, nombre, apellido, posicion, genero)`)
         .eq("equipo_id", equipo.id)
         .eq("temporada_id", temporada.id)
         .order("dorsal"),
       supabase
         .from("jugadores")
-        .select("id, nombre, apellido, posicion")
+        .select("id, nombre, apellido, posicion, genero")
         .order("apellido"),
       supabase
         .from("convocatorias_entrenador")
@@ -71,14 +81,26 @@ export default function AdminPlantilla({
   }
 
   async function asignarJugador() {
-    console.log("temporada.id:", temporada.id);
-    console.log("equipo.id:", equipo.id);
     setError("");
     setMsg("");
     if (!form.jugador_id || !form.dorsal) {
       setError("Rellena todos los campos");
       return;
     }
+
+    const jugadorSeleccionado = todosJugadores.find(
+      (j) => j.id === form.jugador_id,
+    );
+    if (
+      jugadorSeleccionado &&
+      !esCompatibleConEquipo(jugadorSeleccionado, equipo)
+    ) {
+      setError(
+        "Este jugador no es compatible con la categoría de género del equipo",
+      );
+      return;
+    }
+
     const { error: err } = await supabase
       .from("convocatorias_temporada")
       .insert({
@@ -465,6 +487,7 @@ export default function AdminPlantilla({
               <option value="">Selecciona jugador</option>
               {todosJugadores
                 .filter((j) => !jugadores.some((c) => c.jugadores.id === j.id))
+                .filter((j) => esCompatibleConEquipo(j, equipo))
                 .map((j) => (
                   <option key={j.id} value={j.id}>
                     {j.apellido}, {j.nombre} — {j.posicion}

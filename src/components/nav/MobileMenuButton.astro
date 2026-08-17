@@ -1,0 +1,53 @@
+---
+
+---
+
+<button
+  class="menu-btn"
+  id="menu-btn"
+  aria-label="Abrir menú"
+  aria-expanded="false"
+  aria-controls="mobile-menu"
+>
+  <span></span><span></span><span></span>
+</button>
+
+<script>
+  // Igual que en ThemeToggle: delegado en `document`, registrado una sola
+  // vez, para que no se acumulen listeners al navegar entre páginas.
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest?.("#menu-btn");
+    if (!btn) return;
+    const menu = document.getElementById("mobile-menu");
+    if (!menu) return;
+    const abierto = menu.classList.toggle("open");
+    btn.setAttribute("aria-expanded", String(abierto));
+  });
+</script>
+
+<style>
+  .menu-btn {
+    display: none;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .menu-btn span {
+    display: block;
+    width: 20px;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 1px;
+    transition: all 0.2s;
+  }
+
+  @media (max-width: 767px) {
+    .menu-btn {
+      display: flex;
+    }
+  }
+</style>

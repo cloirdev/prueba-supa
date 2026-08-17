@@ -1,4 +1,7 @@
-import Campo from "./Campo.jsx";
+import Campo from "../../ui/Campo.jsx";
+
+// Normaliza para comparar sin problemas de mayúsculas/espacios
+const normalizarGenero = (g) => (g ?? "").toString().trim().toLowerCase();
 
 export default function TabAsignar({
   form,
@@ -10,6 +13,32 @@ export default function TabAsignar({
   equipoLabel,
   jugador,
 }) {
+  const generoJugador = normalizarGenero(jugador?.genero);
+
+  const equipoCompatible = (eq) => {
+    const generoEquipo = normalizarGenero(eq.categorias?.genero);
+    if (!generoJugador) return true;
+    if (!generoEquipo || generoEquipo === "mixto") return true;
+    return generoEquipo === generoJugador;
+  };
+
+  const equiposFiltrados = equipos.filter((eq) => {
+    if (form.temporada_id && eq.temporadas?.id !== form.temporada_id)
+      return false;
+    return equipoCompatible(eq);
+  });
+
+  const handleAsignar = () => {
+    const equipoSeleccionado = equipos.find((eq) => eq.id === form.equipo_id);
+    if (equipoSeleccionado && !equipoCompatible(equipoSeleccionado)) {
+      alert(
+        "Este equipo es de otra categoría de género y no es compatible con el jugador.",
+      );
+      return;
+    }
+    onAsignar();
+  };
+
   return (
     <div className="form-stack">
       <p style={{ fontSize: "13px", color: "var(--muted)", margin: 0 }}>
@@ -43,22 +72,11 @@ export default function TabAsignar({
               ? "Selecciona equipo"
               : "Primero selecciona una temporada"}
           </option>
-          {equipos
-            .filter((eq) => {
-              // Filtro por temporada
-              if (form.temporada_id && eq.temporadas?.id !== form.temporada_id)
-                return false;
-              // Filtro por género
-              if (!jugador?.genero) return true;
-              if (!eq.categorias?.genero || eq.categorias?.genero === "mixto")
-                return true;
-              return eq.categorias.genero === jugador.genero;
-            })
-            .map((eq) => (
-              <option key={eq.id} value={eq.id}>
-                {equipoLabel(eq)}
-              </option>
-            ))}
+          {equiposFiltrados.map((eq) => (
+            <option key={eq.id} value={eq.id}>
+              {equipoLabel(eq)}
+            </option>
+          ))}
         </select>
       </Campo>
 
@@ -73,7 +91,7 @@ export default function TabAsignar({
         />
       </Campo>
 
-      <button className="btn-primary" onClick={onAsignar}>
+      <button className="btn-primary" onClick={handleAsignar}>
         Asignar
       </button>
 

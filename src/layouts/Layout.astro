@@ -1,7 +1,7 @@
 ---
 import "@/styles/global.css";
-import Buscador from "@/components/Buscador";
 import Footer from "@/components/Footer.astro";
+import Nav from "@/components/nav/Nav.astro";
 import { ClientRouter } from "astro:transitions";
 const { titulo } = Astro.props;
 ---
@@ -10,55 +10,16 @@ const { titulo } = Astro.props;
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Sitio web oficial del CB Jaca. Calendario, resultados, noticias y toda la información del club de baloncesto.">
+    <meta
+      name="description"
+      content="Sitio web oficial del CB Jaca. Calendario, resultados, noticias y toda la información del club de baloncesto."
+    />
     <title>{titulo} · CB Jaca</title>
     <link rel="shortcut icon" href="/escudo-naranja.png" type="image/x-icon" />
     <ClientRouter />
   </head>
   <body>
-    <nav class="main-nav">
-      <img src="/escudo-naranja.png" alt="Escudo del CB Jaca" />
-      <a href="/" class="nav-logo">CB <span>Jaca</span></a>
-      <div class="nav-links">
-        <a href="/noticias">Noticias</a>
-        <a href="/equipos">Equipos</a>
-      </div>
-      <div class="nav-actions">
-        <Buscador client:load />
-        <button class="menu-btn" id="menu-btn" aria-label="Abrir menú">
-          <span></span><span></span><span></span>
-        </button>
-        <button class="theme-btn" id="theme-btn" aria-label="Cambiar tema">
-          <svg id="sunmoon" width="40" height="40" viewBox="0 0 200 200">
-            <defs>
-              <mask id="hole">
-                <rect width="100%" height="100%" fill="white"></rect>
-                <circle id="overlay" r="80" cx="230" cy="-30" fill="black"
-                ></circle>
-              </mask>
-              <filter id="blur">
-                <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="white"
-                ></feDropShadow>
-              </filter>
-            </defs>
-            <g filter="url(#blur)">
-              <circle
-                fill="white"
-                id="donut"
-                r="80"
-                cx="100"
-                cy="100"
-                mask="url(#hole)"></circle>
-            </g>
-          </svg>
-        </button>
-      </div>
-    </nav>
-    <div class="mobile-menu" id="mobile-menu">
-      <Buscador client:load />
-      <a href="/noticias">Noticias</a>
-      <a href="/equipos">Equipos</a>
-    </div>
+    <Nav />
     <main>
       <slot />
     </main>
@@ -67,224 +28,26 @@ const { titulo } = Astro.props;
 </html>
 
 <script>
-  function initTema() {
-    const btn = document.getElementById("theme-btn");
+  // Aplica el tema guardado lo antes posible para evitar parpadeo en cada
+  // navegación. El toggle del botón vive en <ThemeToggle />.
+  function aplicarTemaGuardado() {
     const html = document.documentElement;
-
-    // Solo aplicamos el tema guardado si aún no hay uno (evita parpadeo/reset en cada nav)
     if (!html.getAttribute("data-theme")) {
-      const saved = localStorage.getItem("tema") || "light";
-      html.setAttribute("data-theme", saved);
+      const guardado = localStorage.getItem("tema") || "light";
+      html.setAttribute("data-theme", guardado);
     }
-
-    btn?.addEventListener("click", () => {
-      const nuevo =
-        html.getAttribute("data-theme") === "dark" ? "light" : "dark";
-      html.setAttribute("data-theme", nuevo);
-      localStorage.setItem("tema", nuevo);
-    });
   }
 
-  function initMenu() {
-    const menuBtn = document.getElementById("menu-btn");
-    const mobileMenu = document.getElementById("mobile-menu");
-    menuBtn?.addEventListener("click", () =>
-      mobileMenu?.classList.toggle("open"),
-    );
-  }
-
-  function initNavScroll() {
-    let lastScroll = 0;
-    window.addEventListener("scroll", () => {
-      const nav = document.querySelector(".main-nav"); // se consulta fresco cada vez
-      if (!nav) return;
-      const current = window.scrollY;
-      if (current > lastScroll && current > 56) {
-        nav.classList.add("hidden");
-      } else {
-        nav.classList.remove("hidden");
-      }
-      lastScroll = current;
-    });
-  }
-
-  function init() {
-    initTema();
-    initMenu();
-  }
-
-  init();
-  document.addEventListener("astro:page-load", init);
-  initNavScroll();
+  aplicarTemaGuardado();
+  document.addEventListener("astro:page-load", aplicarTemaGuardado);
 
   if (!window.__astroNavDirTracked) {
-  window.__astroNavDirTracked = true;
-  document.addEventListener("astro:before-swap", (event) => {
-    sessionStorage.setItem(
-      "astro-nav-direction",
-      event.direction === "back" ? "back" : "forward",
-    );
-  });
-}
+    window.__astroNavDirTracked = true;
+    document.addEventListener("astro:before-swap", (event) => {
+      sessionStorage.setItem(
+        "astro-nav-direction",
+        event.direction === "back" ? "back" : "forward",
+      );
+    });
+  }
 </script>
-
-<style is:global>
-  .theme-btn {
-    background: transparent;
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    display: flex;
-    outline: none;
-  }
-
-  #sunmoon {
-    width: 24px;
-    height: 24px;
-    overflow: visible;
-  }
-
-  #overlay {
-    transition:
-      cx 0.5s ease,
-      cy 0.5s ease;
-  }
-
-  [data-theme="dark"] #overlay {
-    cx: 140px;
-    cy: 60px;
-  }
-  [data-theme="light"] #overlay {
-    cx: 230px;
-    cy: -30px;
-  }
-
-  .main-nav {
-    background: var(--azul-oscuro);
-    padding: 0 24px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    height: 56px;
-    position: sticky;
-    top: 0;
-    z-index: 12;
-    gap: 32px;
-    transition: transform 0.3s ease;
-  }
-
-  .main-nav.hidden {
-    transform: translateY(-100%);
-  }
-
-  .main-nav img {
-    width: 40px;
-  }
-
-  .nav-logo {
-    font-size: 16px;
-    font-weight: 800;
-    color: white;
-    letter-spacing: 0.5px;
-  }
-
-  .nav-logo span {
-    color: var(--naranja);
-  }
-
-  .nav-links {
-    display: flex;
-    gap: 24px;
-    align-items: center;
-  }
-
-  .nav-links a {
-    font-size: 13px;
-    color: rgba(255, 255, 255, 0.7);
-    transition: color 0.2s;
-  }
-
-  .nav-links a:hover,
-  .nav-links a.active {
-    color: white;
-  }
-
-  .nav-actions {
-    display: flex;
-    align-items: center;
-    margin-left: auto;
-    gap: 16px;
-    flex-grow: 1;
-    justify-content: flex-end;
-  }
-
-  .menu-btn {
-    display: none;
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    padding: 4px;
-    flex-direction: column;
-    gap: 5px;
-  }
-
-  .menu-btn span {
-    display: block;
-    width: 20px;
-    height: 2px;
-    background: rgba(255, 255, 255, 0.8);
-    border-radius: 1px;
-    transition: all 0.2s;
-  }
-
-  .mobile-menu {
-    display: none;
-    position: absolute;
-    top: 56px;
-    left: 0;
-    right: 0;
-    background: var(--azul-oscuro);
-    padding: 12px 16px 16px;
-    z-index: 11;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-    flex-direction: column;
-    gap: 0;
-  }
-
-  .mobile-menu.open {
-    display: flex;
-  }
-
-  .mobile-menu a {
-    font-size: 15px;
-    color: rgba(255, 255, 255, 0.75);
-    padding: 12px 4px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    transition: color 0.2s;
-  }
-
-  .mobile-menu a:last-child {
-    border-bottom: none;
-  }
-  .mobile-menu a:hover {
-    color: white;
-  }
-
-  @media (max-width: 767px) {
-    .nav-links {
-      display: none;
-    }
-    .nav-actions {
-      flex-grow: 0;
-      margin-left: auto;
-      gap: 8px;
-    }
-    .nav-actions > :first-child {
-      display: none;
-    }
-
-    .menu-btn {
-      display: flex;
-    }
-  }
-</style>

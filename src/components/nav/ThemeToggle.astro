@@ -1,0 +1,81 @@
+---
+
+---
+
+<button class="theme-btn" id="theme-btn" aria-label="Cambiar tema">
+  <svg id="sunmoon" width="40" height="40" viewBox="0 0 200 200">
+    <defs>
+      <mask id="hole">
+        <rect width="100%" height="100%" fill="white"></rect>
+        <circle id="overlay" r="80" cx="230" cy="-30" fill="black"></circle>
+      </mask>
+      <filter id="blur">
+        <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="white"
+        ></feDropShadow>
+      </filter>
+    </defs>
+    <g filter="url(#blur)">
+      <circle fill="white" id="donut" r="80" cx="100" cy="100" mask="url(#hole)"
+      ></circle>
+    </g>
+  </svg>
+</button>
+
+<script>
+  function aplicarTemaGuardado() {
+    const html = document.documentElement;
+    if (!html.getAttribute("data-theme")) {
+      const guardado = localStorage.getItem("tema") || "light";
+      html.setAttribute("data-theme", guardado);
+    }
+  }
+
+  // Delegado en `document`, que nunca se destruye entre navegaciones con
+  // View Transitions: el listener se registra UNA sola vez en toda la
+  // sesión, así que nunca se duplica aunque el botón se vuelva a pintar.
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest?.("#theme-btn");
+    if (!btn) return;
+    const html = document.documentElement;
+    const nuevo = html.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    html.setAttribute("data-theme", nuevo);
+    localStorage.setItem("tema", nuevo);
+  });
+
+  aplicarTemaGuardado();
+  document.addEventListener("astro:page-load", aplicarTemaGuardado);
+</script>
+
+<style>
+  .theme-btn {
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    display: flex;
+    outline: none;
+  }
+
+  #sunmoon {
+    width: 24px;
+    height: 24px;
+    overflow: visible;
+  }
+
+  #overlay {
+    transition:
+      cx 0.5s ease,
+      cy 0.5s ease;
+  }
+
+  /* [data-theme] vive en <html>, fuera del árbol de este componente,
+     por eso se marca como :global mientras que #overlay sí queda scoped */
+  :global([data-theme="dark"]) #overlay {
+    cx: 140px;
+    cy: 60px;
+  }
+  :global([data-theme="light"]) #overlay {
+    cx: 230px;
+    cy: -30px;
+  }
+</style>

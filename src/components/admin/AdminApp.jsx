@@ -2,12 +2,11 @@ import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
 import "@/styles/admin.css";
 import AdminLogin from "./AdminLogin.jsx";
-import AdminEquipos from "./AdminEquipos.jsx";
 import AdminTemporadas from "./AdminTemporadas.jsx";
 import AdminPanel from "./AdminPanel.jsx";
+import AdminNoticias from "./AdminNoticias.jsx";
 import AdminPlantilla from "./AdminPlantilla.jsx";
 import AdminCalendario from "./AdminCalendario.jsx";
-import AdminNoticias from "./AdminNoticias.jsx";
 import AdminJugadores from "./jugadores/AdminJugadores.jsx";
 import AdminEntrenadores from "./AdminEntrenadores.jsx";
 import AdminFase from "./AdminFase.jsx";
@@ -137,10 +136,13 @@ export default function AdminApp() {
     setHistorial([]);
   }
 
+  // Breadcrumb del medio: vuelve al panel maestro-detalle de temporadas,
+  // pero conserva temporadaActual para que AdminTemporadas la preseleccione
+  // (en vez de saltar a la primera de la lista).
   function irAEquipos() {
     setEquipoActual(null);
     setHistorial((h) => [...h, vista]);
-    setVista("equipos");
+    setVista("temporadas");
   }
 
   if (cargando)
@@ -302,13 +304,6 @@ export default function AdminApp() {
                 collapsed={sidebarCollapsed}
                 onClick={() => navegar("clasificacion")}
               />
-              <NavItem
-                label="Noticias"
-                icon="📰"
-                activa={vista === "noticias"}
-                collapsed={sidebarCollapsed}
-                onClick={() => navegar("noticias")}
-              />
             </NavSection>
           )}
 
@@ -335,12 +330,20 @@ export default function AdminApp() {
                 collapsed={sidebarCollapsed}
                 onClick={() => navegar("clubes")}
               />
+
               <NavItem
                 label="Competiciones"
                 icon="🏆"
                 activa={vista === "competiciones"}
                 collapsed={sidebarCollapsed}
                 onClick={() => navegar("competiciones")}
+              />
+              <NavItem
+                label="Noticias"
+                icon="📰"
+                activa={vista === "noticias"}
+                collapsed={sidebarCollapsed}
+                onClick={() => navegar("noticias")}
               />
               <NavItem
                 label="Nuevo equipo"
@@ -595,27 +598,13 @@ export default function AdminApp() {
           {vista === "temporadas" && (
             <AdminTemporadas
               supabase={supabase}
-              onSelect={(temporada) => {
-                setTemporadaActual(temporada);
-                setHistorial([]);
-                setVista("equipos");
-              }}
-            />
-          )}
-          {vista === "equipos" && temporadaActual && (
-            <AdminEquipos
-              supabase={supabase}
               perfil={perfil}
-              temporada={temporadaActual}
-              onSelect={(equipo) => {
+              temporadaInicial={temporadaActual}
+              onSelectEquipo={(equipo, temporada) => {
                 setEquipoActual(equipo);
-                setHistorial((h) => [...h, "equipos"]);
+                setTemporadaActual(temporada);
+                setHistorial((h) => [...h, "temporadas"]);
                 setVista("equipo");
-              }}
-              onBack={() => {
-                setTemporadaActual(null);
-                setVista("temporadas");
-                setHistorial([]);
               }}
             />
           )}
@@ -657,15 +646,14 @@ export default function AdminApp() {
               temporada={temporadaActual}
             />
           )}
-          {vista === "noticias" && tieneEquipo && (
+          {vista === "noticias" && perfil?.rol === "admin" && (
             <AdminNoticias
               supabase={supabase}
               perfil={perfil}
-              equipo={equipoActual}
-              temporada={temporadaActual}
               onBack={volver}
             />
           )}
+
           {vista === "nuevoEquipo" && perfil?.rol === "admin" && (
             <FormNuevoEquipo
               supabase={supabase}

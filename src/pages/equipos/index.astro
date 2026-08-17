@@ -2,6 +2,7 @@
 // @ts-nocheck
 // src/pages/equipos/index.astro
 import { supabase } from "@/lib/supabase.js";
+import { resolverSlugsEquipos } from "@/lib/services/equipos.js";
 import Layout from "@/layouts/Layout.astro";
 
 const { data: temporadas } = await supabase
@@ -39,7 +40,6 @@ function nombreEquipo(equipo) {
     : `CB Jaca ${equipo.categorias?.nombre ?? ""}`;
 }
 
-import { resolverSlugsEquipos } from "@/lib/services/equipos.js";
 const slugMap = resolverSlugsEquipos(equipos ?? []);
 
 function urlEquipo(equipo) {

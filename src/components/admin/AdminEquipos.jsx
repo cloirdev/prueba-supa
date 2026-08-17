@@ -77,12 +77,15 @@ export default function AdminEquipos({
   temporada,
   onSelect,
   onBack,
+  embedded = false,
 }) {
   const [equipos, setEquipos] = useState([]);
   const [cargando, setCargando] = useState(true);
+  const [vistaCards, setVistaCards] = useState(false);
 
   useEffect(() => {
     async function cargar() {
+      setCargando(true);
       try {
         // Eliminado .order("sponsor") para evitar el fallo de columna inexistente
         let query = supabase
@@ -94,7 +97,7 @@ export default function AdminEquipos({
               sponsor_id,
               categoria_id,
               temporada_id,
-              categorias (nombre),
+              categorias (id, nombre, genero),
               temporadas:temporadas!equipos_temporada_id_fkey (nombre),
               sponsors (
                 id,
@@ -140,24 +143,110 @@ export default function AdminEquipos({
         setCargando(false);
       }
     }
-    cargar();
-  }, [temporada.id, perfil]);
+    if (temporada?.id) cargar();
+  }, [temporada?.id, perfil]);
 
-  if (cargando)
+  if (cargando && equipos.length === 0)
     return <p style={{ color: "var(--muted)" }}>Cargando equipos...</p>;
 
   return (
-    <div>
-      <button onClick={onBack} className="adm-back-btn">
-        ← Volver
-      </button>
-      <h1 className="adm-page-title">Equipos</h1>
-      <p className="adm-page-subtitle">
-        Temporada {temporada.nombre} · Selecciona un equipo
-      </p>
+    <div
+      style={{ opacity: cargando ? 0.5 : 1, transition: "opacity 0.15s ease" }}
+    >
+      {!embedded && (
+        <>
+          <button onClick={onBack} className="adm-back-btn">
+            ← Volver
+          </button>
+          <h1 className="adm-page-title">Equipos</h1>
+          <p className="adm-page-subtitle">
+            Temporada {temporada.nombre} · Selecciona un equipo
+          </p>
+        </>
+      )}
 
-      <div className="adm-list" style={{ maxWidth: "500px", gap: "10px" }}>
-        {equipos.length === 0 && (
+      <div style={{ marginBottom: "16px" }}>
+        <div
+          onClick={() => setVistaCards(!vistaCards)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            background: "var(--card)",
+            border: "1px solid var(--borde)",
+            borderRadius: "12px",
+            padding: "4px",
+            width: "fit-content",
+            cursor: "pointer",
+            position: "relative",
+            userSelect: "none",
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              top: "4px",
+              left: vistaCards ? "calc(50%)" : "4px",
+              width: "calc(50% - 4px)",
+              height: "calc(100% - 8px)",
+              background: "var(--naranja)",
+              borderRadius: "8px",
+              transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+              zIndex: 0,
+            }}
+          />
+          <div
+            style={{
+              padding: "6px 12px",
+              display: "flex",
+              alignItems: "center",
+              zIndex: 1,
+              color: !vistaCards ? "white" : "var(--muted)",
+              fontSize: "14px",
+              fontWeight: 700,
+              transition: "color 0.2s",
+            }}
+          >
+            ☰
+          </div>
+          <div
+            style={{
+              padding: "6px 12px",
+              display: "flex",
+              alignItems: "center",
+              zIndex: 1,
+              color: vistaCards ? "white" : "var(--muted)",
+              fontSize: "14px",
+              fontWeight: 700,
+              transition: "color 0.2s",
+            }}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="1em"
+              height="1em"
+              viewBox="0 0 512 512"
+            >
+              <path d="M0 0h512v512H0z" fill="none" />
+              <path
+                fill="currentColor"
+                d="M240 240H32V32h208Zm240 0H272V32h208ZM240 480H32V272h208Zm240 0H272V272h208Z"
+              />
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div
+        className="adm-list"
+        style={{
+          maxWidth: vistaCards ? "none" : embedded ? undefined : "500px",
+          gap: "10px",
+          display: "flex",
+          flexDirection: vistaCards ? "row" : "column",
+          flexWrap: vistaCards ? "wrap" : "nowrap",
+        }}
+      >
+        {equipos.length === 0 && !cargando && (
           <p className="adm-empty">No hay equipos en esta temporada.</p>
         )}
         {equipos.map((e) => (
@@ -165,6 +254,17 @@ export default function AdminEquipos({
             key={e.id}
             onClick={() => onSelect(e)}
             className="card adm-card-row adm-card-clickable"
+            style={
+              vistaCards
+                ? {
+                    width: "calc(25% - 8px)",
+                    minWidth: "160px",
+                    flexDirection: "column",
+                    alignItems: "flex-start",
+                    textAlign: "left",
+                  }
+                : undefined
+            }
           >
             <div>
               <div className="adm-card-title">

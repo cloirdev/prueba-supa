@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from "react";
+import SubirFoto from "./SubirFoto.jsx";
+import FormNuevoJugador from "./FormNuevoJugador.jsx";
 
 const POSICIONES = ["Base", "Escolta", "Alero", "Ala-Pívot", "Pívot"];
 
@@ -25,6 +27,8 @@ export default function AdminJugadores({ supabase, perfil }) {
     apellido: "",
     posicion: "",
     genero: "",
+    fotoDniFile: null,
+    fotoAccionFile: null,
   });
   const [mostrarFormNuevo, setMostrarFormNuevo] = useState(false);
   const [msg, setMsg] = useState("");
@@ -43,7 +47,9 @@ export default function AdminJugadores({ supabase, perfil }) {
     const [{ data: jugs }, { data: eqs }, { data: temps }] = await Promise.all([
       supabase
         .from("jugadores")
-        .select("id, nombre, apellido, posicion, genero, foto_dni_url")
+        .select(
+          "id, nombre, apellido, posicion, genero, foto_dni_url, foto_accion_url",
+        )
         .order("apellido"),
       supabase
         .from("equipos")
@@ -74,27 +80,61 @@ export default function AdminJugadores({ supabase, perfil }) {
     setCargandoHistorial(false);
   }
 
+  async function subirFoto(file, jugadorId, tipo) {
+    const ext = file.name.split(".").pop();
+    const ruta = `${jugadorId}/${tipo}-${Date.now()}.${ext}`;
+    const { error: err } = await supabase.storage
+      .from("jugadores")
+      .upload(ruta, file, { upsert: true });
+    if (err) throw err;
+    const { data } = supabase.storage.from("jugadores").getPublicUrl(ruta);
+    return data.publicUrl;
+  }
+
   async function guardarEdicion() {
     setError("");
     setMsg("");
+
+    const cambios = {
+      nombre: formEditar.nombre,
+      apellido: formEditar.apellido,
+      posicion: formEditar.posicion || null,
+      genero: formEditar.genero || null,
+    };
+
+    try {
+      if (formEditar.fotoDniFile) {
+        cambios.foto_dni_url = await subirFoto(
+          formEditar.fotoDniFile,
+          jugadorSeleccionado.id,
+          "dni",
+        );
+      }
+      if (formEditar.fotoAccionFile) {
+        cambios.foto_accion_url = await subirFoto(
+          formEditar.fotoAccionFile,
+          jugadorSeleccionado.id,
+          "accion",
+        );
+      }
+    } catch {
+      setError("Error al subir la foto");
+      return;
+    }
+
     const { error: err } = await supabase
       .from("jugadores")
-      .update({
-        nombre: formEditar.nombre,
-        apellido: formEditar.apellido,
-        posicion: formEditar.posicion || null,
-        genero: formEditar.genero || null,
-      })
+      .update(cambios)
       .eq("id", jugadorSeleccionado.id);
     if (err) {
       setError("Error al guardar cambios");
       return;
     }
     setMsg("Cambios guardados correctamente");
-    setJugadorSeleccionado({ ...jugadorSeleccionado, ...formEditar });
+    setJugadorSeleccionado({ ...jugadorSeleccionado, ...cambios });
     setJugadores(
       jugadores.map((j) =>
-        j.id === jugadorSeleccionado.id ? { ...j, ...formEditar } : j,
+        j.id === jugadorSeleccionado.id ? { ...j, ...cambios } : j,
       ),
     );
   }
@@ -157,18 +197,53 @@ export default function AdminJugadores({ supabase, perfil }) {
       setError("Nombre y apellido son obligatorios");
       return;
     }
-    const { error: err } = await supabase.from("jugadores").insert({
-      nombre: formNuevo.nombre,
-      apellido: formNuevo.apellido,
-      posicion: formNuevo.posicion || null,
-      genero: formNuevo.genero || null,
-    });
+    const { data: nuevo, error: err } = await supabase
+      .from("jugadores")
+      .insert({
+        nombre: formNuevo.nombre,
+        apellido: formNuevo.apellido,
+        posicion: formNuevo.posicion || null,
+        genero: formNuevo.genero || null,
+      })
+      .select()
+      .single();
     if (err) {
       setError("Error al crear jugador");
       return;
     }
+
+    const updates = {};
+    try {
+      if (formNuevo.fotoDniFile) {
+        updates.foto_dni_url = await subirFoto(
+          formNuevo.fotoDniFile,
+          nuevo.id,
+          "dni",
+        );
+      }
+      if (formNuevo.fotoAccionFile) {
+        updates.foto_accion_url = await subirFoto(
+          formNuevo.fotoAccionFile,
+          nuevo.id,
+          "accion",
+        );
+      }
+      if (Object.keys(updates).length > 0) {
+        await supabase.from("jugadores").update(updates).eq("id", nuevo.id);
+      }
+    } catch {
+      setError("Jugador creado, pero hubo un error al subir alguna foto");
+    }
+
     setMsg("Jugador creado correctamente");
-    setFormNuevo({ nombre: "", apellido: "", posicion: "", genero: "" });
+    setFormNuevo({
+      nombre: "",
+      apellido: "",
+      posicion: "",
+      genero: "",
+      fotoDniFile: null,
+      fotoAccionFile: null,
+    });
     setMostrarFormNuevo(false);
     cargarTodo();
   }
@@ -178,7 +253,7 @@ export default function AdminJugadores({ supabase, perfil }) {
     return (
       texto.includes(busqueda.toLowerCase()) &&
       (!filtroPosicion || j.posicion === filtroPosicion) &&
-      (!filtroGenero || j.genero === filtroGenero) // ← añadir
+      (!filtroGenero || j.genero === filtroGenero)
     );
   });
 
@@ -189,6 +264,10 @@ export default function AdminJugadores({ supabase, perfil }) {
       apellido: j.apellido,
       posicion: j.posicion ?? "",
       genero: j.genero ?? "",
+      foto_dni_url: j.foto_dni_url ?? "",
+      foto_accion_url: j.foto_accion_url ?? "",
+      fotoDniFile: null,
+      fotoAccionFile: null,
     });
     setPanelVista("historial");
     setMsg("");
@@ -248,91 +327,19 @@ export default function AdminJugadores({ supabase, perfil }) {
             {mostrarFormNuevo ? "Cancelar" : "+ Nuevo jugador"}
           </button>
         </div>
+
         {mostrarFormNuevo && (
           <div
             className="card"
-            style={{
-              marginBottom: "20px",
-              display: "flex",
-              flexDirection: "column",
-              gap: "14px",
-              maxWidth: "420px",
-            }}
+            style={{ marginBottom: "20px", maxWidth: "420px" }}
           >
-            {msg && (
-              <p
-                style={{
-                  color: "#16a34a",
-                  fontSize: "13px",
-                  padding: "10px 14px",
-                  background: "#f0fdf4",
-                  borderRadius: "8px",
-                  border: "1px solid #bbf7d0",
-                  margin: 0,
-                }}
-              >
-                {msg}
-              </p>
-            )}
-            {error && (
-              <p
-                style={{
-                  color: "#dc2626",
-                  fontSize: "13px",
-                  padding: "10px 14px",
-                  background: "#fef2f2",
-                  borderRadius: "8px",
-                  border: "1px solid #fecaca",
-                  margin: 0,
-                }}
-              >
-                {error}
-              </p>
-            )}
-            <div>
-              <label style={labelStyle}>Nombre</label>
-              <input
-                type="text"
-                value={formNuevo.nombre}
-                onChange={(e) =>
-                  setFormNuevo({ ...formNuevo, nombre: e.target.value })
-                }
-                placeholder="Carlos"
-                style={inputStyle}
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>Apellido</label>
-              <input
-                type="text"
-                value={formNuevo.apellido}
-                onChange={(e) =>
-                  setFormNuevo({ ...formNuevo, apellido: e.target.value })
-                }
-                placeholder="García"
-                style={inputStyle}
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>Posición</label>
-              <select
-                value={formNuevo.posicion}
-                onChange={(e) =>
-                  setFormNuevo({ ...formNuevo, posicion: e.target.value })
-                }
-                style={inputStyle}
-              >
-                <option value="">Sin posición</option>
-                {POSICIONES.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <button onClick={crearJugador} style={btnPrimaryStyle}>
-              Crear jugador
-            </button>
+            <FormNuevoJugador
+              form={formNuevo}
+              onChange={setFormNuevo}
+              onSubmit={crearJugador}
+              msg={msg}
+              error={error}
+            />
           </div>
         )}
 
@@ -402,8 +409,17 @@ export default function AdminJugadores({ supabase, perfil }) {
           )}
         </div>
 
-        {/* Toggle vista */}
-        <div style={{ marginBottom: "16px" }}>
+        {/* Toggle vista + Filtros en la misma fila */}
+        <div
+          style={{
+            display: "flex",
+            gap: "12px",
+            marginBottom: "16px",
+            alignItems: "flex-end",
+            flexWrap: "wrap",
+          }}
+        >
+          {/* Toggle vista */}
           <div
             onClick={() => setVistaCards(!vistaCards)}
             style={{
@@ -458,20 +474,21 @@ export default function AdminJugadores({ supabase, perfil }) {
                 transition: "color 0.2s",
               }}
             >
-              ⊞
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="1em"
+                height="1em"
+                viewBox="0 0 512 512"
+              >
+                <path d="M0 0h512v512H0z" fill="none" />
+                <path
+                  fill="currentColor"
+                  d="M240 240H32V32h208Zm240 0H272V32h208ZM240 480H32V272h208Zm240 0H272V272h208Z"
+                />
+              </svg>
             </div>
           </div>
-        </div>
 
-        {/* Filtros posición + género */}
-        <div
-          style={{
-            display: "flex",
-            gap: "12px",
-            marginBottom: "16px",
-            alignItems: "flex-end",
-          }}
-        >
           {/* Posición */}
           <div>
             <label
@@ -967,6 +984,36 @@ export default function AdminJugadores({ supabase, perfil }) {
                   ))}
                 </select>
               </div>
+              <div>
+                <label style={labelStyle}>Género</label>
+                <select
+                  value={formEditar.genero ?? ""}
+                  onChange={(e) =>
+                    setFormEditar({ ...formEditar, genero: e.target.value })
+                  }
+                  style={inputStyle}
+                >
+                  <option value="">Sin especificar</option>
+                  <option value="masculino">Masculino</option>
+                  <option value="femenino">Femenino</option>
+                </select>
+              </div>
+
+              <SubirFoto
+                label="Foto DNI"
+                previewUrl={formEditar.foto_dni_url}
+                onFileSelected={(file) =>
+                  setFormEditar({ ...formEditar, fotoDniFile: file })
+                }
+              />
+              <SubirFoto
+                label="Foto de acción"
+                previewUrl={formEditar.foto_accion_url}
+                onFileSelected={(file) =>
+                  setFormEditar({ ...formEditar, fotoAccionFile: file })
+                }
+              />
+
               <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
                 <button onClick={guardarEdicion} style={btnPrimaryStyle}>
                   Guardar cambios
@@ -1122,85 +1169,13 @@ export default function AdminJugadores({ supabase, perfil }) {
             Añade un jugador a la base de datos.
           </p>
 
-          {msg && (
-            <p
-              style={{
-                color: "#16a34a",
-                fontSize: "13px",
-                marginBottom: "14px",
-                padding: "10px 14px",
-                background: "#f0fdf4",
-                borderRadius: "8px",
-                border: "1px solid #bbf7d0",
-              }}
-            >
-              {msg}
-            </p>
-          )}
-          {error && (
-            <p
-              style={{
-                color: "#dc2626",
-                fontSize: "13px",
-                marginBottom: "14px",
-                padding: "10px 14px",
-                background: "#fef2f2",
-                borderRadius: "8px",
-                border: "1px solid #fecaca",
-              }}
-            >
-              {error}
-            </p>
-          )}
-
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: "14px" }}
-          >
-            <div>
-              <label style={labelStyle}>Nombre</label>
-              <input
-                type="text"
-                value={formNuevo.nombre}
-                onChange={(e) =>
-                  setFormNuevo({ ...formNuevo, nombre: e.target.value })
-                }
-                placeholder="Carlos"
-                style={inputStyle}
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>Apellido</label>
-              <input
-                type="text"
-                value={formNuevo.apellido}
-                onChange={(e) =>
-                  setFormNuevo({ ...formNuevo, apellido: e.target.value })
-                }
-                placeholder="García"
-                style={inputStyle}
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>Posición</label>
-              <select
-                value={formNuevo.posicion}
-                onChange={(e) =>
-                  setFormNuevo({ ...formNuevo, posicion: e.target.value })
-                }
-                style={inputStyle}
-              >
-                <option value="">Sin posición</option>
-                {POSICIONES.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <button onClick={crearJugador} style={btnPrimaryStyle}>
-              Crear jugador
-            </button>
-          </div>
+          <FormNuevoJugador
+            form={formNuevo}
+            onChange={setFormNuevo}
+            onSubmit={crearJugador}
+            msg={msg}
+            error={error}
+          />
         </div>
       )}
     </div>

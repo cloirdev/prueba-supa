@@ -1,0 +1,99 @@
+---
+import Buscador from "@/components/Buscador";
+import NavLinks from "./NavLinks.astro";
+import ThemeToggle from "./ThemeToggle.astro";
+import MobileMenuButton from "./MobileMenuButton.astro";
+import MobileMenu from "./MobileMenu.astro";
+import { enlacesNav } from "@/data/navLinks.js";
+---
+
+<nav class="main-nav" id="main-nav">
+  <img src="/escudo-naranja.png" alt="Escudo del CB Jaca" />
+  <a href="/" class="nav-logo">CB <span>Jaca</span></a>
+
+  <NavLinks links={enlacesNav} variant="desktop" />
+
+  <div class="nav-actions">
+    <div class="buscador-desktop">
+      <Buscador client:load />
+    </div>
+    <MobileMenuButton />
+    <ThemeToggle />
+  </div>
+</nav>
+
+<MobileMenu links={enlacesNav} />
+
+<script>
+  function initScrollNav() {
+    let ultimoScroll = 0;
+    window.addEventListener("scroll", () => {
+      const nav = document.getElementById("main-nav");
+      if (!nav) return;
+      const actual = window.scrollY;
+      if (actual > ultimoScroll && actual > 56) {
+        nav.classList.add("hidden");
+      } else {
+        nav.classList.remove("hidden");
+      }
+      ultimoScroll = actual;
+    });
+  }
+
+  initScrollNav();
+</script>
+
+<style>
+  .main-nav {
+    background: var(--azul-oscuro);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+    position: sticky;
+    top: 0;
+    z-index: 12;
+    gap: 32px;
+    transition: transform 0.3s ease;
+  }
+
+  .main-nav.hidden {
+    transform: translateY(-100%);
+  }
+
+  .main-nav img {
+    width: 40px;
+  }
+
+  .nav-logo {
+    font-size: 16px;
+    font-weight: 800;
+    color: white;
+    letter-spacing: 0.5px;
+  }
+
+  .nav-logo span {
+    color: var(--naranja);
+  }
+
+  .nav-actions {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+    gap: 16px;
+    flex-grow: 1;
+    justify-content: flex-end;
+  }
+
+  @media (max-width: 767px) {
+    .nav-actions {
+      flex-grow: 0;
+      margin-left: auto;
+      gap: 8px;
+    }
+    .buscador-desktop {
+      display: none;
+    }
+  }
+</style>
