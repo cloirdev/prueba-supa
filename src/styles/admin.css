@@ -158,3 +158,82 @@
   display: flex;
   gap: 10px;
 }
+
+/* ── Layout maestro-detalle: Temporadas → Equipos ── */
+.adm-split-layout {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+.adm-split-lista {
+  max-width: none;
+  gap: 10px;
+  max-height: calc(100vh - 260px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: sticky;
+  top: 0;
+  padding-right: 6px;
+  padding-bottom: 4px;
+  /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: var(--borde) transparent;
+}
+.adm-split-lista::-webkit-scrollbar {
+  width: 6px;
+}
+.adm-split-lista::-webkit-scrollbar-track {
+  background: transparent;
+}
+.adm-split-lista::-webkit-scrollbar-thumb {
+  background: var(--borde);
+  border-radius: 999px;
+}
+.adm-split-lista::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+.adm-split-detalle {
+  min-width: 0;
+}
+
+.adm-split-detalle-header {
+  margin-bottom: 16px;
+}
+
+.adm-split-detalle-titulo {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--texto);
+  margin: 0;
+}
+
+.adm-temporada-card {
+  transition:
+    padding 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+/* Tarjeta de temporada actualmente seleccionada en el panel izquierdo,
+   distinto del badge "Activa" (que indica la temporada real activa) */
+.adm-temporada-card--seleccionada {
+  border-color: var(--naranja);
+  background: rgba(242, 130, 65, 0.25);
+  box-shadow: inset 3px 0 0 var(--naranja);
+}
+.adm-temporada-card--seleccionada .adm-card-title {
+  color: var(--naranja);
+  font-size: 16px;
+}
+
+@media (max-width: 900px) {
+  .adm-split-layout {
+    grid-template-columns: 1fr;
+  }
+  .adm-split-lista {
+    max-height: 340px;
+    position: static;
+  }
+}

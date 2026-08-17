@@ -132,12 +132,6 @@ export default function AdminPanel({
       label: "Clasificación",
       sub: "Tabla de la competición",
     },
-    {
-      key: "noticias",
-      emoji: "📰",
-      label: "Noticias",
-      sub: "Crónicas y noticias",
-    },
   ];
 
   return (
@@ -159,8 +153,9 @@ export default function AdminPanel({
         style={{
           display: "grid",
           gridTemplateColumns: "1fr 1fr",
+          gridAutoRows: "1fr",
           gap: "16px",
-          alignItems: "start",
+          height: "100%",
         }}
       >
         {/* ── Columna izquierda ── */}

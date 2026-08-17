@@ -1,0 +1,82 @@
+---
+import Layout from "@/layouts/Layout.astro";
+const titulo = "Historia";
+---
+
+<Layout titulo={titulo}>
+  <main class="history-container">
+    <h1>Nuestra <span style="color:orange;">Historia</span></h1>
+    <div class="history-content">
+      <p>
+        El <strong>Club Baloncesto Jaca</strong> fue fundado el 7 de febrero de 2003,
+        dando respuesta a un periodo en el que la ciudad y la comarca carecían de
+        actividad y estructuras dedicadas al baloncesto. En la actualidad, está inscrito
+        como Club Deportivo Elemental en el Registro de Entidades Deportivas de Aragón
+        con el número 5284/1.
+      </p>
+      <p>
+        Los inicios del proyecto estuvieron marcados por la actividad de un
+        equipo en categoría sénior masculina y la colaboración con la asociación
+        AVEBNOR para la formación de un grupo infantil. Con la constitución
+        formal del club, se unificaron todas las secciones bajo la denominación
+        exclusiva de
+        <strong> CLUB BALONCESTO JACA</strong>, comenzando a competir de forma
+        unificada en los juegos escolares.
+      </p>
+      <p>
+        A lo largo de los años, el club ha experimentado un crecimiento
+        constante. Aquel pequeño grupo inicial de amigos y entusiastas del
+        baloncesto ha dado paso a una entidad consolidada, dotada de una
+        estructura deportiva y de gestión acorde a sus dimensiones actuales. Una
+        labor que en el pasado ya se vio reconocida con galardones tan
+        importantes como el premio al mejor club de Aragón y el premio a la
+        promoción deportiva de la ciudad de Jaca.
+      </p>
+      <p>
+        Este desarrollo se refleja de manera clara en hitos recientes, como la
+        temporada 2016-2017, en la que el club reunió a <strong
+          >152 jugadores</strong
+        > (120 de ellos en categorías de deporte escolar, tanto masculino como femenino).
+        La estructura actual abarca desde la escuela base de baloncesto —con categorías
+        benjamín y alevin— hasta el deporte federado, con presencia en la liga provincial
+        júnior masculina, la Tercera Aragonesa femenina, la Segunda Aragonesa masculina
+        y el tradicional equipo de veteranos.
+      </p>
+      <p>
+        En los últimos años se ha impulsado de forma activa la participación
+        femenina, logrando que las jugadoras representen actualmente el <strong
+          >38% del total</strong
+        > de los deportistas del club.
+      </p>
+      <p>
+        Nuestra filosofía sigue firmemente orientada hacia la cantera y la
+        igualdad de oportunidades entre deportistas de ambos sexos. Un esfuerzo
+        constante que recogió sus frutos en 2016, al ser elegidos por la
+        Asociación de la Prensa Deportiva de Huesca como el mejor club en labor
+        de promoción deportiva.
+      </p>
+    </div>
+  </main>
+</Layout>
+
+<style>
+  .history-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+  }
+
+  h1 {
+    font-size: 2.5rem;
+    margin-bottom: 2rem;
+    text-align: center;
+  }
+
+  .history-content {
+    display: grid;
+    gap: 1.5rem;
+    line-height: 1.8;
+    color: #333;
+    font-size: 1.05rem;
+  }
+</style>

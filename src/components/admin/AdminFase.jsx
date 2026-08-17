@@ -306,8 +306,10 @@ function TabParticipantes({ supabase, equipo, fase }) {
     setMsg("");
     const yaExiste = participantes.some((p) => p.club_id === club.id);
     if (yaExiste) {
-      setError("Este club ya está en la fase");
-      return;
+      const confirmar = confirm(
+        `${club.nombre} ya está añadido en esta fase. ¿Quieres añadirlo de nuevo?`,
+      );
+      if (!confirmar) return;
     }
     const { error: err } = await supabase.from("participantes").insert({
       fase_id: fase.id,
@@ -667,19 +669,17 @@ function TabParticipantes({ supabase, equipo, fase }) {
                 return (
                   <div
                     key={c.id}
-                    onClick={() => !yaExiste && añadirClub(c)}
+                    onClick={() => añadirClub(c)}
                     style={{
                       padding: "10px 14px",
                       fontSize: "13px",
-                      cursor: yaExiste ? "default" : "pointer",
-                      opacity: yaExiste ? 0.4 : 1,
+                      cursor: "pointer",
                       borderBottom: "1px solid var(--borde)",
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
                     }}
                     onMouseEnter={(e) =>
-                      !yaExiste &&
                       (e.currentTarget.style.background = "var(--fondo)")
                     }
                     onMouseLeave={(e) =>
@@ -687,7 +687,13 @@ function TabParticipantes({ supabase, equipo, fase }) {
                     }
                   >
                     <span>{c.nombre}</span>
-                    <span style={{ fontSize: "11px", color: "var(--muted)" }}>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        color: yaExiste ? "var(--naranja)" : "var(--muted)",
+                        fontWeight: yaExiste ? 700 : 400,
+                      }}
+                    >
                       {yaExiste ? "Ya añadido" : "Añadir"}
                     </span>
                   </div>

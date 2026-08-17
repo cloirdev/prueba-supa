@@ -5,9 +5,7 @@ import { supabase } from "@/lib/supabase.js";
 import Layout from "@/layouts/Layout.astro";
 
 export async function getStaticPaths() {
-  const { data: jugadores } = await supabase
-    .from("jugadores")
-    .select("id");
+  const { data: jugadores } = await supabase.from("jugadores").select("id");
 
   return (jugadores ?? []).map((j) => ({
     params: { id: j.id },
@@ -19,148 +17,389 @@ const { id } = Astro.params;
 // ── Datos del jugador ──────────────────────────────────────────────────────
 const { data: jugador } = await supabase
   .from("jugadores")
-  .select("id, nombre, apellido, posicion, genero, foto_dni_url")  // ← añadir
+  .select(
+    "id, nombre, apellido, posicion, genero, foto_dni_url, foto_accion_url",
+  )
   .eq("id", id)
   .single();
 
 if (!jugador) return Astro.redirect("/equipos");
 
 // ── Historial de equipos por temporada ────────────────────────────────────
-const { data: historial } = await supabase
+const { data: historial, error: errorHistorial } = await supabase
   .from("convocatorias_temporada")
-  .select(`
+  .select(
+    `
     dorsal,
     equipos (
-      id, sponsor,
-      categorias (nombre, slug),
-      temporadas (nombre),
-      competiciones (nombre)
+      id,
+      sponsors ( nombre ),
+      categorias ( nombre, slug, genero ),
+      temporadas ( id, nombre ),
+      equipo_competiciones (
+        competiciones ( nombre )
+      )
     )
-  `)
+  `,
+  )
   .eq("jugador_id", id)
   .order("equipo_id");
+
+if (errorHistorial) console.error("Error historial:", errorHistorial);
 
 // Ordenar historial por temporada más reciente
 const historialOrdenado = (historial ?? []).sort((a, b) =>
   (b.equipos?.temporadas?.nombre ?? "").localeCompare(
-    a.equipos?.temporadas?.nombre ?? ""
-  )
+    a.equipos?.temporadas?.nombre ?? "",
+  ),
 );
 
 // ── Estadísticas por partido ───────────────────────────────────────────────
-const { data: statsPartidos } = await supabase
+const { data: statsPartidos, error: errorStats } = await supabase
   .from("convocatorias_partido")
-  .select(`
-    titular, minutos, puntos,
+  .select(
+    `
+    titular, minutos, puntos, valoracion,
     tiros_campo_intentados, tiros_campo_anotados,
     triples_intentados, triples_anotados,
     tiros_libres_intentados, tiros_libres_anotados,
-    rebotes_ofensivos, rebotes_defensivos,
+    rebotes_ofensivos, rebotes_defensivos, rebotes_totales,
     asistencias, robos, tapones, perdidas, faltas_cometidas,
     partidos (
-      fecha, jornada, ronda, es_local, rival,
+      id, fecha, jornada, ronda, es_local,
       puntos_favor, puntos_contra,
-      equipos_rivales (nombre_equipo),
       equipos (
-        sponsor,
-        categorias (nombre, slug),
-        temporadas (nombre)
+        sponsors ( nombre ),
+        categorias ( nombre, slug ),
+        temporadas ( nombre )
+      ),
+      participante_local:participantes!participante_local_id (
+        nombre_equipo,
+        equipos_rivales ( nombre_equipo )
+      ),
+      participante_visitante:participantes!participante_visitante_id (
+        nombre_equipo,
+        equipos_rivales ( nombre_equipo )
       )
     )
-  `)
+  `,
+  )
   .eq("jugador_id", id)
   .order("partidos(fecha)", { ascending: false });
 
+if (errorStats) console.error("Error stats:", errorStats);
+
 const stats = statsPartidos ?? [];
-const partidos_jugados = stats.filter((s) => (s.minutos ?? 0) > 0).length;
-
-// ── Totales acumulados ─────────────────────────────────────────────────────
-function sum(campo) {
-  return stats.reduce((a, s) => a + (parseInt(s[campo]) || 0), 0);
-}
-
-const totales = {
-  partidos:    partidos_jugados,
-  minutos:     sum("minutos"),
-  puntos:      sum("puntos"),
-  rebotes:     sum("rebotes_ofensivos") + sum("rebotes_defensivos"),
-  asistencias: sum("asistencias"),
-  robos:       sum("robos"),
-  tapones:     sum("tapones"),
-  tc_an:       sum("tiros_campo_anotados"),
-  tc_int:      sum("tiros_campo_intentados"),
-  t3_an:       sum("triples_anotados"),
-  t3_int:      sum("triples_intentados"),
-  tl_an:       sum("tiros_libres_anotados"),
-  tl_int:      sum("tiros_libres_intentados"),
-};
-
-// Medias por partido
-function media(val) {
-  if (!partidos_jugados) return "—";
-  return (val / partidos_jugados).toFixed(1);
-}
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const posicionLabel = {
-  Base: "Base", Escolta: "Escolta", Alero: "Alero",
-  "Ala-Pívot": "Ala-Pívot", Pívot: "Pívot",
+  Base: "Base",
+  Escolta: "Escolta",
+  Alero: "Alero",
+  "Ala-Pívot": "Ala-Pívot",
+  Pívot: "Pívot",
 };
 
-function porcentaje(an, int_) {
-  if (!int_) return "—";
-  return `${Math.round((an / int_) * 100)}%`;
+function porcentaje(an, intent) {
+  if (!intent) return 0;
+  return Math.round((an / intent) * 100);
+}
+
+function nivelPct(pct) {
+  if (pct >= 50) return "alto";
+  if (pct >= 35) return "medio";
+  return "bajo";
+}
+
+function minutosDisplay(totalSegundos) {
+  const val = parseInt(totalSegundos) || 0;
+  if (val < 200) return `${val}'`;
+  const mm = Math.floor(val / 60);
+  const ss = val % 60;
+  return `${mm}:${String(ss).padStart(2, "0")}`;
 }
 
 function formatFecha(f) {
   if (!f) return "—";
   return new Date(f).toLocaleDateString("es-ES", {
-    day: "numeric", month: "short", year: "numeric",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
   });
 }
 
-function nombreRival(p) {
-  return p.equipos_rivales?.nombre_equipo ?? p.rival;
+function nombreEquipoPropio(eq) {
+  return eq?.sponsors?.nombre
+    ? `${eq.sponsors.nombre}`
+    : `CB Jaca ${eq?.categorias?.nombre ?? ""}`;
 }
 
-const iniciales = `${jugador.nombre?.[0] ?? ""}${jugador.apellido?.[0] ?? ""}`.toUpperCase();
+function nombreCompeticion(eq) {
+  return (
+    eq?.equipo_competiciones?.[0]?.competiciones?.nombre ??
+    eq?.categorias?.nombre ??
+    "—"
+  );
+}
+
+function nombreRival(p) {
+  const participanteRival = p?.es_local
+    ? p?.participante_visitante
+    : p?.participante_local;
+  return (
+    participanteRival?.nombre_equipo ??
+    participanteRival?.equipos_rivales?.nombre_equipo ??
+    "Rival"
+  );
+}
+
+function sum(arr, campo) {
+  return arr.reduce((acc, s) => acc + (parseInt(s[campo]) || 0), 0);
+}
+
+function normalizar(valor, max) {
+  return Math.max(0, Math.min(1, (valor || 0) / max));
+}
+
+function puntoEje(indice, total, cx, cy, radio, valor) {
+  const angulo = (Math.PI * 2 * indice) / total - Math.PI / 2;
+  const x = cx + Math.cos(angulo) * radio * valor;
+  const y = cy + Math.sin(angulo) * radio * valor;
+  return `${x.toFixed(1)},${y.toFixed(1)}`;
+}
+
+function poligonoRadar(valores, cx, cy, radio) {
+  return valores
+    .map((v, i) => puntoEje(i, valores.length, cx, cy, radio, v))
+    .join(" ");
+}
+
+function etiquetaEje(indice, total, cx, cy, radio) {
+  const angulo = (Math.PI * 2 * indice) / total - Math.PI / 2;
+  return {
+    x: cx + Math.cos(angulo) * radio,
+    y: cy + Math.sin(angulo) * radio,
+  };
+}
+
+// ── Cálculo de estadísticas ────────────────────────────────────────────────
+function computarDatos(statsSeason) {
+  const jugados = statsSeason.filter((s) => (s.minutos ?? 0) > 0).length;
+
+  const totales = {
+    puntos: sum(statsSeason, "puntos"),
+    reb_of: sum(statsSeason, "rebotes_ofensivos"),
+    reb_def: sum(statsSeason, "rebotes_defensivos"),
+    asistencias: sum(statsSeason, "asistencias"),
+    robos: sum(statsSeason, "robos"),
+    tapones: sum(statsSeason, "tapones"),
+    perdidas: sum(statsSeason, "perdidas"),
+    valoracion: sum(statsSeason, "valoracion"),
+    minutos: sum(statsSeason, "minutos"),
+    tc_an: sum(statsSeason, "tiros_campo_anotados"),
+    tc_int: sum(statsSeason, "tiros_campo_intentados"),
+    t3_an: sum(statsSeason, "triples_anotados"),
+    t3_int: sum(statsSeason, "triples_intentados"),
+    tl_an: sum(statsSeason, "tiros_libres_anotados"),
+    tl_int: sum(statsSeason, "tiros_libres_intentados"),
+  };
+  totales.rebotes = totales.reb_of + totales.reb_def;
+
+  const media = (v) => (jugados ? v / jugados : 0);
+  const mediaFmt = (v) => (jugados ? (v / jugados).toFixed(1) : "—");
+
+  const medias = {
+    puntos: media(totales.puntos),
+    rebotes: media(totales.rebotes),
+    asistencias: media(totales.asistencias),
+    valoracion: media(totales.valoracion),
+    defensa: media(totales.robos + totales.tapones),
+  };
+
+  const mediasFmt = {
+    puntos: mediaFmt(totales.puntos),
+    rebotes: mediaFmt(totales.rebotes),
+    asistencias: mediaFmt(totales.asistencias),
+    valoracion: mediaFmt(totales.valoracion),
+    robos: mediaFmt(totales.robos),
+    tapones: mediaFmt(totales.tapones),
+  };
+
+  let maxPuntos = null;
+  let mejorTriples = null;
+  let mejorValoracion = null;
+
+  statsSeason.forEach((s) => {
+    if (!maxPuntos || (s.puntos ?? 0) > (maxPuntos.puntos ?? 0)) maxPuntos = s;
+    if (
+      !mejorValoracion ||
+      (s.valoracion ?? 0) > (mejorValoracion.valoracion ?? 0)
+    )
+      mejorValoracion = s;
+    if ((s.triples_intentados ?? 0) >= 3) {
+      const pct = s.triples_anotados / s.triples_intentados;
+      const pctActual = mejorTriples
+        ? mejorTriples.triples_anotados / mejorTriples.triples_intentados
+        : -1;
+      if (pct > pctActual) mejorTriples = s;
+    }
+  });
+
+  const radar = [
+    normalizar(medias.puntos, 22),
+    normalizar(medias.rebotes, 12),
+    normalizar(medias.asistencias, 7),
+    normalizar(medias.defensa, 5),
+    normalizar(medias.valoracion, 22),
+  ];
+
+  const idMejorPartido = mejorValoracion?.partidos?.id ?? null;
+
+  const partidosOrdenados = [...statsSeason].sort(
+    (a, b) =>
+      new Date(b.partidos?.fecha ?? 0) - new Date(a.partidos?.fecha ?? 0),
+  );
+
+  return {
+    jugados,
+    totales,
+    medias,
+    mediasFmt,
+    maxPuntos,
+    mejorTriples,
+    radar,
+    idMejorPartido,
+    partidos: partidosOrdenados,
+  };
+}
+
+// ── Agrupación por temporada ────────────────────────────────────────────────
+const temporadasSet = new Set();
+stats.forEach((s) => {
+  const t = s.partidos?.equipos?.temporadas?.nombre;
+  if (t) temporadasSet.add(t);
+});
+const listaTemporadas = [...temporadasSet].sort().reverse();
+
+const opcionesTemporada =
+  listaTemporadas.length > 1 ? [...listaTemporadas, "total"] : listaTemporadas;
+
+const datosPorTemporada = {};
+listaTemporadas.forEach((t) => {
+  datosPorTemporada[t] = computarDatos(
+    stats.filter((s) => s.partidos?.equipos?.temporadas?.nombre === t),
+  );
+});
+if (opcionesTemporada.includes("total")) {
+  datosPorTemporada["total"] = computarDatos(stats);
+}
+
+const temporadaPorDefecto = listaTemporadas[0] ?? "total";
+
+const iniciales =
+  `${jugador.nombre?.[0] ?? ""}${jugador.apellido?.[0] ?? ""}`.toUpperCase();
+
+const equipoActual = historialOrdenado[0]?.equipos;
+const dorsalActual = historialOrdenado[0]?.dorsal;
+const datosActuales =
+  datosPorTemporada[temporadaPorDefecto] ?? computarDatos([]);
+
+const genderoCategoriaLabel = {
+  masculino: "Masculino",
+  femenino: "Femenino",
+  mixto: "Mixto",
+};
 ---
 
 <Layout titulo={`${jugador.nombre} ${jugador.apellido} | CB Jaca`}>
+  <!-- Foto en segundo plano a la izquierda -->
+  {
+    jugador.foto_accion_url && (
+      <div class="bg-foto-wrapper" aria-hidden="true">
+        <img src={jugador.foto_accion_url} alt="" class="bg-foto-img" />
+      </div>
+    )
+  }
 
   <!-- Hero -->
   <div class="jugador-hero">
+    {
+      dorsalActual != null && (
+        <span class="dorsal-gigante" aria-hidden="true">
+          #{dorsalActual}
+        </span>
+      )
+    }
     <div class="jugador-hero-inner">
       <a href="javascript:history.back()" class="volver">← Volver</a>
+
       <div class="jugador-hero-content">
-        {jugador.foto_dni_url ? (
-  <img
-    src={jugador.foto_dni_url}
-    alt={`${jugador.nombre} ${jugador.apellido}`}
-    class="avatar avatar-foto"
-  />
-) : (
-  <div class="avatar">{iniciales}</div>
-)}
+        <div class="avatar-wrap">
+          {
+            jugador.foto_dni_url ? (
+              <img
+                src={jugador.foto_dni_url}
+                alt={`${jugador.nombre} ${jugador.apellido}`}
+                class="avatar avatar-foto"
+              />
+            ) : (
+              <div class="avatar">{iniciales}</div>
+            )
+          }
+          {
+            dorsalActual != null && (
+              <span class="dorsal-chip">#{dorsalActual}</span>
+            )
+          }
+        </div>
+
         <div class="jugador-info">
-          <p class="posicion-label">{posicionLabel[jugador.posicion] ?? jugador.posicion ?? "Sin posición"}</p>
-          <h1>{jugador.nombre} <span class="apellido">{jugador.apellido}</span></h1>
+          <div class="chips-row">
+            <span class="chip chip-posicion">
+              {
+                posicionLabel[jugador.posicion] ??
+                  jugador.posicion ??
+                  "Sin posición"
+              }
+            </span>
+            {
+              equipoActual && (
+                <span class="chip chip-categoria">
+                  {equipoActual.categorias?.nombre ?? "—"}
+                  {nombreCompeticion(equipoActual) &&
+                    ` · ${nombreCompeticion(equipoActual)}`}
+                </span>
+              )
+            }
+          </div>
+          <h1>
+            {jugador.nombre}
+            <span class="apellido">{jugador.apellido}</span>
+          </h1>
+
           <div class="hero-stats">
             <div class="hero-stat">
-              <span class="hero-stat-val">{totales.partidos}</span>
-              <span class="hero-stat-label">Partidos</span>
+              <span class="hero-stat-val">{datosActuales.mediasFmt.puntos}</span
+              >
+              <span class="hero-stat-label">PTS/P</span>
             </div>
             <div class="hero-stat">
-              <span class="hero-stat-val">{media(totales.puntos)}</span>
-              <span class="hero-stat-label">Pts/partido</span>
+              <span class="hero-stat-val"
+                >{datosActuales.mediasFmt.rebotes}</span
+              >
+              <span class="hero-stat-label">REB/P</span>
             </div>
             <div class="hero-stat">
-              <span class="hero-stat-val">{media(totales.rebotes)}</span>
-              <span class="hero-stat-label">Reb/partido</span>
+              <span class="hero-stat-val"
+                >{datosActuales.mediasFmt.asistencias}</span
+              >
+              <span class="hero-stat-label">AST/P</span>
             </div>
             <div class="hero-stat">
-              <span class="hero-stat-val">{media(totales.asistencias)}</span>
-              <span class="hero-stat-label">Ast/partido</span>
+              <span class="hero-stat-val"
+                >{datosActuales.mediasFmt.valoracion}</span
+              >
+              <span class="hero-stat-label">VAL/P</span>
             </div>
           </div>
         </div>
@@ -168,147 +407,481 @@ const iniciales = `${jugador.nombre?.[0] ?? ""}${jugador.apellido?.[0] ?? ""}`.t
     </div>
   </div>
 
-  <div class="contenido">
-
-    <!-- Historial de equipos -->
-    <section class="seccion">
-      <h2 class="seccion-titulo">Historial</h2>
-      {historialOrdenado.length === 0 ? (
-        <p class="vacio">Sin temporadas registradas.</p>
-      ) : (
-        <div class="historial-lista">
-          {historialOrdenado.map((h) => {
-            const eq = h.equipos;
-            const nombreEquipo = eq?.sponsor ? `${eq.sponsor} CB Jaca` : `CB Jaca ${eq?.categorias?.nombre ?? ""}`;
-            const href = eq?.categorias?.slug && eq?.temporadas?.nombre
-              ? `/equipos/${eq.categorias.slug}/${eq.temporadas.nombre}`
-              : null;
-            return (
-              <div class="historial-card">
-                <div class="dorsal-badge">#{h.dorsal ?? "—"}</div>
-                <div class="historial-info">
-                  <span class="historial-equipo">
-                    {href ? <a href={href}>{nombreEquipo}</a> : nombreEquipo}
-                  </span>
-                  <span class="historial-meta">
-                    {eq?.temporadas?.nombre} · {eq?.competiciones?.nombre ?? eq?.categorias?.nombre}
-                  </span>
-                </div>
+  <div class="layout-jugador">
+    <!-- ═══ SIDEBAR ═══ -->
+    <aside class="sidebar">
+      <div class="card-ficha">
+        <h2 class="ficha-titulo">Ficha técnica</h2>
+        <dl class="ficha-lista">
+          <div class="ficha-fila">
+            <dt>Posición</dt>
+            <dd>
+              {posicionLabel[jugador.posicion] ?? jugador.posicion ?? "—"}
+            </dd>
+          </div>
+          {
+            equipoActual?.categorias?.genero && (
+              <div class="ficha-fila">
+                <dt>Categoría</dt>
+                <dd>
+                  {genderoCategoriaLabel[equipoActual.categorias.genero] ??
+                    equipoActual.categorias.genero}
+                </dd>
               </div>
-            );
-          })}
-        </div>
-      )}
-    </section>
+            )
+          }
+          <div class="ficha-fila">
+            <dt>Temporadas en CB Jaca</dt>
+            <dd>{listaTemporadas.length || "—"}</dd>
+          </div>
+          {
+            dorsalActual != null && (
+              <div class="ficha-fila">
+                <dt>Dorsal actual</dt>
+                <dd>#{dorsalActual}</dd>
+              </div>
+            )
+          }
+        </dl>
+      </div>
+    </aside>
 
-    <!-- Estadísticas acumuladas -->
-    {stats.length > 0 && (
-      <section class="seccion seccion-alt">
-        <h2 class="seccion-titulo">Estadísticas</h2>
+    <!-- ═══ CONTENIDO PRINCIPAL ═══ -->
+    <div class="contenido">
+      {
+        opcionesTemporada.length > 1 && (
+          <div class="selector-wrap">
+            <label for="selector-temporada" class="selector-label">
+              Temporada
+            </label>
+            <select id="selector-temporada">
+              {opcionesTemporada.map((t) => (
+                <option value={t} selected={t === temporadaPorDefecto}>
+                  {t === "total" ? "Carrera total" : t}
+                </option>
+              ))}
+            </select>
+          </div>
+        )
+      }
 
-        <!-- Totales y medias -->
-        <div class="stats-grid">
-          {[
-            { label: "Puntos",      total: totales.puntos,      media: media(totales.puntos) },
-            { label: "Rebotes",     total: totales.rebotes,     media: media(totales.rebotes) },
-            { label: "Asistencias", total: totales.asistencias, media: media(totales.asistencias) },
-            { label: "Robos",       total: totales.robos,       media: media(totales.robos) },
-            { label: "Tapones",     total: totales.tapones,     media: media(totales.tapones) },
-            { label: "Minutos",     total: totales.minutos,     media: media(totales.minutos) },
-          ].map(({ label, total, media: m }) => (
-            <div class="stat-card">
-              <span class="stat-total">{total}</span>
-              <span class="stat-media">{m} / partido</span>
-              <span class="stat-label">{label}</span>
+      {
+        opcionesTemporada.map((t) => {
+          const d = datosPorTemporada[t];
+          const pctTc = porcentaje(d.totales.tc_an, d.totales.tc_int);
+          const pct3 = porcentaje(d.totales.t3_an, d.totales.t3_int);
+          const pctTl = porcentaje(d.totales.tl_an, d.totales.tl_int);
+          const cx = 110,
+            cy = 110,
+            radio = 88;
+          const ejes = ["PTS", "REB", "AST", "DEF", "VAL"];
+
+          return (
+            <div
+              class="bloque-temporada"
+              data-temporada={t}
+              class:list={[{ activo: t === temporadaPorDefecto }]}
+            >
+              {/* Highlights sin minutos */}
+              {d.jugados > 0 && (
+                <section class="seccion">
+                  <h2 class="seccion-titulo">Highlights de temporada</h2>
+                  <div class="highlights-grid">
+                    {d.maxPuntos && (d.maxPuntos.puntos ?? 0) > 0 && (
+                      <div class="highlight-card">
+                        <span class="highlight-icono">🏀</span>
+                        <div>
+                          <div class="highlight-valor">
+                            {d.maxPuntos.puntos} pts
+                          </div>
+                          <div class="highlight-detalle">
+                            vs {nombreRival(d.maxPuntos.partidos)} ·{" "}
+                            {formatFecha(d.maxPuntos.partidos?.fecha)}
+                          </div>
+                          <div class="highlight-label">Máxima anotación</div>
+                        </div>
+                      </div>
+                    )}
+                    {d.mejorTriples && (
+                      <div class="highlight-card">
+                        <span class="highlight-icono">🎯</span>
+                        <div>
+                          <div class="highlight-valor">
+                            {d.mejorTriples.triples_anotados}/
+                            {d.mejorTriples.triples_intentados} (
+                            {porcentaje(
+                              d.mejorTriples.triples_anotados,
+                              d.mejorTriples.triples_intentados,
+                            )}
+                            %)
+                          </div>
+                          <div class="highlight-detalle">
+                            vs {nombreRival(d.mejorTriples.partidos)} ·{" "}
+                            {formatFecha(d.mejorTriples.partidos?.fecha)}
+                          </div>
+                          <div class="highlight-label">
+                            Mejor partido en triples
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )}
+
+              {/* Porcentajes + Radar */}
+              {d.jugados > 0 && (
+                <section class="seccion seccion-alt">
+                  <h2 class="seccion-titulo">Desglose estadístico</h2>
+                  <div class="desglose-grid">
+                    <div class="tiros-grid">
+                      {[
+                        {
+                          label: "Tiro de campo",
+                          an: d.totales.tc_an,
+                          int: d.totales.tc_int,
+                          pct: pctTc,
+                        },
+                        {
+                          label: "Triples",
+                          an: d.totales.t3_an,
+                          int: d.totales.t3_int,
+                          pct: pct3,
+                        },
+                        {
+                          label: "Tiros libres",
+                          an: d.totales.tl_an,
+                          int: d.totales.tl_int,
+                          pct: pctTl,
+                        },
+                      ].map(({ label, an, int: intt, pct }) => (
+                        <div class="tiro-card">
+                          <div class="tiro-top">
+                            <span class={`tiro-pct nivel-${nivelPct(pct)}`}>
+                              {intt ? `${pct}%` : "—"}
+                            </span>
+                            <span class="tiro-detalle">
+                              {an}-{intt}
+                            </span>
+                          </div>
+                          <div class="tiro-bar-track">
+                            <div
+                              class={`tiro-bar-fill nivel-${nivelPct(pct)}`}
+                              style={`width:${pct}%`}
+                            />
+                          </div>
+                          <div class="tiro-label">{label}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div class="radar-wrap">
+                      <svg viewBox="0 0 220 220" class="radar-svg">
+                        {[0.25, 0.5, 0.75, 1].map((nivel) => (
+                          <polygon
+                            points={poligonoRadar(
+                              [nivel, nivel, nivel, nivel, nivel],
+                              cx,
+                              cy,
+                              radio,
+                            )}
+                            class="radar-grid"
+                          />
+                        ))}
+                        {ejes.map((_, i) => {
+                          const p = etiquetaEje(i, ejes.length, cx, cy, radio);
+                          return (
+                            <line
+                              x1={cx}
+                              y1={cy}
+                              x2={p.x}
+                              y2={p.y}
+                              class="radar-eje"
+                            />
+                          );
+                        })}
+                        <polygon
+                          points={poligonoRadar(d.radar, cx, cy, radio)}
+                          class="radar-area"
+                        />
+                        {ejes.map((label, i) => {
+                          const p = etiquetaEje(
+                            i,
+                            ejes.length,
+                            cx,
+                            cy,
+                            radio + 18,
+                          );
+                          return (
+                            <text
+                              x={p.x}
+                              y={p.y}
+                              class="radar-label"
+                              text-anchor="middle"
+                              dominant-baseline="middle"
+                            >
+                              {label}
+                            </text>
+                          );
+                        })}
+                      </svg>
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {/* Log de partidos */}
+              <section class="seccion">
+                <div class="log-header">
+                  <h2 class="seccion-titulo" style="margin-bottom:0">
+                    Partidos {t !== "total" && `· ${t}`}
+                  </h2>
+                  {d.partidos.length > 0 && (
+                    <button class="toggle-tabla" type="button">
+                      Ver compacto
+                    </button>
+                  )}
+                </div>
+
+                {d.partidos.length === 0 ? (
+                  <p class="vacio">
+                    Sin partidos registrados en esta temporada.
+                  </p>
+                ) : (
+                  <div class="log-tabla-wrap">
+                    <table class="log-tabla">
+                      <thead>
+                        <tr>
+                          <th>Fecha</th>
+                          <th>Rival</th>
+                          <th class="col-extra">Equipo</th>
+                          <th>MIN</th>
+                          <th>PTS</th>
+                          <th>REB</th>
+                          <th>AST</th>
+                          <th class="col-extra">FG</th>
+                          <th class="col-extra">3PT</th>
+                          <th class="col-extra">FT</th>
+                          <th class="col-extra">ROB</th>
+                          <th class="col-extra">TAP</th>
+                          <th>VAL</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {d.partidos.map((s) => {
+                          const p = s.partidos;
+                          const reb =
+                            s.rebotes_totales ??
+                            (parseInt(s.rebotes_ofensivos) || 0) +
+                              (parseInt(s.rebotes_defensivos) || 0);
+                          const eq = p?.equipos;
+                          const nombreEq =
+                            eq?.sponsors?.nombre ??
+                            eq?.categorias?.nombre ??
+                            "—";
+                          const gano =
+                            (p?.puntos_favor ?? 0) > (p?.puntos_contra ?? 0);
+                          const esMejorPartido =
+                            p?.id && p.id === d.idMejorPartido;
+                          return (
+                            <tr
+                              class:list={[
+                                { "fila-destacada": esMejorPartido },
+                              ]}
+                            >
+                              <td class="fecha-col">{formatFecha(p?.fecha)}</td>
+                              <td class="rival-col">
+                                <span class="condicion">
+                                  {p?.es_local ? "vs" : "@"}
+                                </span>
+                                {nombreRival(p)}
+                                {p?.puntos_favor != null && (
+                                  <span
+                                    class={`resultado-chip ${gano ? "win" : "loss"}`}
+                                  >
+                                    {gano ? "V" : "D"} {p.puntos_favor}-
+                                    {p.puntos_contra}
+                                  </span>
+                                )}
+                              </td>
+                              <td class="equipo-col col-extra">{nombreEq}</td>
+                              <td class="min-col">
+                                {minutosDisplay(s.minutos)}
+                              </td>
+                              <td class="destacado">{s.puntos ?? 0}</td>
+                              <td>{reb}</td>
+                              <td>{s.asistencias ?? 0}</td>
+                              <td class="tiro col-extra">
+                                {s.tiros_campo_anotados ?? 0}-
+                                {s.tiros_campo_intentados ?? 0}
+                              </td>
+                              <td class="tiro col-extra">
+                                {s.triples_anotados ?? 0}-
+                                {s.triples_intentados ?? 0}
+                              </td>
+                              <td class="tiro col-extra">
+                                {s.tiros_libres_anotados ?? 0}-
+                                {s.tiros_libres_intentados ?? 0}
+                              </td>
+                              <td class="col-extra">{s.robos ?? 0}</td>
+                              <td class="col-extra">{s.tapones ?? 0}</td>
+                              <td class="destacado">{s.valoracion ?? 0}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
             </div>
-          ))}
-        </div>
+          );
+        })
+      }
 
-        <!-- Porcentajes de tiro -->
-        <div class="tiros-grid">
-          {[
-            { label: "Tiro campo", an: totales.tc_an, int: totales.tc_int },
-            { label: "Triples",    an: totales.t3_an, int: totales.t3_int },
-            { label: "Tiros libres", an: totales.tl_an, int: totales.tl_int },
-          ].map(({ label, an, int: i }) => (
-            <div class="tiro-card">
-              <div class="tiro-pct">{porcentaje(an, i)}</div>
-              <div class="tiro-detalle">{an}-{i}</div>
-              <div class="tiro-label">{label}</div>
-            </div>
-          ))}
-        </div>
-
-        <!-- Log de partidos -->
-        <h3 class="subseccion-titulo">Partidos</h3>
-        <div class="log-tabla-wrap">
-          <table class="log-tabla">
-            <thead>
-              <tr>
-                <th>Fecha</th>
-                <th>Rival</th>
-                <th>Equipo</th>
-                <th>MIN</th>
-                <th>PTS</th>
-                <th>REB</th>
-                <th>AST</th>
-                <th>FG</th>
-                <th>3PT</th>
-                <th>FT</th>
-                <th>ROB</th>
-                <th>TAP</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stats.map((s) => {
-                const p = s.partidos;
-                const reb = (parseInt(s.rebotes_ofensivos) || 0) + (parseInt(s.rebotes_defensivos) || 0);
-                const eq = p?.equipos;
-                const nombreEq = eq?.sponsor ? `${eq.sponsor}` : eq?.categorias?.nombre ?? "—";
+      <!-- Historial de equipos: timeline -->
+      <section class="seccion">
+        <h2 class="seccion-titulo">Trayectoria</h2>
+        {
+          historialOrdenado.length === 0 ? (
+            <p class="vacio">Sin temporadas registradas.</p>
+          ) : (
+            <div class="timeline">
+              {historialOrdenado.map((h) => {
+                const eq = h.equipos;
+                const nombreEquipo = nombreEquipoPropio(eq);
+                const href =
+                  eq?.categorias?.slug && eq?.temporadas?.nombre
+                    ? `/equipos/${eq.categorias.slug}/${eq.temporadas.nombre}`
+                    : null;
                 return (
-                  <tr>
-                    <td class="fecha-col">{formatFecha(p?.fecha)}</td>
-                    <td class="rival-col">
-                      <span class="condicion">{p?.es_local ? "vs" : "@"}</span>
-                      {nombreRival(p)}
-                    </td>
-                    <td class="equipo-col">{nombreEq}</td>
-                    <td>{s.minutos ?? 0}</td>
-                    <td class="destacado">{s.puntos ?? 0}</td>
-                    <td>{reb}</td>
-                    <td>{s.asistencias ?? 0}</td>
-                    <td class="tiro">{s.tiros_campo_anotados ?? 0}-{s.tiros_campo_intentados ?? 0}</td>
-                    <td class="tiro">{s.triples_anotados ?? 0}-{s.triples_intentados ?? 0}</td>
-                    <td class="tiro">{s.tiros_libres_anotados ?? 0}-{s.tiros_libres_intentados ?? 0}</td>
-                    <td>{s.robos ?? 0}</td>
-                    <td>{s.tapones ?? 0}</td>
-                  </tr>
+                  <div class="timeline-item">
+                    <div class="timeline-punto" />
+                    <div class="timeline-card">
+                      <div class="timeline-dorsal">#{h.dorsal ?? "—"}</div>
+                      <div class="timeline-info">
+                        <span class="timeline-temporada">
+                          {eq?.temporadas?.nombre ?? "—"}
+                        </span>
+                        <span class="timeline-equipo">
+                          {href ? (
+                            <a href={href}>{nombreEquipo}</a>
+                          ) : (
+                            nombreEquipo
+                          )}
+                        </span>
+                        <span class="timeline-meta">
+                          {nombreCompeticion(eq)}
+                        </span>
+                      </div>
+                      {href && (
+                        <a
+                          href={href}
+                          class="timeline-arrow"
+                          aria-hidden="true"
+                        >
+                          →
+                        </a>
+                      )}
+                    </div>
+                  </div>
                 );
               })}
-            </tbody>
-          </table>
-        </div>
+            </div>
+          )
+        }
       </section>
-    )}
-
+    </div>
   </div>
 </Layout>
 
+<script>
+  const selector = document.getElementById("selector-temporada");
+  selector?.addEventListener("change", (e) => {
+    const val = (e.target as HTMLSelectElement).value;
+    document
+      .querySelectorAll<HTMLElement>(".bloque-temporada")
+      .forEach((el) => {
+        el.classList.toggle("activo", el.dataset.temporada === val);
+      });
+  });
+
+  document
+    .querySelectorAll<HTMLButtonElement>(".toggle-tabla")
+    .forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const seccion = btn.closest(".seccion");
+        const wrap = seccion?.querySelector(".log-tabla-wrap");
+        if (!wrap) return;
+        const compacto = wrap.classList.toggle("compacto");
+        btn.textContent = compacto ? "Ver completo" : "Ver compacto";
+      });
+    });
+</script>
+
 <style>
-  /* ── Hero ── */
+  /* ── Foto en Segundo Plano (Izquierda) ── */
+  .bg-foto-wrapper {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    max-width: 850px;
+    height: 70vh;
+    pointer-events: none;
+    z-index: 0;
+    overflow: hidden;
+  }
+  .bg-foto-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top center;
+    opacity: 0.45;
+    mask-image:
+      linear-gradient(to right, rgba(0, 0, 0, 1) 20%, transparent 100%),
+      linear-gradient(to bottom, rgba(0, 0, 0, 1) 40%, transparent 100%);
+    mask-composite: intersect;
+    -webkit-mask-image:
+      linear-gradient(to right, rgba(0, 0, 0, 1) 20%, transparent 100%),
+      linear-gradient(to bottom, rgba(0, 0, 0, 1) 40%, transparent 100%);
+    -webkit-mask-composite: source-in;
+  }
+
+  /* ── Hero adaptable (Transparente para dejar ver la imagen de fondo) ── */
   .jugador-hero {
-    background-color: #0f172a;
-    padding: 3rem 2rem 2.5rem;
-    color: white;
+    position: relative;
+    z-index: 1;
+    padding: 2.5rem 1.5rem 3rem;
+    color: var(--texto);
+    overflow: hidden;
+    background: transparent;
+  }
+  .dorsal-gigante {
+    position: absolute;
+    top: -2rem;
+    right: 1rem;
+    font-size: clamp(6rem, 15vw, 14rem);
+    font-weight: 900;
+    color: var(--naranja);
+    opacity: 0.12;
+    line-height: 1;
+    z-index: 0;
+    pointer-events: none;
+    user-select: none;
   }
   .jugador-hero-inner {
-    max-width: 900px;
+    position: relative;
+    max-width: 1180px;
     margin: 0 auto;
+    z-index: 1;
   }
   .volver {
-    font-size: 0.8rem;
+    display: inline-block;
+    margin-bottom: 1.5rem;
+    font-size: 0.85rem;
     font-weight: 700;
-    color: var(--orange, #f97316);
+    color: var(--naranja);
     text-decoration: none;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -316,44 +889,80 @@ const iniciales = `${jugador.nombre?.[0] ?? ""}${jugador.apellido?.[0] ?? ""}`.t
   }
   .jugador-hero-content {
     display: flex;
-    align-items: center;
     gap: 2rem;
-    margin-top: 1.5rem;
-    flex-wrap: wrap;
+    align-items: center;
+  }
+  .avatar-wrap {
+    position: relative;
+    flex-shrink: 0;
   }
   .avatar {
-    width: 80px;
-    height: 80px;
+    width: 110px;
+    height: 110px;
     border-radius: 50%;
-    background: var(--orange, #f97316);
+    background: var(--card);
+    border: 3px solid var(--naranja);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.8rem;
-    font-weight: 900;
-    color: white;
-    flex-shrink: 0;
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: var(--texto);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
   }
-
   .avatar-foto {
-  object-fit: cover;
-  object-position: top center;
-}
-  .posicion-label {
+    object-fit: cover;
+    object-position: top;
+  }
+  .dorsal-chip {
+    position: absolute;
+    bottom: -4px;
+    right: -4px;
+    background: var(--naranja);
+    color: #ffffff;
+    font-weight: 800;
+    font-size: 0.9rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 12px;
+    border: 2px solid var(--card);
+  }
+  .jugador-info {
+    flex: 1;
+  }
+  .chips-row {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+  }
+  .chip {
     font-size: 0.75rem;
     font-weight: 700;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--orange, #f97316);
-    margin-bottom: 0.3rem;
+    letter-spacing: 0.04em;
+  }
+  .chip-posicion {
+    background: var(--naranja);
+    color: #ffffff;
+  }
+  .chip-categoria {
+    background: var(--card);
+    color: var(--texto);
+    border: 1px solid var(--borde);
   }
   h1 {
-    font-size: clamp(1.6rem, 4vw, 2.5rem);
+    font-size: clamp(1.8rem, 4vw, 2.8rem);
     font-weight: 800;
-    margin: 0 0 1rem;
+    line-height: 1.1;
+    margin: 0 0 1.25rem 0;
+    color: var(--texto);
   }
-  .apellido { color: var(--orange, #f97316); }
-
+  h1 .apellido {
+    display: block;
+    color: var(--naranja);
+  }
   .hero-stats {
     display: flex;
     gap: 1.5rem;
@@ -362,193 +971,611 @@ const iniciales = `${jugador.nombre?.[0] ?? ""}${jugador.apellido?.[0] ?? ""}`.t
   .hero-stat {
     display: flex;
     flex-direction: column;
-    gap: 0.1rem;
+    align-items: flex-start;
   }
   .hero-stat-val {
-    font-size: 1.4rem;
+    font-size: 1.5rem;
     font-weight: 800;
-    color: white;
+    line-height: 1;
+    color: var(--texto);
   }
   .hero-stat-label {
-    font-size: 0.68rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: rgba(255,255,255,0.4);
-  }
-
-  /* ── Layout ── */
-  .contenido {
-    max-width: 900px;
-    margin: 0 auto;
-  }
-  .seccion {
-    padding: 3rem 2rem;
-  }
-  .seccion-alt {
-    background: var(--bg-clr-2, #0f172a);
-    max-width: 100%;
-    padding: 3rem 2rem;
-  }
-  .seccion-alt > * {
-    max-width: 900px;
-    margin-left: auto;
-    margin-right: auto;
-  }
-  .seccion-titulo {
-    font-size: 1.1rem;
-    font-weight: 800;
-    margin-bottom: 1.25rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--orange, #f97316);
-    font-size: 0.75rem;
-  }
-  .subseccion-titulo {
-    font-size: 0.72rem;
+    font-size: 0.7rem;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--orange, #f97316);
-    margin: 2rem 0 0.75rem;
-    max-width: 900px;
-    margin-left: auto;
-    margin-right: auto;
-  }
-  .vacio { color: var(--muted, #64748b); font-size: 0.9rem; }
-
-  /* ── Historial ── */
-  .historial-lista {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-  .historial-card {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 0.85rem 1rem;
-    background: var(--card, #1e293b);
-    border: 1px solid var(--borde, rgba(255,255,255,0.07));
-    border-radius: 10px;
-  }
-  .dorsal-badge {
-    width: 38px;
-    height: 38px;
-    border-radius: 50%;
-    background: rgba(249,115,22,0.15);
-    color: var(--orange, #f97316);
-    font-weight: 800;
-    font-size: 0.8rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-  .historial-info {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-  }
-  .historial-equipo {
-    font-weight: 700;
-    font-size: 0.9rem;
-  }
-  .historial-equipo a {
-    color: inherit;
-    text-decoration: none;
-  }
-  .historial-equipo a:hover { color: var(--orange, #f97316); }
-  .historial-meta {
-    font-size: 0.75rem;
-    color: var(--muted, #64748b);
-  }
-
-  /* ── Stats grid ── */
-  .stats-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-    gap: 0.6rem;
-    max-width: 900px;
-    margin: 0 auto 1.5rem;
-  }
-  .stat-card {
-    background: var(--card, #1e293b);
-    border: 1px solid var(--borde, rgba(255,255,255,0.07));
-    border-radius: 10px;
-    padding: 1rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-  }
-  .stat-total {
-    font-size: 1.8rem;
-    font-weight: 800;
-    color: var(--orange, #f97316);
-    line-height: 1;
-  }
-  .stat-media {
-    font-size: 0.72rem;
-    color: var(--muted, #64748b);
-  }
-  .stat-label {
-    font-size: 0.72rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--muted, #64748b);
+    color: var(--muted);
     margin-top: 0.25rem;
   }
 
-  /* ── Tiros ── */
-  .tiros-grid {
-    display: flex;
-    gap: 0.6rem;
-    max-width: 900px;
-    margin: 0 auto 2rem;
-    flex-wrap: wrap;
+  /* Responsive para el Hero */
+  @media (max-width: 768px) {
+    .jugador-hero-content {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 1.25rem;
+    }
+    .avatar {
+      width: 90px;
+      height: 90px;
+      font-size: 2rem;
+    }
+    .hero-stats {
+      gap: 1.25rem;
+    }
+    .dorsal-gigante {
+      top: 0;
+      right: 0.5rem;
+      opacity: 0.08;
+    }
   }
-  .tiro-card {
-    flex: 1;
-    min-width: 120px;
-    background: var(--card, #1e293b);
-    border: 1px solid var(--borde, rgba(255,255,255,0.07));
+
+  /* ── Estructura de contenido inferior ── */
+  .layout-jugador {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 2rem;
+  }
+  @media (max-width: 900px) {
+    .layout-jugador {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* ── Sidebar & Card Ficha ── */
+  .card-ficha {
+    background: var(--card);
+    border: 1px solid var(--borde);
+    border-radius: 12px;
+    padding: 1.5rem;
+  }
+  .ficha-titulo {
+    font-size: 1.1rem;
+    font-weight: 800;
+    margin: 0 0 1rem 0;
+    color: var(--texto);
+    border-bottom: 2px solid var(--naranja);
+    padding-bottom: 0.5rem;
+  }
+  .ficha-lista {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+  .ficha-fila {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9rem;
+  }
+  .ficha-fila dt {
+    color: var(--muted);
+  }
+  .ficha-fila dd {
+    font-weight: 700;
+    color: var(--texto);
+    margin: 0;
+  }
+
+  /* ── Bloque de contenidos / Temporadas ── */
+  .selector-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+  }
+  .selector-label {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+  #selector-temporada {
+    padding: 0.4rem 0.8rem;
+    border-radius: 8px;
+    border: 1px solid var(--borde);
+    background: var(--card);
+    color: var(--texto);
+    font-weight: 700;
+  }
+
+  .bloque-temporada {
+    display: none;
+  }
+  .bloque-temporada.activo {
+    display: block;
+  }
+
+  /* ── Secciones y Tarjetas ── */
+  .seccion {
+    margin-bottom: 2.5rem;
+  }
+  .seccion-titulo {
+    font-size: 1.25rem;
+    font-weight: 800;
+    margin: 0 0 1rem 0;
+    color: var(--texto);
+  }
+
+  .highlights-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+  }
+  .highlight-card {
+    background: var(--card);
+    border: 1px solid var(--borde);
     border-radius: 10px;
     padding: 1rem;
-    text-align: center;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
   }
-  .tiro-pct {
-    font-size: 1.6rem;
+  .highlight-icono {
+    font-size: 1.8rem;
+  }
+  .highlight-valor {
+    font-size: 1.1rem;
     font-weight: 800;
-    color: white;
+    color: var(--texto);
+  }
+  .highlight-detalle {
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+  .highlight-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--naranja);
+    text-transform: uppercase;
+    margin-top: 0.2rem;
+  }
+
+  /* ── Desglose & Radar ── */
+  .desglose-grid {
+    display: grid;
+    grid-template-columns: 1fr 220px;
+    gap: 1.5rem;
+    align-items: center;
+  }
+  @media (max-width: 650px) {
+    .desglose-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .tiros-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+  .tiro-card {
+    background: var(--card);
+    border: 1px solid var(--borde);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+  }
+  .tiro-top {
+    display: flex;
+    justify-content: space-between;
+    font-weight: 800;
+    margin-bottom: 0.4rem;
+  }
+  .tiro-pct.nivel-alto {
+    color: #10b981;
+  }
+  .tiro-pct.nivel-medio {
+    color: #f59e0b;
+  }
+  .tiro-pct.nivel-bajo {
+    color: #ef4444;
   }
   .tiro-detalle {
-    font-size: 0.75rem;
-    color: var(--muted, #64748b);
-    margin: 0.2rem 0;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .tiro-bar-track {
+    height: 6px;
+    background: var(--borde);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 0.3rem;
+  }
+  .tiro-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+  }
+  .tiro-bar-fill.nivel-alto {
+    background: #10b981;
+  }
+  .tiro-bar-fill.nivel-medio {
+    background: #f59e0b;
+  }
+  .tiro-bar-fill.nivel-bajo {
+    background: #ef4444;
   }
   .tiro-label {
+    font-size: 0.75rem;
+    color: var(--muted);
+    font-weight: 600;
+  }
+
+  .radar-wrap {
+    display: flex;
+    justify-content: center;
+  }
+  .radar-svg {
+    width: 100%;
+    max-width: 220px;
+    height: auto;
+  }
+  .radar-grid {
+    fill: none;
+    stroke: var(--borde);
+    stroke-width: 1;
+  }
+  .radar-eje {
+    stroke: var(--borde);
+    stroke-width: 1;
+  }
+  .radar-area {
+    fill: rgba(249, 115, 22, 0.35);
+    stroke: var(--naranja);
+    stroke-width: 2;
+  }
+  .radar-label {
+    font-size: 10px;
+    font-weight: 700;
+    fill: var(--muted);
+  }
+
+  /* ── Tabla de Partidos ── */
+  .log-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+  .toggle-tabla {
+    background: var(--card);
+    border: 1px solid var(--borde);
+    color: var(--texto);
+    padding: 0.3rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .log-tabla-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--borde);
+    border-radius: 8px;
+    background: var(--card);
+  }
+  .log-tabla {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    text-align: left;
+  }
+  .log-tabla th,
+  .log-tabla td {
+    padding: 0.6rem 0.8rem;
+    border-bottom: 1px solid var(--borde);
+  }
+  .log-tabla th {
+    background: rgba(0, 0, 0, 0.02);
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+  .log-tabla-wrap.compacto .col-extra {
+    display: none;
+  }
+  .fila-destacada {
+    background: rgba(249, 115, 22, 0.08);
+  }
+  .destacado {
+    font-weight: 800;
+    color: var(--texto);
+  }
+  .resultado-chip {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 800;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    margin-left: 0.4rem;
+  }
+  .resultado-chip.win {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+  }
+  .resultado-chip.loss {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+  }
+
+  /* ── Timeline ── */
+  .timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .timeline-item {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+  }
+  .timeline-punto {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--naranja);
+    flex-shrink: 0;
+  }
+  .timeline-card {
+    flex: 1;
+    background: var(--card);
+    border: 1px solid var(--borde);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  .timeline-dorsal {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: var(--naranja);
+  }
+  .timeline-info {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+  }
+  .timeline-temporada {
+    font-size: 0.75rem;
+    color: var(--muted);
+    font-weight: 700;
+  }
+  .timeline-equipo {
+    font-weight: 700;
+    color: var(--texto);
+  }
+  .timeline-equipo a {
+    color: var(--texto);
+    text-decoration: none;
+  }
+  .timeline-meta {
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+  .timeline-arrow {
+    color: var(--naranja);
+    text-decoration: none;
+    font-weight: 800;
+  }
+  .vacio {
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  /* ── Selector de temporada ── */
+  .selector-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    margin-bottom: 2rem;
+  }
+  .selector-label {
     font-size: 0.68rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--orange, #f97316);
+    color: var(--muted);
+  }
+  #selector-temporada {
+    background: var(--card);
+    border: 1px solid var(--borde);
+    color: var(--texto);
+    font-weight: 700;
+    font-size: 0.85rem;
+    padding: 0.5rem 0.9rem;
+    border-radius: 8px;
+    cursor: pointer;
   }
 
-  /* ── Log tabla ── */
+  .bloque-temporada {
+    display: none;
+  }
+  .bloque-temporada.activo {
+    display: block;
+  }
+
+  /* ── Highlights ── */
+  .highlights-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.75rem;
+  }
+  .highlight-card {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    background: var(--card);
+    border: 1px solid rgba(242, 130, 65, 0.3);
+    border-radius: 12px;
+    padding: 1rem 1.1rem;
+  }
+  .highlight-icono {
+    font-size: 1.6rem;
+    flex-shrink: 0;
+  }
+  .highlight-valor {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--texto);
+  }
+  .highlight-detalle {
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-top: 0.1rem;
+  }
+  .highlight-label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--naranja);
+    margin-top: 0.3rem;
+  }
+
+  /* ── Desglose: tiros + radar ── */
+  .desglose-grid {
+    display: grid;
+    grid-template-columns: 1fr 260px;
+    gap: 2rem;
+    align-items: center;
+  }
+  .tiros-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .tiro-card {
+    background: var(--color-background-secondary);
+    border: 1px solid var(--borde);
+    border-radius: 10px;
+    padding: 0.9rem 1rem;
+  }
+  .tiro-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+  }
+  .tiro-pct {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: var(--texto);
+  }
+  .tiro-pct.nivel-alto {
+    color: #16a34a;
+  }
+  .tiro-pct.nivel-medio {
+    color: #ca8a04;
+  }
+  .tiro-pct.nivel-bajo {
+    color: #dc2626;
+  }
+  .tiro-detalle {
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+  .tiro-bar-track {
+    width: 100%;
+    height: 5px;
+    border-radius: 999px;
+    background: var(--borde);
+    overflow: hidden;
+    margin-bottom: 0.55rem;
+  }
+  .tiro-bar-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: var(--naranja);
+  }
+  .tiro-bar-fill.nivel-alto {
+    background: #16a34a;
+  }
+  .tiro-bar-fill.nivel-medio {
+    background: #ca8a04;
+  }
+  .tiro-bar-fill.nivel-bajo {
+    background: #dc2626;
+  }
+  .tiro-label {
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+
+  .radar-wrap {
+    display: flex;
+    justify-content: center;
+  }
+  .radar-svg {
+    width: 100%;
+    max-width: 260px;
+  }
+  .radar-grid {
+    fill: none;
+    stroke: var(--borde);
+    stroke-width: 1;
+  }
+  .radar-eje {
+    stroke: var(--borde);
+    stroke-width: 1;
+  }
+  .radar-area {
+    fill: rgba(242, 130, 65, 0.28);
+    stroke: var(--naranja);
+    stroke-width: 2;
+  }
+  .radar-label {
+    fill: var(--muted);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  /* ── Log de partidos ── */
+  .log-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.1rem;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+  }
+  .toggle-tabla {
+    background: transparent;
+    border: 1px solid var(--borde);
+    color: var(--muted);
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 5px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .toggle-tabla:hover {
+    border-color: var(--naranja);
+    color: var(--naranja);
+  }
+
   .log-tabla-wrap {
     overflow-x: auto;
-    max-width: 900px;
-    margin: 0 auto;
+    border-radius: 10px;
   }
   .log-tabla {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.82rem;
-    min-width: 700px;
+    min-width: 720px;
+  }
+  .log-tabla-wrap.compacto .log-tabla {
+    min-width: 0;
+  }
+  .log-tabla-wrap.compacto .col-extra {
+    display: none;
   }
   .log-tabla thead tr {
-    border-bottom: 2px solid var(--orange, #f97316);
+    border-bottom: 2px solid var(--naranja);
   }
   .log-tabla th {
     padding: 0.5rem 0.6rem;
@@ -557,38 +1584,253 @@ const iniciales = `${jugador.nombre?.[0] ?? ""}${jugador.apellido?.[0] ?? ""}`.t
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--muted, #64748b);
+    color: var(--muted);
     white-space: nowrap;
   }
   .log-tabla th:first-child,
   .log-tabla th:nth-child(2),
-  .log-tabla th:nth-child(3) { text-align: left; }
+  .log-tabla th:nth-child(3) {
+    text-align: left;
+  }
   .log-tabla tbody tr {
-    border-bottom: 1px solid var(--borde, rgba(255,255,255,0.05));
+    border-bottom: 1px solid var(--borde);
     transition: background 0.15s;
   }
-  .log-tabla tbody tr:hover { background: var(--card, #1e293b); }
+  .log-tabla tbody tr:nth-child(even) {
+    background: var(--color-background-secondary);
+  }
+  .log-tabla tbody tr:hover {
+    background: rgba(242, 130, 65, 0.1);
+  }
+  .log-tabla tbody tr.fila-destacada {
+    background: rgba(242, 130, 65, 0.14);
+    box-shadow: inset 3px 0 0 var(--naranja);
+  }
   .log-tabla td {
     padding: 0.55rem 0.6rem;
     text-align: center;
-    color: var(--muted, #64748b);
+    color: var(--muted);
   }
-  .log-tabla td.fecha-col { text-align: left; white-space: nowrap; font-size: 0.75rem; }
-  .log-tabla td.rival-col { text-align: left; font-weight: 600; color: var(--muted); }
-  .log-tabla td.equipo-col { text-align: left; font-size: 0.75rem; }
-  .log-tabla td.destacado { font-weight: 800; color: var(--orange, #f97316); font-size: 0.95rem; }
-  .log-tabla td.tiro { font-size: 0.75rem; }
+  .log-tabla td.fecha-col {
+    text-align: left;
+    white-space: nowrap;
+    font-size: 0.75rem;
+  }
+  .log-tabla td.rival-col {
+    text-align: left;
+    font-weight: 600;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .log-tabla td.equipo-col {
+    text-align: left;
+    font-size: 0.75rem;
+  }
+  .log-tabla td.destacado {
+    font-weight: 800;
+    color: var(--naranja);
+    font-size: 0.95rem;
+  }
+  .log-tabla td.min-col {
+    font-family: monospace;
+    font-size: 0.78rem;
+  }
+  .log-tabla td.tiro {
+    font-size: 0.75rem;
+  }
   .condicion {
     font-size: 0.65rem;
-    color: var(--muted, #64748b);
+    color: var(--muted);
     margin-right: 0.3rem;
+  }
+  .resultado-chip {
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 999px;
+    margin-left: 0.4rem;
+  }
+  .resultado-chip.win {
+    background: #f0fdf4;
+    color: #16a34a;
+  }
+  .resultado-chip.loss {
+    background: #fef2f2;
+    color: #dc2626;
+  }
+  [data-theme="dark"] .resultado-chip.win {
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ade80;
+  }
+  [data-theme="dark"] .resultado-chip.loss {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+  }
+  [data-theme="dark"] .tiro-pct.nivel-alto {
+    color: #4ade80;
+  }
+  [data-theme="dark"] .tiro-pct.nivel-medio {
+    color: #fbbf24;
+  }
+  [data-theme="dark"] .tiro-pct.nivel-bajo {
+    color: #f87171;
+  }
+  [data-theme="dark"] .tiro-bar-fill.nivel-alto {
+    background: #4ade80;
+  }
+  [data-theme="dark"] .tiro-bar-fill.nivel-medio {
+    background: #fbbf24;
+  }
+  [data-theme="dark"] .tiro-bar-fill.nivel-bajo {
+    background: #f87171;
+  }
+
+  /* ── Timeline ── */
+  .timeline {
+    position: relative;
+    padding-left: 1.4rem;
+  }
+  .timeline::before {
+    content: "";
+    position: absolute;
+    left: 5px;
+    top: 6px;
+    bottom: 6px;
+    width: 2px;
+    background: linear-gradient(
+      to bottom,
+      var(--naranja),
+      rgba(242, 130, 65, 0.1)
+    );
+  }
+  .timeline-item {
+    position: relative;
+    margin-bottom: 0.85rem;
+  }
+  .timeline-punto {
+    position: absolute;
+    left: -1.4rem;
+    top: 1.15rem;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--naranja);
+    box-shadow: 0 0 0 4px rgba(242, 130, 65, 0.18);
+  }
+  .timeline-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.85rem 1rem;
+    background: var(--card);
+    border: 1px solid var(--borde);
+    border-radius: 10px;
+    transition: border-color 0.15s;
+  }
+  .timeline-card:hover {
+    border-color: rgba(242, 130, 65, 0.5);
+  }
+  .timeline-dorsal {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: rgba(242, 130, 65, 0.15);
+    color: var(--naranja-oscuro);
+    font-weight: 800;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  [data-theme="dark"] .timeline-dorsal {
+    color: var(--naranja);
+  }
+  .timeline-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    flex: 1;
+    min-width: 0;
+  }
+  .timeline-temporada {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--naranja);
+  }
+  .timeline-equipo {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--texto);
+  }
+  .timeline-equipo a {
+    color: inherit;
+    text-decoration: none;
+  }
+  .timeline-equipo a:hover {
+    color: var(--naranja);
+  }
+  .timeline-meta {
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+  .timeline-arrow {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 1rem;
+    flex-shrink: 0;
+    transition:
+      color 0.15s,
+      transform 0.15s;
+  }
+  .timeline-card:hover .timeline-arrow {
+    color: var(--naranja);
+    transform: translateX(2px);
+  }
+
+  @media (max-width: 900px) {
+    .bg-foto-wrapper {
+      width: 100vw;
+      height: 70vh;
+    }
+    .layout-jugador {
+      grid-template-columns: 1fr;
+      padding: 1rem 1rem 2rem;
+    }
+    .sidebar {
+      position: static;
+    }
+    .desglose-grid {
+      grid-template-columns: 1fr;
+    }
+    .dorsal-gigante {
+      display: none;
+    }
   }
 
   @media (max-width: 640px) {
-    .jugador-hero { padding: 2rem 1rem 1.5rem; }
-    .seccion { padding: 2rem 1rem; }
-    .seccion-alt { padding: 2rem 1rem; }
-    .hero-stats { gap: 1rem; }
-    .stats-grid { grid-template-columns: repeat(3, 1fr); }
+    .jugador-hero {
+      padding: 2rem 1rem 2rem;
+    }
+    .jugador-hero-content {
+      gap: 1.25rem;
+    }
+    .avatar,
+    .avatar-foto {
+      width: 72px;
+      height: 72px;
+      font-size: 1.5rem;
+    }
+    .seccion-alt {
+      padding: 1.25rem;
+    }
+    .hero-stats {
+      gap: 1rem;
+    }
+    .bg-foto-img {
+      opacity: 0.2;
+    }
   }
 </style>

@@ -12,14 +12,6 @@ const pagina = Math.max(
 );
 const desde = (pagina - 1) * POR_PAGINA;
 
-// ── Categorías para el filtro ──────────────────────────────────────────────
-const { data: categorias } = await supabase
-  .from("categorias")
-  .select("id, nombre, slug")
-  .order("nombre");
-
-const categoriaFiltro = Astro.url.searchParams.get("categoria") ?? null;
-
 // ── Noticia destacada (hero) ───────────────────────────────────────────────
 const { data: destacada } = await supabase
   .from("noticias")
@@ -44,12 +36,8 @@ let query = supabase
   .range(desde, desde + POR_PAGINA - 1);
 
 // Excluir la destacada del listado para no repetir
-if (destacada?.id) query = query.neq("id", destacada.id);
-
-// Filtrar por categoría si viene en la URL
-if (categoriaFiltro) {
-  const cat = (categorias ?? []).find((c) => c.slug === categoriaFiltro);
-  if (cat) query = query.eq("categoria_id", cat.id);
+if (destacada?.id) {
+  query = query.neq("id", destacada.id);
 }
 
 const { data: noticias, count } = await query;
@@ -84,17 +72,23 @@ function formatFechaCorta(f) {
   });
 }
 
+function iniciales(titulo) {
+  return (
+    (titulo ?? "CB")
+      .split(" ")
+      .filter((w) => w.length > 2)
+      .slice(0, 2)
+      .map((w) => w[0])
+      .join("")
+      .toUpperCase() || "CB"
+  );
+}
+
 function paginaUrl(p) {
   const params = new URLSearchParams();
   if (p > 1) params.set("pagina", String(p));
-  if (categoriaFiltro) params.set("categoria", categoriaFiltro);
   const qs = params.toString();
   return `/noticias${qs ? "?" + qs : ""}`;
-}
-
-function categoriaUrl(slug) {
-  if (!slug) return "/noticias";
-  return `/noticias?categoria=${slug}`;
 }
 
 const paginasAMostrar = Array.from(
@@ -116,88 +110,66 @@ for (const p of paginasAMostrar) {
   ultimaP = p;
 }
 
-const catActual = (categorias ?? []).find((c) => c.slug === categoriaFiltro);
+const mostrarHero = !!destacada;
 ---
 
 <Layout titulo="Noticias | CB Jaca">
   <!-- ── CABECERA ── -->
   <div class="page-header">
     <div class="page-header-inner">
-      <div class="header-text">
-        <p class="header-eyebrow">Club Baloncesto Jaca</p>
-        <h1 class="header-titulo">Noticias</h1>
-        {
-          catActual && (
-            <p class="header-filtro-activo">
-              Filtrando por: <strong>{catActual.nombre}</strong>
-              <a href="/noticias" class="quitar-filtro">
-                ✕ quitar filtro
-              </a>
-            </p>
-          )
-        }
-      </div>
-
-      <!-- Filtro de categorías -->
-      {
-        categorias && categorias.length > 0 && (
-          <nav class="filtros" aria-label="Filtrar por categoría">
-            <a
-              href="/noticias"
-              class:list={["filtro-btn", !categoriaFiltro ? "activo" : ""]}
-            >
-              Todas
-            </a>
-            {categorias.map((c) => (
-              <a
-                href={categoriaUrl(c.slug)}
-                class:list={[
-                  "filtro-btn",
-                  categoriaFiltro === c.slug ? "activo" : "",
-                ]}
-              >
-                {c.nombre}
-              </a>
-            ))}
-          </nav>
-        )
-      }
+      <p class="header-eyebrow">Club Baloncesto Jaca</p>
+      <h1 class="header-titulo">Noticias</h1>
     </div>
   </div>
 
   <div class="contenido">
-    <!-- ── NOTICIA DESTACADA ── -->
+    <!-- ── NOTICIA DESTACADA (hero de retransmisión) ── -->
     {
-      destacada && !categoriaFiltro && (
-        <section class="destacada-section">
-          <a href={urlNoticia(destacada)} class="destacada-card">
-            <div class="destacada-img-wrap">
-              {destacada.img_url ? (
-                <img
-                  src={destacada.img_url}
-                  alt={destacada.titulo}
-                  class="destacada-img"
-                />
-              ) : (
-                <div class="destacada-placeholder" />
-              )}
-              <div class="destacada-overlay" />
-            </div>
-            <div class="destacada-info">
-              <div class="destacada-meta">
-                <span class="pill-destacada">Destacada</span>
+      mostrarHero && (
+        <section class="hero-section">
+          <a href={urlNoticia(destacada)} class="hero-card">
+            {destacada.img_url ? (
+              <img
+                src={destacada.img_url}
+                alt={destacada.titulo}
+                class="hero-img"
+              />
+            ) : (
+              <div class="hero-placeholder">
+                <span>{iniciales(destacada.titulo)}</span>
+              </div>
+            )}
+            <div class="hero-scrim" />
+
+            <div class="hero-content">
+              <div class="hero-meta">
+                <span class="hero-live">
+                  <span class="hero-live-dot" />
+                  Portada
+                </span>
                 {destacada.categorias && (
                   <span class="pill-cat">{destacada.categorias.nombre}</span>
                 )}
-                <time class="destacada-fecha">
+                <time class="hero-fecha">
                   {formatFecha(destacada.fecha_publicacion)}
                 </time>
               </div>
-              <h2 class="destacada-titulo">{destacada.titulo}</h2>
+              <h2 class="hero-titulo">{destacada.titulo}</h2>
               {destacada.subtitulo && (
-                <p class="destacada-sub">{destacada.subtitulo}</p>
+                <p class="hero-sub">{destacada.subtitulo}</p>
               )}
-              <span class="destacada-leer">Leer noticia →</span>
+              <span class="hero-leer">
+                Leer noticia
+                <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path
+                    d="M3 8H13M13 8L9 4M13 8L9 12"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </span>
             </div>
           </a>
         </section>
@@ -208,14 +180,15 @@ const catActual = (categorias ?? []).find((c) => c.slug === categoriaFiltro);
     {
       noticias && noticias.length > 0 ? (
         <section class="grid-section">
-          {!categoriaFiltro && destacada && (
-            <h2 class="grid-titulo">Últimas noticias</h2>
-          )}
+          {mostrarHero && <h2 class="grid-titulo">Últimas noticias</h2>}
           <div class="noticias-grid">
             {noticias.map((n, i) => (
               <a
                 href={urlNoticia(n)}
-                class:list={["noticia-card", i === 0 ? "card-grande" : ""]}
+                class:list={[
+                  "noticia-card",
+                  i === 0 && mostrarHero ? "card-grande" : "",
+                ]}
               >
                 <div class="card-img-wrap">
                   {n.img_url ? (
@@ -227,7 +200,7 @@ const catActual = (categorias ?? []).find((c) => c.slug === categoriaFiltro);
                     />
                   ) : (
                     <div class="card-placeholder">
-                      <span>CB Jaca</span>
+                      <span>{iniciales(n.titulo)}</span>
                     </div>
                   )}
                 </div>
@@ -249,15 +222,30 @@ const catActual = (categorias ?? []).find((c) => c.slug === categoriaFiltro);
         </section>
       ) : (
         <div class="vacio">
-          <p>
-            No hay noticias
-            {catActual ? ` en la categoría "${catActual.nombre}"` : ""} todavía.
-          </p>
-          {catActual && (
-            <a href="/noticias" class="vacio-link">
-              Ver todas las noticias
-            </a>
-          )}
+          <div class="vacio-icono" aria-hidden="true">
+            <svg viewBox="0 0 48 48" fill="none">
+              <circle
+                cx="24"
+                cy="24"
+                r="19"
+                stroke="currentColor"
+                stroke-width="2"
+              />
+              <path
+                d="M17 20C17 20 19.5 17 24 17C28.5 17 31 20 31 20"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              />
+              <path
+                d="M17 29C17 29 19.5 31 24 31C28.5 31 31 29 31 29"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              />
+            </svg>
+          </div>
+          <p class="vacio-texto">No hay noticias todavía.</p>
         </div>
       )
     }
@@ -266,11 +254,17 @@ const catActual = (categorias ?? []).find((c) => c.slug === categoriaFiltro);
     {
       totalPaginas > 1 && (
         <nav class="paginacion" aria-label="Paginación">
-          {pagina > 1 && (
-            <a href={paginaUrl(pagina - 1)} class="pag-btn pag-prev">
-              ← Anterior
-            </a>
-          )}
+          <a
+            href={pagina > 1 ? paginaUrl(pagina - 1) : undefined}
+            class:list={[
+              "pag-btn",
+              "pag-prev",
+              pagina <= 1 ? "deshabilitado" : "",
+            ]}
+            aria-disabled={pagina <= 1}
+          >
+            ← Anterior
+          </a>
 
           <div class="pag-nums">
             {itemsPaginacion.map((item) =>
@@ -291,11 +285,17 @@ const catActual = (categorias ?? []).find((c) => c.slug === categoriaFiltro);
             )}
           </div>
 
-          {pagina < totalPaginas && (
-            <a href={paginaUrl(pagina + 1)} class="pag-btn pag-next">
-              Siguiente →
-            </a>
-          )}
+          <a
+            href={pagina < totalPaginas ? paginaUrl(pagina + 1) : undefined}
+            class:list={[
+              "pag-btn",
+              "pag-next",
+              pagina >= totalPaginas ? "deshabilitado" : "",
+            ]}
+            aria-disabled={pagina >= totalPaginas}
+          >
+            Siguiente →
+          </a>
         </nav>
       )
     }
@@ -303,229 +303,233 @@ const catActual = (categorias ?? []).find((c) => c.slug === categoriaFiltro);
 </Layout>
 
 <style>
+  @import url("https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&display=swap");
+
+  :global(body) {
+    --hc-titulo: "Barlow Condensed", "Arial Narrow", sans-serif;
+  }
+
   /* ── Cabecera ─────────────────────────────────────────────────────────── */
   .page-header {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    padding: 3rem 2rem 2rem;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    border-bottom: 1px solid var(--borde, rgba(255, 255, 255, 0.07));
+    padding: 2.25rem 2rem 1.5rem;
+    background: color-mix(in srgb, var(--fondo, #0f172a) 88%, transparent);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
   }
   .page-header-inner {
-    max-width: 900px;
+    max-width: 1000px;
     margin: 0 auto;
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
   }
   .header-eyebrow {
-    font-size: 0.72rem;
+    font-family: var(--hc-titulo);
+    font-size: 0.8rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--orange, #f97316);
+    letter-spacing: 0.16em;
+    color: var(--naranja, #f97316);
     margin: 0;
   }
   .header-titulo {
-    font-size: clamp(2rem, 5vw, 3.2rem);
-    font-weight: 900;
-    letter-spacing: -0.03em;
-    margin: 0.25rem 0 0;
-    line-height: 1;
-  }
-  .header-filtro-activo {
-    font-size: 0.82rem;
-    color: rgba(255, 255, 255, 0.5);
-    margin: 0.5rem 0 0;
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-  }
-  .header-filtro-activo strong {
-    color: white;
-  }
-  .quitar-filtro {
-    font-size: 0.72rem;
-    color: var(--muted, #64748b);
-    text-decoration: none;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 2px 8px;
-    border-radius: 4px;
-    transition:
-      color 0.15s,
-      border-color 0.15s;
-  }
-  .quitar-filtro:hover {
-    color: white;
-    border-color: rgba(255, 255, 255, 0.3);
-  }
-
-  /* Filtros */
-  .filtros {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-  }
-  .filtro-btn {
-    font-size: 0.72rem;
-    font-weight: 700;
+    font-family: var(--hc-titulo);
+    font-size: clamp(2.4rem, 6vw, 3.6rem);
+    font-weight: 800;
+    letter-spacing: -0.01em;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: 5px 14px;
-    border-radius: 20px;
-    text-decoration: none;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: transparent;
-    transition: all 0.15s;
-  }
-  .filtro-btn:hover {
-    border-color: rgba(249, 115, 22, 0.5);
-    color: var(--orange, #f97316);
-  }
-  .filtro-btn.activo {
-    background: var(--orange, #f97316);
-    border-color: var(--orange, #f97316);
-    color: white;
+    margin: 0.15rem 0 0;
+    line-height: 0.95;
   }
 
   /* ── Contenido ────────────────────────────────────────────────────────── */
   .contenido {
-    max-width: 900px;
+    max-width: 1000px;
     margin: 0 auto;
-    padding: 3rem 2rem;
+    padding: 2.75rem 2rem 4rem;
     display: flex;
     flex-direction: column;
     gap: 3rem;
   }
 
-  /* ── Destacada ────────────────────────────────────────────────────────── */
-  .destacada-card {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    border-radius: 14px;
+  /* ── Hero destacada (estilo retransmisión) ───────────────────────────── */
+  .hero-section {
+    margin: 0 -2rem;
+  }
+  .hero-card {
+    position: relative;
+    display: block;
+    border-radius: 18px;
     overflow: hidden;
     text-decoration: none;
-    border: 1px solid var(--borde, rgba(255, 255, 255, 0.07));
-    background: var(--card, #1e293b);
-    transition:
-      border-color 0.2s,
-      transform 0.2s;
+    aspect-ratio: 16/8;
     min-height: 320px;
+    background: var(--card, #1e293b);
+    isolation: isolate;
   }
-  .destacada-card:hover {
-    border-color: var(--orange, #f97316);
-    transform: translateY(-2px);
-  }
-  .destacada-img-wrap {
-    position: relative;
-    overflow: hidden;
-  }
-  .destacada-img {
+  .hero-img {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
-    display: block;
-    transition: transform 0.4s ease;
+    transition: transform 0.5s ease;
   }
-  .destacada-card:hover .destacada-img {
-    transform: scale(1.04);
+  .hero-card:hover .hero-img {
+    transform: scale(1.03);
   }
-  .destacada-placeholder {
-    width: 100%;
-    height: 100%;
-    min-height: 280px;
-    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  .hero-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+      repeating-linear-gradient(
+        135deg,
+        rgba(249, 115, 22, 0.06) 0 2px,
+        transparent 2px 26px
+      ),
+      linear-gradient(135deg, #1e293b 0%, #0b1220 100%);
   }
-  .destacada-overlay {
+  .hero-placeholder span {
+    font-family: var(--hc-titulo);
+    font-size: 5rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    color: rgba(255, 255, 255, 0.08);
+  }
+  .hero-scrim {
     position: absolute;
     inset: 0;
     background: linear-gradient(
-      to right,
-      transparent 60%,
-      var(--card, #1e293b) 100%
+      to top,
+      rgba(4, 8, 16, 0.94) 0%,
+      rgba(4, 8, 16, 0.55) 42%,
+      transparent 75%
     );
-    pointer-events: none;
   }
-  .destacada-info {
-    padding: 2rem 2rem 2rem 1.5rem;
+  .hero-content {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 2.25rem clamp(1.25rem, 4vw, 2.75rem);
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    gap: 0.75rem;
+    gap: 0.65rem;
+    border-left: 3px solid var(--naranja, #f97316);
+    margin-left: clamp(1.25rem, 4vw, 2.75rem);
+    padding-left: 1.1rem;
+    max-width: 640px;
   }
-  .destacada-meta {
+  .hero-meta {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.6rem;
     flex-wrap: wrap;
   }
-  .pill-destacada {
-    font-size: 0.62rem;
+  .hero-live {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.65rem;
     font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    padding: 3px 8px;
+    letter-spacing: 0.1em;
+    color: white;
+    background: var(--naranja, #f97316);
+    padding: 4px 9px 4px 7px;
     border-radius: 4px;
-    background: rgba(234, 179, 8, 0.15);
-    color: #eab308;
-    border: 1px solid rgba(234, 179, 8, 0.25);
+  }
+  .hero-live-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: white;
+    animation: pulso 1.6s ease-in-out infinite;
+  }
+  @keyframes pulso {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.35;
+    }
   }
   .pill-cat {
-    font-size: 0.62rem;
+    font-size: 0.65rem;
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    padding: 3px 8px;
+    padding: 4px 9px;
     border-radius: 4px;
-    background: rgba(249, 115, 22, 0.12);
-    color: var(--orange, #f97316);
-    border: 1px solid rgba(249, 115, 22, 0.2);
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
   }
-  .destacada-fecha {
-    font-size: 0.72rem;
-    color: var(--muted, #64748b);
-    margin-left: auto;
+  .hero-fecha {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.65);
   }
-  .destacada-titulo {
-    font-size: clamp(1.1rem, 2.5vw, 1.6rem);
-    font-weight: 900;
-    line-height: 1.2;
-    letter-spacing: -0.02em;
+  .hero-titulo {
+    font-family: var(--hc-titulo);
+    font-size: clamp(1.6rem, 4.2vw, 2.75rem);
+    font-weight: 700;
+    text-transform: uppercase;
+    line-height: 1.02;
+    letter-spacing: -0.005em;
     margin: 0;
+    color: white;
   }
-  .destacada-sub {
-    font-size: 0.88rem;
+  .hero-sub {
+    font-size: 0.92rem;
     line-height: 1.6;
-    color: var(--muted, #64748b);
+    color: rgba(255, 255, 255, 0.75);
     margin: 0;
     display: -webkit-box;
-    -webkit-line-clamp: 3;
+    -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
-  .destacada-leer {
-    font-size: 0.78rem;
+  .hero-leer {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
     font-weight: 700;
-    color: var(--orange, #f97316);
+    color: var(--naranja, #f97316);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-top: 0.25rem;
+    letter-spacing: 0.04em;
+    margin-top: 0.35rem;
+  }
+  .hero-leer svg {
+    width: 14px;
+    height: 14px;
+    transition: transform 0.2s ease;
+  }
+  .hero-card:hover .hero-leer svg {
+    transform: translateX(3px);
   }
 
   /* ── Grid ─────────────────────────────────────────────────────────────── */
   .grid-titulo {
-    font-size: 0.72rem;
+    font-family: var(--hc-titulo);
+    font-size: 0.85rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--orange, #f97316);
+    letter-spacing: 0.1em;
+    color: var(--naranja, #f97316);
     margin: 0 0 1.25rem;
   }
 
   .noticias-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 1rem;
+    gap: 1.1rem;
   }
 
-  /* Primera card ocupa 2 columnas */
   .noticia-card.card-grande {
     grid-column: span 2;
   }
@@ -533,10 +537,10 @@ const catActual = (categorias ?? []).find((c) => c.slug === categoriaFiltro);
     aspect-ratio: 16/9;
   }
   .noticia-card.card-grande .card-titulo {
-    font-size: 1.1rem;
+    font-size: 1.35rem;
   }
   .noticia-card.card-grande .card-sub {
-    display: block;
+    display: -webkit-box;
   }
 
   .noticia-card {
@@ -550,14 +554,24 @@ const catActual = (categorias ?? []).find((c) => c.slug === categoriaFiltro);
     color: inherit;
     transition:
       border-color 0.2s,
-      transform 0.15s;
+      transform 0.15s,
+      box-shadow 0.2s;
   }
   .noticia-card:hover {
-    border-color: var(--orange, #f97316);
-    transform: translateY(-2px);
+    border-color: rgba(249, 115, 22, 0.5);
+    transform: translateY(-3px);
+    box-shadow: 0 12px 28px -14px rgba(0, 0, 0, 0.55);
+  }
+  .noticia-card:focus-visible,
+  .hero-card:focus-visible,
+  .pag-num:focus-visible,
+  .pag-btn:focus-visible {
+    outline: 2px solid var(--naranja, #f97316);
+    outline-offset: 2px;
   }
 
   .card-img-wrap {
+    position: relative;
     aspect-ratio: 4/3;
     overflow: hidden;
     background: rgba(255, 255, 255, 0.03);
@@ -567,10 +581,10 @@ const catActual = (categorias ?? []).find((c) => c.slug === categoriaFiltro);
     height: 100%;
     object-fit: cover;
     display: block;
-    transition: transform 0.3s ease;
+    transition: transform 0.35s ease;
   }
   .noticia-card:hover .card-img {
-    transform: scale(1.05);
+    transform: scale(1.06);
   }
   .card-placeholder {
     width: 100%;
@@ -578,25 +592,27 @@ const catActual = (categorias ?? []).find((c) => c.slug === categoriaFiltro);
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.03) 0%,
-      transparent 100%
-    );
+    background:
+      repeating-linear-gradient(
+        135deg,
+        rgba(249, 115, 22, 0.05) 0 2px,
+        transparent 2px 22px
+      ),
+      rgba(255, 255, 255, 0.02);
   }
   .card-placeholder span {
-    font-size: 0.65rem;
+    font-family: var(--hc-titulo);
+    font-size: 1.8rem;
     font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: rgba(255, 255, 255, 0.1);
+    letter-spacing: 0.03em;
+    color: rgba(255, 255, 255, 0.14);
   }
 
   .card-body {
-    padding: 1rem;
+    padding: 1rem 1.1rem 1.1rem;
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: 0.45rem;
     flex: 1;
   }
   .card-meta {
@@ -610,7 +626,7 @@ const catActual = (categorias ?? []).find((c) => c.slug === categoriaFiltro);
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.07em;
-    color: var(--orange, #f97316);
+    color: var(--naranja, #f97316);
   }
   .card-fecha {
     font-size: 0.68rem;
@@ -618,9 +634,11 @@ const catActual = (categorias ?? []).find((c) => c.slug === categoriaFiltro);
     margin-left: auto;
   }
   .card-titulo {
-    font-size: 0.9rem;
-    font-weight: 800;
-    line-height: 1.3;
+    font-family: var(--hc-titulo);
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.005em;
     margin: 0;
     display: -webkit-box;
     -webkit-line-clamp: 3;
@@ -628,7 +646,7 @@ const catActual = (categorias ?? []).find((c) => c.slug === categoriaFiltro);
     overflow: hidden;
   }
   .card-sub {
-    font-size: 0.78rem;
+    font-size: 0.8rem;
     color: var(--muted, #64748b);
     margin: 0;
     line-height: 1.5;
@@ -641,22 +659,26 @@ const catActual = (categorias ?? []).find((c) => c.slug === categoriaFiltro);
   /* ── Vacío ────────────────────────────────────────────────────────────── */
   .vacio {
     text-align: center;
-    padding: 4rem 2rem;
+    padding: 4.5rem 2rem;
     color: var(--muted, #64748b);
-    font-size: 0.9rem;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 1rem;
   }
-  .vacio-link {
-    font-size: 0.8rem;
-    font-weight: 700;
-    color: var(--orange, #f97316);
-    text-decoration: none;
+  .vacio-icono {
+    width: 48px;
+    height: 48px;
+    color: rgba(255, 255, 255, 0.15);
   }
-  .vacio-link:hover {
-    text-decoration: underline;
+  .vacio-icono svg {
+    width: 100%;
+    height: 100%;
+  }
+  .vacio-texto {
+    font-size: 0.9rem;
+    max-width: 340px;
+    margin: 0;
   }
 
   /* ── Paginación ───────────────────────────────────────────────────────── */
@@ -664,23 +686,29 @@ const catActual = (categorias ?? []).find((c) => c.slug === categoriaFiltro);
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0.5rem;
-    padding-top: 1rem;
+    gap: 0.75rem;
+    padding-top: 1.5rem;
     border-top: 1px solid var(--borde, rgba(255, 255, 255, 0.07));
     flex-wrap: wrap;
   }
   .pag-btn {
     font-size: 0.78rem;
     font-weight: 700;
-    color: var(--orange, #f97316);
+    color: var(--naranja, #f97316);
     text-decoration: none;
-    padding: 0.5rem 1rem;
-    border-radius: 8px;
-    border: 1px solid rgba(249, 115, 22, 0.25);
-    transition: background 0.15s;
+    padding: 0.55rem 1.1rem;
+    border-radius: 999px;
+    border: 1px solid rgba(249, 115, 22, 0.3);
+    transition:
+      background 0.15s,
+      opacity 0.15s;
   }
   .pag-btn:hover {
-    background: rgba(249, 115, 22, 0.08);
+    background: rgba(249, 115, 22, 0.1);
+  }
+  .pag-btn.deshabilitado {
+    pointer-events: none;
+    opacity: 0.3;
   }
   .pag-nums {
     display: flex;
@@ -696,19 +724,19 @@ const catActual = (categorias ?? []).find((c) => c.slug === categoriaFiltro);
     font-size: 0.82rem;
     font-weight: 700;
     text-decoration: none;
-    border-radius: 8px;
+    border-radius: 999px;
     color: var(--muted, #64748b);
     border: 1px solid transparent;
     transition: all 0.15s;
   }
   .pag-num:hover {
-    border-color: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.12);
     color: white;
   }
   .pag-num.activo {
-    background: var(--orange, #f97316);
+    background: var(--naranja, #f97316);
     color: white;
-    border-color: var(--orange, #f97316);
+    border-color: var(--naranja, #f97316);
   }
   .pag-elipsis {
     color: var(--muted, #64748b);
@@ -716,27 +744,34 @@ const catActual = (categorias ?? []).find((c) => c.slug === categoriaFiltro);
     font-size: 0.82rem;
   }
 
+  /* ── Movimiento reducido ──────────────────────────────────────────────── */
+  @media (prefers-reduced-motion: reduce) {
+    .hero-img,
+    .card-img,
+    .hero-leer svg,
+    .noticia-card,
+    .hero-live-dot {
+      transition: none !important;
+      animation: none !important;
+    }
+  }
+
   /* ── Responsive ───────────────────────────────────────────────────────── */
   @media (max-width: 760px) {
-    .destacada-card {
-      grid-template-columns: 1fr;
-      min-height: auto;
+    .page-header {
+      padding: 1.5rem 1.25rem 1.25rem;
     }
-    .destacada-img-wrap {
-      aspect-ratio: 16/9;
+
+    .hero-section {
+      margin: 0 -1.25rem;
     }
-    .destacada-overlay {
-      background: linear-gradient(
-        to top,
-        var(--card, #1e293b) 0%,
-        transparent 60%
-      );
+    .hero-card {
+      aspect-ratio: 4/5;
+      border-radius: 0;
     }
-    .destacada-info {
-      padding: 1.25rem;
-    }
-    .destacada-fecha {
-      margin-left: 0;
+    .hero-content {
+      margin-left: 1.25rem;
+      padding: 1.5rem 1.25rem 1.75rem 1rem;
     }
 
     .noticias-grid {
@@ -751,14 +786,12 @@ const catActual = (categorias ?? []).find((c) => c.slug === categoriaFiltro);
   }
 
   @media (max-width: 480px) {
-    .page-header {
-      padding: 2rem 1rem 1.5rem;
-    }
     .contenido {
-      padding: 2rem 1rem;
+      padding: 2rem 1.25rem 3rem;
     }
     .noticias-grid {
       grid-template-columns: 1fr;
+      gap: 1rem;
     }
     .noticia-card.card-grande {
       grid-column: span 1;

@@ -470,19 +470,25 @@ function ModalParticipante({
                   return (
                     <div
                       key={c.id}
-                      onClick={() => !yaExiste && añadirClub(c)}
+                      onClick={() => {
+                        if (yaExiste) {
+                          const confirmar = confirm(
+                            `${c.nombre} ya está añadido en esta fase. ¿Quieres añadirlo de nuevo?`,
+                          );
+                          if (!confirmar) return;
+                        }
+                        añadirClub(c);
+                      }}
                       style={{
                         padding: "10px 14px",
-                        cursor: yaExiste ? "default" : "pointer",
+                        cursor: "pointer",
                         fontSize: "13px",
                         borderBottom: "0.5px solid var(--borde)",
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
-                        opacity: yaExiste ? 0.4 : 1,
                       }}
                       onMouseEnter={(e) =>
-                        !yaExiste &&
                         (e.currentTarget.style.background = "var(--fondo)")
                       }
                       onMouseLeave={(e) =>
@@ -490,7 +496,15 @@ function ModalParticipante({
                       }
                     >
                       <span>{c.nombre}</span>
-                      <span style={{ fontSize: "11px", color: "var(--muted)" }}>
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          color: yaExiste
+                            ? "var(--naranja, #F97316)"
+                            : "var(--muted)",
+                          fontWeight: yaExiste ? 700 : 400,
+                        }}
+                      >
                         {yaExiste ? "Ya añadido" : c.ciudad}
                       </span>
                     </div>

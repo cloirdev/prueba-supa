@@ -1,0 +1,246 @@
+---
+const { links = [], variant = "desktop" } = Astro.props;
+---
+
+{
+  variant === "desktop" ? (
+    <div class="nav-links">
+      {links.map((link) =>
+        link.submenu ? (
+          <details class="nav-dropdown">
+            <summary>
+              <span>{link.label}</span>
+              <svg
+                class="chevron"
+                width="10"
+                height="10"
+                viewBox="0 0 10 10"
+                fill="none"
+              >
+                <path
+                  d="M2 3.5L5 6.5L8 3.5"
+                  stroke="currentColor"
+                  stroke-width="1.4"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </summary>
+            <div class="nav-dropdown__menu">
+              {link.submenu.map((sub) => (
+                <a href={sub.href}>{sub.label}</a>
+              ))}
+            </div>
+          </details>
+        ) : (
+          <a href={link.href}>{link.label}</a>
+        ),
+      )}
+    </div>
+  ) : (
+    <div class="nav-links-mobile">
+      {links.map((link) =>
+        link.submenu ? (
+          <details class="nav-dropdown-mobile">
+            <summary>
+              <span>{link.label}</span>
+              <svg
+                class="chevron"
+                width="10"
+                height="10"
+                viewBox="0 0 10 10"
+                fill="none"
+              >
+                <path
+                  d="M2 3.5L5 6.5L8 3.5"
+                  stroke="currentColor"
+                  stroke-width="1.4"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </summary>
+            <div class="nav-dropdown-mobile__menu">
+              {link.submenu.map((sub) => (
+                <a href={sub.href}>{sub.label}</a>
+              ))}
+            </div>
+          </details>
+        ) : (
+          <a href={link.href}>{link.label}</a>
+        ),
+      )}
+    </div>
+  )
+}
+
+<style>
+  /* ── Variante desktop ── */
+  .nav-links {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+  }
+  .nav-links > a {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.7);
+    transition: color 0.2s;
+  }
+  .nav-links > a:hover,
+  .nav-links > a.active {
+    color: white;
+  }
+
+  /* ── Dropdown desktop ── */
+  .nav-dropdown {
+    position: relative;
+  }
+  .nav-dropdown summary {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    list-style: none;
+    transition: color 0.2s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .nav-dropdown summary::-webkit-details-marker {
+    display: none;
+  }
+  .nav-dropdown summary::marker {
+    content: "";
+  }
+  .nav-dropdown .chevron {
+    transition: transform 0.25s ease;
+    opacity: 0.7;
+  }
+  .nav-dropdown[open] summary,
+  .nav-dropdown summary:hover {
+    color: white;
+  }
+  .nav-dropdown[open] summary .chevron,
+  .nav-dropdown summary:hover .chevron {
+    opacity: 1;
+  }
+  .nav-dropdown[open] .chevron {
+    transform: rotate(180deg);
+  }
+
+  .nav-dropdown__menu {
+    position: absolute;
+    top: calc(100% + 16px);
+    left: 0;
+    background: var(--azul-oscuro);
+    border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    min-width: 190px;
+    padding: 6px;
+    z-index: 50;
+    transform-origin: top left;
+    animation: dropdown-in 0.18s ease;
+  }
+  .nav-dropdown__menu a {
+    display: block;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.7);
+    transition:
+      background 0.15s,
+      color 0.15s;
+  }
+  .nav-dropdown__menu a:hover {
+    color: white;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  @keyframes dropdown-in {
+    from {
+      opacity: 0;
+      transform: translateY(-6px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  /* ── Variante móvil ── */
+  .nav-links-mobile > a {
+    display: block;
+    font-size: 15px;
+    color: rgba(255, 255, 255, 0.75);
+    padding: 12px 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    transition: color 0.2s;
+  }
+  .nav-links-mobile > a:last-child {
+    border-bottom: none;
+  }
+  .nav-links-mobile > a:hover {
+    color: white;
+  }
+
+  /* ── Dropdown móvil ── */
+  .nav-dropdown-mobile {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .nav-dropdown-mobile summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 15px;
+    color: rgba(255, 255, 255, 0.75);
+    padding: 12px 4px;
+    cursor: pointer;
+    list-style: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .nav-dropdown-mobile summary::-webkit-details-marker {
+    display: none;
+  }
+  .nav-dropdown-mobile summary::marker {
+    content: "";
+  }
+  .nav-dropdown-mobile .chevron {
+    transition: transform 0.25s ease;
+    opacity: 0.6;
+  }
+  .nav-dropdown-mobile[open] .chevron {
+    transform: rotate(180deg);
+  }
+
+  .nav-dropdown-mobile__menu {
+    padding: 2px 0 10px 12px;
+    animation: dropdown-in-mobile 0.18s ease;
+  }
+  .nav-dropdown-mobile__menu a {
+    padding: 10px 4px;
+    font-size: 14px;
+    border-bottom: none;
+    color: rgba(255, 255, 255, 0.6);
+  }
+  .nav-dropdown-mobile__menu a:hover {
+    color: white;
+  }
+
+  @keyframes dropdown-in-mobile {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @media (max-width: 767px) {
+    .nav-links {
+      display: none;
+    }
+  }
+</style>

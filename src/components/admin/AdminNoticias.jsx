@@ -30,13 +30,7 @@ function formatFecha(f) {
   return `${parseInt(d)} ${meses[parseInt(m) - 1]} ${y}`;
 }
 
-export default function AdminNoticias({
-  supabase,
-  perfil,
-  equipo,
-  temporada,
-  onBack,
-}) {
+export default function AdminNoticias({ supabase, perfil, onBack }) {
   const [noticias, setNoticias] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -82,7 +76,7 @@ export default function AdminNoticias({
       publicada: false,
       destacada: false,
       slug: "",
-      categoria_id: equipo?.categoria_id ?? "",
+      categoria_id: "",
     };
   }
 
@@ -234,9 +228,7 @@ export default function AdminNoticias({
       <div className="adm-header">
         <div>
           <h1 className="adm-page-title">Noticias</h1>
-          <p className="adm-page-subtitle">
-            {equipo.sponsor ?? equipo.categorias?.nombre} · {temporada.nombre}
-          </p>
+          <p className="adm-page-subtitle">Crónicas y noticias del club</p>
         </div>
         {vista === "lista" ? (
           <button onClick={nuevaNoticia} className="adm-btn-primary">
