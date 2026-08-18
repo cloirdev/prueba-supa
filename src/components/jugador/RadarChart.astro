@@ -1,0 +1,92 @@
+---
+// src/components/jugador/RadarChart.astro
+// Gráfico radar genérico de 5 ejes. Reutilizable fuera de la ficha de
+// jugador (p. ej. comparativas de equipo) siempre que se le pase un
+// array `valores` de 5 números normalizados entre 0 y 1.
+import { poligonoRadar, etiquetaEje } from "@/lib/jugador-stats.js";
+
+interface Props {
+  valores: number[];
+  ejes?: string[];
+}
+
+const { valores, ejes = ["PTS", "REB", "AST", "DEF", "VAL"] } = Astro.props;
+
+const cx = 110,
+  cy = 110,
+  radio = 88;
+---
+
+<div class="radar-wrap">
+  <svg viewBox="0 0 220 220" class="radar-svg">
+    {
+      [0.25, 0.5, 0.75, 1].map((nivel) => (
+        <polygon
+          points={poligonoRadar(
+            [nivel, nivel, nivel, nivel, nivel],
+            cx,
+            cy,
+            radio,
+          )}
+          class="radar-grid"
+        />
+      ))
+    }
+    {
+      ejes.map((_, i) => {
+        const p = etiquetaEje(i, ejes.length, cx, cy, radio);
+        return <line x1={cx} y1={cy} x2={p.x} y2={p.y} class="radar-eje" />;
+      })
+    }
+    <polygon points={poligonoRadar(valores, cx, cy, radio)} class="radar-area"
+    ></polygon>
+    {
+      ejes.map((label, i) => {
+        const p = etiquetaEje(i, ejes.length, cx, cy, radio + 18);
+        return (
+          <text
+            x={p.x}
+            y={p.y}
+            class="radar-label"
+            text-anchor="middle"
+            dominant-baseline="middle"
+          >
+            {label}
+          </text>
+        );
+      })
+    }
+  </svg>
+</div>
+
+<style>
+  .radar-wrap {
+    display: flex;
+    justify-content: center;
+  }
+  .radar-svg {
+    width: 100%;
+    max-width: 260px;
+    height: auto;
+  }
+  .radar-grid {
+    fill: none;
+    stroke: var(--borde);
+    stroke-width: 1;
+  }
+  .radar-eje {
+    stroke: var(--borde);
+    stroke-width: 1;
+  }
+  .radar-area {
+    fill: rgba(242, 130, 65, 0.28);
+    stroke: var(--naranja);
+    stroke-width: 2;
+  }
+  .radar-label {
+    fill: var(--muted);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+</style>

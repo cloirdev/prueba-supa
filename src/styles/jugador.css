@@ -1,0 +1,44 @@
+/* src/styles/jugador.css
+   Clases "de layout" compartidas por varios componentes de la ficha de
+   jugador. Se importa una sola vez desde la página [id].astro (import
+   global, sin scoping) para que todos los componentes puedan usarlas. */
+
+.layout-jugador {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 2rem;
+}
+@media (max-width: 900px) {
+  .layout-jugador {
+    grid-template-columns: 1fr;
+    padding: 1rem 1rem 2rem;
+  }
+  .sidebar {
+    position: static;
+  }
+}
+
+.seccion {
+  margin-bottom: 2.5rem;
+}
+.seccion-titulo {
+  font-size: 1.25rem;
+  font-weight: 800;
+  margin: 0 0 1rem 0;
+  color: var(--texto);
+}
+
+.vacio {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.bloque-temporada {
+  display: none;
+}
+.bloque-temporada.activo {
+  display: block;
+}

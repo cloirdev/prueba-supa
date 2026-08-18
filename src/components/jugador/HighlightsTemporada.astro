@@ -1,0 +1,93 @@
+---
+// src/components/jugador/HighlightsTemporada.astro
+import { formatFecha, nombreRival, porcentaje } from "@/lib/jugador-stats.js";
+
+interface Props {
+  datos: any; // resultado de computarDatos()
+}
+
+const { datos: d } = Astro.props;
+---
+
+<section class="seccion">
+  <h2 class="seccion-titulo">Highlights de temporada</h2>
+  <div class="highlights-grid">
+    {
+      d.maxPuntos && (d.maxPuntos.puntos ?? 0) > 0 && (
+        <div class="highlight-card">
+          <span class="highlight-icono">🏀</span>
+          <div>
+            <div class="highlight-valor">{d.maxPuntos.puntos} pts</div>
+            <div class="highlight-detalle">
+              vs {nombreRival(d.maxPuntos.partidos)} ·{" "}
+              {formatFecha(d.maxPuntos.partidos?.fecha)}
+            </div>
+            <div class="highlight-label">Máxima anotación</div>
+          </div>
+        </div>
+      )
+    }
+    {
+      d.mejorTriples && (
+        <div class="highlight-card">
+          <span class="highlight-icono">🎯</span>
+          <div>
+            <div class="highlight-valor">
+              {d.mejorTriples.triples_anotados}/
+              {d.mejorTriples.triples_intentados} (
+              {porcentaje(
+                d.mejorTriples.triples_anotados,
+                d.mejorTriples.triples_intentados,
+              )}
+              %)
+            </div>
+            <div class="highlight-detalle">
+              vs {nombreRival(d.mejorTriples.partidos)} ·{" "}
+              {formatFecha(d.mejorTriples.partidos?.fecha)}
+            </div>
+            <div class="highlight-label">Mejor partido en triples</div>
+          </div>
+        </div>
+      )
+    }
+  </div>
+</section>
+
+<style>
+  .highlights-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.75rem;
+  }
+  .highlight-card {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    background: var(--card);
+    border: 1px solid rgba(242, 130, 65, 0.3);
+    border-radius: 12px;
+    padding: 1rem 1.1rem;
+  }
+  .highlight-icono {
+    font-size: 1.6rem;
+    flex-shrink: 0;
+  }
+  .highlight-valor {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--texto);
+  }
+  .highlight-detalle {
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-top: 0.1rem;
+  }
+  .highlight-label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--naranja);
+    margin-top: 0.3rem;
+  }
+</style>

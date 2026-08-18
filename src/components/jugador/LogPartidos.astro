@@ -1,0 +1,261 @@
+---
+// src/components/jugador/LogPartidos.astro
+import {
+  formatFecha,
+  minutosDisplay,
+  nombreRival,
+} from "@/lib/jugador-stats.js";
+
+interface Props {
+  datos: any; // resultado de computarDatos()
+  temporada: string;
+}
+
+const { datos: d, temporada: t } = Astro.props;
+---
+
+<section class="seccion">
+  <div class="log-header">
+    <h2 class="seccion-titulo" style="margin-bottom:0">
+      Partidos {t !== "total" && `· ${t}`}
+    </h2>
+    {
+      d.partidos.length > 0 && (
+        <button class="toggle-tabla" type="button">
+          Ver compacto
+        </button>
+      )
+    }
+  </div>
+
+  {
+    d.partidos.length === 0 ? (
+      <p class="vacio">Sin partidos registrados en esta temporada.</p>
+    ) : (
+      <div class="log-tabla-wrap">
+        <table class="log-tabla">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Rival</th>
+              <th class="col-extra">Equipo</th>
+              <th>MIN</th>
+              <th>PTS</th>
+              <th>REB</th>
+              <th>AST</th>
+              <th class="col-extra">FG</th>
+              <th class="col-extra">3PT</th>
+              <th class="col-extra">FT</th>
+              <th class="col-extra">ROB</th>
+              <th class="col-extra">TAP</th>
+              <th>VAL</th>
+            </tr>
+          </thead>
+          <tbody>
+            {d.partidos.map((s) => {
+              const p = s.partidos;
+              const reb =
+                s.rebotes_totales ??
+                (parseInt(s.rebotes_ofensivos) || 0) +
+                  (parseInt(s.rebotes_defensivos) || 0);
+              const eq = p?.equipos;
+              const nombreEq =
+                eq?.sponsors?.nombre ?? eq?.categorias?.nombre ?? "—";
+              const gano = (p?.puntos_favor ?? 0) > (p?.puntos_contra ?? 0);
+              const esMejorPartido = p?.id && p.id === d.idMejorPartido;
+              return (
+                <tr class:list={[{ "fila-destacada": esMejorPartido }]}>
+                  <td class="fecha-col">{formatFecha(p?.fecha)}</td>
+                  <td class="rival-col">
+                    <span class="condicion">{p?.es_local ? "vs" : "@"}</span>
+                    {nombreRival(p)}
+                    {p?.puntos_favor != null && (
+                      <span class={`resultado-chip ${gano ? "win" : "loss"}`}>
+                        {gano ? "V" : "D"} {p.puntos_favor}-{p.puntos_contra}
+                      </span>
+                    )}
+                  </td>
+                  <td class="equipo-col col-extra">{nombreEq}</td>
+                  <td class="min-col">{minutosDisplay(s.minutos)}</td>
+                  <td class="destacado">{s.puntos ?? 0}</td>
+                  <td>{reb}</td>
+                  <td>{s.asistencias ?? 0}</td>
+                  <td class="tiro col-extra">
+                    {s.tiros_campo_anotados ?? 0}-
+                    {s.tiros_campo_intentados ?? 0}
+                  </td>
+                  <td class="tiro col-extra">
+                    {s.triples_anotados ?? 0}-{s.triples_intentados ?? 0}
+                  </td>
+                  <td class="tiro col-extra">
+                    {s.tiros_libres_anotados ?? 0}-
+                    {s.tiros_libres_intentados ?? 0}
+                  </td>
+                  <td class="col-extra">{s.robos ?? 0}</td>
+                  <td class="col-extra">{s.tapones ?? 0}</td>
+                  <td class="destacado">{s.valoracion ?? 0}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+</section>
+
+<script>
+  // Cada instancia del componente añade su propio listener; como el botón
+  // y la tabla están dentro de la misma sección, closest() los encuentra
+  // sin ambigüedad aunque haya varios LogPartidos en la página (uno por
+  // temporada).
+  document
+    .querySelectorAll<HTMLButtonElement>(".toggle-tabla")
+    .forEach((btn) => {
+      if (btn.dataset.bound) return;
+      btn.dataset.bound = "true";
+      btn.addEventListener("click", () => {
+        const seccion = btn.closest(".seccion");
+        const wrap = seccion?.querySelector(".log-tabla-wrap");
+        if (!wrap) return;
+        const compacto = wrap.classList.toggle("compacto");
+        btn.textContent = compacto ? "Ver completo" : "Ver compacto";
+      });
+    });
+</script>
+
+<style>
+  .log-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.1rem;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+  }
+  .toggle-tabla {
+    background: transparent;
+    border: 1px solid var(--borde);
+    color: var(--muted);
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 5px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .toggle-tabla:hover {
+    border-color: var(--naranja);
+    color: var(--naranja);
+  }
+
+  .log-tabla-wrap {
+    overflow-x: auto;
+    border-radius: 10px;
+  }
+  .log-tabla {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    min-width: 720px;
+  }
+  .log-tabla-wrap.compacto .log-tabla {
+    min-width: 0;
+  }
+  .log-tabla-wrap.compacto .col-extra {
+    display: none;
+  }
+  .log-tabla thead tr {
+    border-bottom: 2px solid var(--naranja);
+  }
+  .log-tabla th {
+    padding: 0.5rem 0.6rem;
+    text-align: center;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .log-tabla th:first-child,
+  .log-tabla th:nth-child(2),
+  .log-tabla th:nth-child(3) {
+    text-align: left;
+  }
+  .log-tabla tbody tr {
+    border-bottom: 1px solid var(--borde);
+    transition: background 0.15s;
+  }
+  .log-tabla tbody tr:nth-child(even) {
+    background: var(--color-background-secondary);
+  }
+  .log-tabla tbody tr:hover {
+    background: rgba(242, 130, 65, 0.1);
+  }
+  .log-tabla tbody tr.fila-destacada {
+    background: rgba(242, 130, 65, 0.14);
+    box-shadow: inset 3px 0 0 var(--naranja);
+  }
+  .log-tabla td {
+    padding: 0.55rem 0.6rem;
+    text-align: center;
+    color: var(--muted);
+  }
+  .log-tabla td.fecha-col {
+    text-align: left;
+    white-space: nowrap;
+    font-size: 0.75rem;
+  }
+  .log-tabla td.rival-col {
+    text-align: left;
+    font-weight: 600;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .log-tabla td.equipo-col {
+    text-align: left;
+    font-size: 0.75rem;
+  }
+  .log-tabla td.destacado {
+    font-weight: 800;
+    color: var(--naranja);
+    font-size: 0.95rem;
+  }
+  .log-tabla td.min-col {
+    font-family: monospace;
+    font-size: 0.78rem;
+  }
+  .log-tabla td.tiro {
+    font-size: 0.75rem;
+  }
+  .condicion {
+    font-size: 0.65rem;
+    color: var(--muted);
+    margin-right: 0.3rem;
+  }
+  .resultado-chip {
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 999px;
+    margin-left: 0.4rem;
+  }
+  .resultado-chip.win {
+    background: #f0fdf4;
+    color: #16a34a;
+  }
+  .resultado-chip.loss {
+    background: #fef2f2;
+    color: #dc2626;
+  }
+  [data-theme="dark"] .resultado-chip.win {
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ade80;
+  }
+  [data-theme="dark"] .resultado-chip.loss {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+  }
+</style>

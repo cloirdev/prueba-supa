@@ -19,6 +19,8 @@ export default function AdminPanel({
   const [sponsorId, setSponsorId] = useState(equipo.sponsor_id ?? "");
   const [guardandoSponsor, setGuardandoSponsor] = useState(false);
   const [sponsorMsg, setSponsorMsg] = useState("");
+  const [eliminando, setEliminando] = useState(false);
+  const [eliminarError, setEliminarError] = useState("");
 
   useEffect(() => {
     supabase
@@ -93,6 +95,60 @@ export default function AdminPanel({
     } finally {
       setSubiendoFoto(false);
       if (inputFotoRef.current) inputFotoRef.current.value = "";
+    }
+  }
+
+  async function eliminarEquipo() {
+    if (
+      !confirm(
+        `¿Seguro que quieres eliminar "${nombreEquipo}"?\n\nEsta acción no se puede deshacer.`,
+      )
+    )
+      return;
+
+    setEliminando(true);
+    setEliminarError("");
+    try {
+      // 1. Borrar relaciones "seguras" primero
+      await supabase
+        .from("convocatorias_temporada")
+        .delete()
+        .eq("equipo_id", equipo.id);
+      await supabase
+        .from("convocatorias_entrenador")
+        .delete()
+        .eq("equipo_id", equipo.id);
+      await supabase
+        .from("equipo_competiciones")
+        .delete()
+        .eq("equipo_id", equipo.id);
+
+      // 2. Borrar la foto del storage si existe
+      if (fotoUrl) {
+        const path = fotoUrl.split("/equipos/")[1]?.split("?")[0];
+        if (path) await supabase.storage.from("equipos").remove([path]);
+      }
+
+      // 3. Intentar borrar el equipo
+      const { error } = await supabase
+        .from("equipos")
+        .delete()
+        .eq("id", equipo.id);
+
+      if (error) {
+        if (error.code === "23503") {
+          throw new Error(
+            "No se puede eliminar: tiene partidos, participaciones o noticias asociadas.",
+          );
+        }
+        throw error;
+      }
+
+      onBack();
+    } catch (e) {
+      setEliminarError(e.message);
+    } finally {
+      setEliminando(false);
     }
   }
 
@@ -420,6 +476,59 @@ export default function AdminPanel({
               </div>
             </div>
           ))}
+
+          {/* 4ª celda: eliminar equipo, deliberadamente discreto */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "6px",
+              minHeight: "160px",
+            }}
+          >
+            <button
+              onClick={eliminarEquipo}
+              disabled={eliminando}
+              style={{
+                background: "none",
+                border: "none",
+                color: "var(--muted)",
+                fontSize: "12px",
+                fontWeight: 500,
+                cursor: eliminando ? "not-allowed" : "pointer",
+                padding: "4px 8px",
+                opacity: eliminando ? 0.5 : 1,
+                textDecoration: "underline",
+                textDecorationColor: "transparent",
+                transition: "color .15s, text-decoration-color .15s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = "#dc2626";
+                e.currentTarget.style.textDecorationColor = "#dc2626";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = "var(--muted)";
+                e.currentTarget.style.textDecorationColor = "transparent";
+              }}
+            >
+              {eliminando ? "Eliminando..." : "Eliminar equipo"}
+            </button>
+            {eliminarError && (
+              <p
+                style={{
+                  fontSize: "10px",
+                  color: "#dc2626",
+                  textAlign: "center",
+                  maxWidth: "140px",
+                  margin: 0,
+                }}
+              >
+                {eliminarError}
+              </p>
+            )}
+          </div>
         </div>
       </div>
 

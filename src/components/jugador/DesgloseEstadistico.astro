@@ -1,0 +1,60 @@
+---
+// src/components/jugador/DesgloseEstadistico.astro
+import { porcentaje } from "@/lib/jugador-stats.js";
+import TirosGrid from "./TirosGrid.astro";
+import RadarChart from "./RadarChart.astro";
+
+interface Props {
+  datos: any; // resultado de computarDatos()
+}
+
+const { datos: d } = Astro.props;
+
+const tiros = [
+  {
+    label: "Tiro de campo",
+    an: d.totales.tc_an,
+    int: d.totales.tc_int,
+    pct: porcentaje(d.totales.tc_an, d.totales.tc_int),
+  },
+  {
+    label: "Triples",
+    an: d.totales.t3_an,
+    int: d.totales.t3_int,
+    pct: porcentaje(d.totales.t3_an, d.totales.t3_int),
+  },
+  {
+    label: "Tiros libres",
+    an: d.totales.tl_an,
+    int: d.totales.tl_int,
+    pct: porcentaje(d.totales.tl_an, d.totales.tl_int),
+  },
+];
+---
+
+<section class="seccion seccion-alt">
+  <h2 class="seccion-titulo">Desglose estadístico</h2>
+  <div class="desglose-grid">
+    <TirosGrid tiros={tiros} />
+    <RadarChart valores={d.radar} />
+  </div>
+</section>
+
+<style>
+  .desglose-grid {
+    display: grid;
+    grid-template-columns: 1fr 260px;
+    gap: 2rem;
+    align-items: center;
+  }
+  @media (max-width: 650px) {
+    .desglose-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  @media (max-width: 640px) {
+    .seccion-alt {
+      padding: 1.25rem;
+    }
+  }
+</style>

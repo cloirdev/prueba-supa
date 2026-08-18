@@ -1,0 +1,60 @@
+---
+// src/components/jugador/SelectorTemporada.astro
+interface Props {
+  opciones: string[];
+  porDefecto: string;
+}
+
+const { opciones, porDefecto } = Astro.props;
+---
+
+<div class="selector-wrap">
+  <label for="selector-temporada" class="selector-label">Temporada</label>
+  <select id="selector-temporada">
+    {
+      opciones.map((t) => (
+        <option value={t} selected={t === porDefecto}>
+          {t === "total" ? "Carrera total" : t}
+        </option>
+      ))
+    }
+  </select>
+</div>
+
+<script>
+  const selector = document.getElementById("selector-temporada");
+  selector?.addEventListener("change", (e) => {
+    const val = (e.target as HTMLSelectElement).value;
+    document
+      .querySelectorAll<HTMLElement>(".bloque-temporada")
+      .forEach((el) => {
+        el.classList.toggle("activo", el.dataset.temporada === val);
+      });
+  });
+</script>
+
+<style>
+  .selector-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    margin-bottom: 2rem;
+  }
+  .selector-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+  #selector-temporada {
+    background: var(--card);
+    border: 1px solid var(--borde);
+    color: var(--texto);
+    font-weight: 700;
+    font-size: 0.85rem;
+    padding: 0.5rem 0.9rem;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+</style>

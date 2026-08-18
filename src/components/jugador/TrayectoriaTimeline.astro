@@ -1,0 +1,158 @@
+---
+// src/components/jugador/TrayectoriaTimeline.astro
+import { nombreEquipoPropio, nombreCompeticion } from "@/lib/jugador-stats.js";
+
+interface Props {
+  historial: any[]; // historialOrdenado (convocatorias_temporada)
+}
+
+const { historial } = Astro.props;
+---
+
+<section class="seccion">
+  <h2 class="seccion-titulo">Trayectoria</h2>
+  {
+    historial.length === 0 ? (
+      <p class="vacio">Sin temporadas registradas.</p>
+    ) : (
+      <div class="timeline">
+        {historial.map((h) => {
+          const eq = h.equipos;
+          const nombreEquipo = nombreEquipoPropio(eq);
+          const href =
+            eq?.categorias?.slug && eq?.temporadas?.nombre
+              ? `/equipos/${eq.categorias.slug}/${eq.temporadas.nombre}`
+              : null;
+          return (
+            <div class="timeline-item">
+              <div class="timeline-punto" />
+              <div class="timeline-card">
+                <div class="timeline-dorsal">#{h.dorsal ?? "—"}</div>
+                <div class="timeline-info">
+                  <span class="timeline-temporada">
+                    {eq?.temporadas?.nombre ?? "—"}
+                  </span>
+                  <span class="timeline-equipo">
+                    {href ? <a href={href}>{nombreEquipo}</a> : nombreEquipo}
+                  </span>
+                  <span class="timeline-meta">{nombreCompeticion(eq)}</span>
+                </div>
+                {href && (
+                  <a href={href} class="timeline-arrow" aria-hidden="true">
+                    →
+                  </a>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    )
+  }
+</section>
+
+<style>
+  .timeline {
+    position: relative;
+    padding-left: 1.4rem;
+  }
+  .timeline::before {
+    content: "";
+    position: absolute;
+    left: 5px;
+    top: 6px;
+    bottom: 6px;
+    width: 2px;
+    background: linear-gradient(
+      to bottom,
+      var(--naranja),
+      rgba(242, 130, 65, 0.1)
+    );
+  }
+  .timeline-item {
+    position: relative;
+    margin-bottom: 0.85rem;
+  }
+  .timeline-punto {
+    position: absolute;
+    left: -1.4rem;
+    top: 1.15rem;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--naranja);
+    box-shadow: 0 0 0 4px rgba(242, 130, 65, 0.18);
+  }
+  .timeline-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.85rem 1rem;
+    background: var(--card);
+    border: 1px solid var(--borde);
+    border-radius: 10px;
+    transition: border-color 0.15s;
+  }
+  .timeline-card:hover {
+    border-color: rgba(242, 130, 65, 0.5);
+  }
+  .timeline-dorsal {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: rgba(242, 130, 65, 0.15);
+    color: var(--naranja-oscuro);
+    font-weight: 800;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  [data-theme="dark"] .timeline-dorsal {
+    color: var(--naranja);
+  }
+  .timeline-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    flex: 1;
+    min-width: 0;
+  }
+  .timeline-temporada {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--naranja);
+  }
+  .timeline-equipo {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--texto);
+  }
+  .timeline-equipo a {
+    color: inherit;
+    text-decoration: none;
+  }
+  .timeline-equipo a:hover {
+    color: var(--naranja);
+  }
+  .timeline-meta {
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+  .timeline-arrow {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 1rem;
+    flex-shrink: 0;
+    transition:
+      color 0.15s,
+      transform 0.15s;
+  }
+  .timeline-card:hover .timeline-arrow {
+    color: var(--naranja);
+    transform: translateX(2px);
+  }
+</style>

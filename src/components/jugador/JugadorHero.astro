@@ -1,0 +1,324 @@
+---
+// src/components/jugador/JugadorHero.astro
+import { posicionLabel, nombreCompeticion } from "@/lib/jugador-stats.js";
+
+interface Props {
+  jugador: any;
+  dorsalActual: number | null | undefined;
+  equipoActual: any;
+  datosActuales: any; // resultado de computarDatos()
+}
+
+const { jugador, dorsalActual, equipoActual, datosActuales } = Astro.props;
+
+const iniciales =
+  `${jugador.nombre?.[0] ?? ""}${jugador.apellido?.[0] ?? ""}`.toUpperCase();
+---
+
+{
+  jugador.foto_accion_url && (
+    <div class="bg-foto-wrapper" aria-hidden="true">
+      <img src={jugador.foto_accion_url} alt="" class="bg-foto-img" />
+    </div>
+  )
+}
+
+<div class="jugador-hero">
+  {
+    dorsalActual != null && (
+      <span class="dorsal-gigante" aria-hidden="true">
+        #{dorsalActual}
+      </span>
+    )
+  }
+  <div class="jugador-hero-inner">
+    <a href="javascript:history.back()" class="volver">← Volver</a>
+
+    <div class="jugador-hero-content">
+      <div class="avatar-wrap">
+        {
+          jugador.foto_dni_url ? (
+            <img
+              src={jugador.foto_dni_url}
+              alt={`${jugador.nombre} ${jugador.apellido}`}
+              class="avatar avatar-foto"
+            />
+          ) : (
+            <div class="avatar">{iniciales}</div>
+          )
+        }
+        {
+          dorsalActual != null && (
+            <span class="dorsal-chip">#{dorsalActual}</span>
+          )
+        }
+      </div>
+
+      <div class="jugador-info">
+        <div class="chips-row">
+          <span class="chip chip-posicion">
+            {
+              posicionLabel[jugador.posicion] ??
+                jugador.posicion ??
+                "Sin posición"
+            }
+          </span>
+          {
+            equipoActual && (
+              <span class="chip chip-categoria">
+                {equipoActual.categorias?.nombre ?? "—"}
+                {nombreCompeticion(equipoActual) &&
+                  ` · ${nombreCompeticion(equipoActual)}`}
+              </span>
+            )
+          }
+        </div>
+        <h1>
+          {jugador.nombre}
+          <span class="apellido">{jugador.apellido}</span>
+        </h1>
+
+        <div class="hero-stats">
+          <div class="hero-stat">
+            <span class="hero-stat-val">{datosActuales.mediasFmt.puntos}</span>
+            <span class="hero-stat-label">PTS/P</span>
+          </div>
+          <div class="hero-stat">
+            <span class="hero-stat-val">{datosActuales.mediasFmt.rebotes}</span>
+            <span class="hero-stat-label">REB/P</span>
+          </div>
+          <div class="hero-stat">
+            <span class="hero-stat-val"
+              >{datosActuales.mediasFmt.asistencias}</span
+            >
+            <span class="hero-stat-label">AST/P</span>
+          </div>
+          <div class="hero-stat">
+            <span class="hero-stat-val"
+              >{datosActuales.mediasFmt.valoracion}</span
+            >
+            <span class="hero-stat-label">VAL/P</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .bg-foto-wrapper {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    max-width: 850px;
+    height: 70vh;
+    pointer-events: none;
+    z-index: 0;
+    overflow: hidden;
+  }
+  .bg-foto-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top center;
+    opacity: 0.45;
+    mask-image:
+      linear-gradient(to right, rgba(0, 0, 0, 1) 20%, transparent 100%),
+      linear-gradient(to bottom, rgba(0, 0, 0, 1) 40%, transparent 100%);
+    mask-composite: intersect;
+    -webkit-mask-image:
+      linear-gradient(to right, rgba(0, 0, 0, 1) 20%, transparent 100%),
+      linear-gradient(to bottom, rgba(0, 0, 0, 1) 40%, transparent 100%);
+    -webkit-mask-composite: source-in;
+  }
+
+  .jugador-hero {
+    position: relative;
+    z-index: 1;
+    padding: 2.5rem 1.5rem 3rem;
+    color: var(--texto);
+    overflow: hidden;
+    background: transparent;
+  }
+  .dorsal-gigante {
+    position: absolute;
+    top: -2rem;
+    right: 1rem;
+    font-size: clamp(6rem, 15vw, 14rem);
+    font-weight: 900;
+    color: var(--naranja);
+    opacity: 0.12;
+    line-height: 1;
+    z-index: 0;
+    pointer-events: none;
+    user-select: none;
+  }
+  .jugador-hero-inner {
+    position: relative;
+    max-width: 1180px;
+    margin: 0 auto;
+    z-index: 1;
+  }
+  .volver {
+    display: inline-block;
+    margin-bottom: 1.5rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--naranja);
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+  }
+  .jugador-hero-content {
+    display: flex;
+    gap: 2rem;
+    align-items: center;
+  }
+  .avatar-wrap {
+    position: relative;
+    flex-shrink: 0;
+  }
+  .avatar {
+    width: 110px;
+    height: 110px;
+    border-radius: 50%;
+    background: var(--card);
+    border: 3px solid var(--naranja);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: var(--texto);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  }
+  .avatar-foto {
+    object-fit: cover;
+    object-position: top;
+  }
+  .dorsal-chip {
+    position: absolute;
+    bottom: -4px;
+    right: -4px;
+    background: var(--naranja);
+    color: #ffffff;
+    font-weight: 800;
+    font-size: 0.9rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 12px;
+    border: 2px solid var(--card);
+  }
+  .jugador-info {
+    flex: 1;
+  }
+  .chips-row {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+  }
+  .chip {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .chip-posicion {
+    background: var(--naranja);
+    color: #ffffff;
+  }
+  .chip-categoria {
+    background: var(--card);
+    color: var(--texto);
+    border: 1px solid var(--borde);
+  }
+  h1 {
+    font-size: clamp(1.8rem, 4vw, 2.8rem);
+    font-weight: 800;
+    line-height: 1.1;
+    margin: 0 0 1.25rem 0;
+    color: var(--texto);
+  }
+  h1 .apellido {
+    display: block;
+    color: var(--naranja);
+  }
+  .hero-stats {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+  .hero-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .hero-stat-val {
+    font-size: 1.5rem;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--texto);
+  }
+  .hero-stat-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--muted);
+    margin-top: 0.25rem;
+  }
+
+  @media (max-width: 900px) {
+    .bg-foto-wrapper {
+      width: 100vw;
+      height: 70vh;
+    }
+    .dorsal-gigante {
+      display: none;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .jugador-hero-content {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 1.25rem;
+    }
+    .avatar {
+      width: 90px;
+      height: 90px;
+      font-size: 2rem;
+    }
+    .hero-stats {
+      gap: 1.25rem;
+    }
+    .dorsal-gigante {
+      top: 0;
+      right: 0.5rem;
+      opacity: 0.08;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .jugador-hero {
+      padding: 2rem 1rem 2rem;
+    }
+    .jugador-hero-content {
+      gap: 1.25rem;
+    }
+    .avatar,
+    .avatar-foto {
+      width: 72px;
+      height: 72px;
+      font-size: 1.5rem;
+    }
+    .hero-stats {
+      gap: 1rem;
+    }
+    .bg-foto-img {
+      opacity: 0.2;
+    }
+  }
+</style>
