@@ -1,0 +1,175 @@
+---
+// src/components/equipo/TablaClasificacion.astro
+import {
+  calcularFilasClasificacion,
+  diferencia,
+} from "@/lib/equipo-temporada.js";
+
+interface Props {
+  fase: any;
+  participantes: any[];
+  clasificacion: any[];
+  equipoId: string | number;
+  nombreEquipo: string;
+  activa: boolean;
+}
+
+const { fase, participantes, clasificacion, equipoId, nombreEquipo, activa } =
+  Astro.props;
+
+const filas = calcularFilasClasificacion(
+  participantes,
+  clasificacion,
+  equipoId,
+  nombreEquipo,
+);
+---
+
+<div
+  class:list={["fase-panel", activa && "active"]}
+  data-fase-panel={fase.id}
+  role="tabpanel"
+>
+  {
+    filas.length === 0 ? (
+      <p class="vacio">Sin equipos en esta fase.</p>
+    ) : (
+      <div class="tabla-wrapper">
+        <table class="tabla-clasificacion">
+          <thead>
+            <tr>
+              <th class="col-pos">#</th>
+              <th class="col-nombre">Equipo</th>
+              <th>PJ</th>
+              <th>V</th>
+              <th>D</th>
+              <th>PF</th>
+              <th>PC</th>
+              <th>Dif</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filas.map(({ p, c, nombre, esMiEquipo }) => {
+              const d = diferencia(c);
+              return (
+                <tr class:list={[esMiEquipo && "mi-equipo"]}>
+                  <td class="col-pos">
+                    <span
+                      class:list={["pos-badge", c?.posicion === 1 && "primero"]}
+                    >
+                      {c?.posicion ?? "—"}
+                    </span>
+                  </td>
+                  <td class="col-nombre">
+                    <span class:list={[esMiEquipo && "nombre-destacado"]}>
+                      {nombre}
+                    </span>
+                  </td>
+                  <td>{c?.partidos_jugados ?? 0}</td>
+                  <td class="col-v">{c?.victorias ?? 0}</td>
+                  <td class="col-d">{c?.derrotas ?? 0}</td>
+                  <td>{c?.puntos_favor ?? 0}</td>
+                  <td>{c?.puntos_contra ?? 0}</td>
+                  <td
+                    class:list={["col-dif", d > 0 ? "pos" : d < 0 ? "neg" : ""]}
+                  >
+                    {d > 0 ? `+${d}` : d}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+</div>
+
+<style>
+  .fase-panel {
+    display: none;
+  }
+  .fase-panel.active {
+    display: block;
+  }
+
+  .tabla-wrapper {
+    overflow-x: auto;
+  }
+  .tabla-clasificacion {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+  .tabla-clasificacion thead tr {
+    border-bottom: 1px solid var(--borde, rgba(255, 255, 255, 0.07));
+  }
+  .tabla-clasificacion th {
+    padding: 8px 10px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--muted, #64748b);
+    text-align: center;
+  }
+  .tabla-clasificacion th.col-pos {
+    width: 36px;
+  }
+  .tabla-clasificacion th.col-nombre {
+    text-align: left;
+  }
+  .tabla-clasificacion td {
+    padding: 10px 10px;
+    text-align: center;
+    border-bottom: 1px solid var(--borde, rgba(255, 255, 255, 0.04));
+    font-variant-numeric: tabular-nums;
+  }
+  .tabla-clasificacion td.col-nombre {
+    text-align: left;
+  }
+  .tabla-clasificacion td.col-pos {
+    text-align: center;
+  }
+  .tabla-clasificacion td.col-v {
+    color: #22c55e;
+    font-weight: 700;
+  }
+  .tabla-clasificacion td.col-d {
+    color: #f6603b;
+    font-weight: 700;
+  }
+  .tabla-clasificacion td.col-dif {
+    font-weight: 700;
+  }
+  .tabla-clasificacion td.col-dif.pos {
+    color: #22c55e;
+  }
+  .tabla-clasificacion td.col-dif.neg {
+    color: #f6603b;
+  }
+  .tabla-clasificacion tr.mi-equipo {
+    background: rgba(249, 115, 22, 0.26);
+  }
+  .tabla-clasificacion tr.mi-equipo td {
+    border-bottom-color: rgba(249, 115, 22, 0.1);
+  }
+  .pos-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    background: var(--card, #1e293b);
+  }
+  .pos-badge.primero {
+    background: var(--orange, #f97316);
+    color: white;
+  }
+  .nombre-destacado {
+    font-weight: 700;
+  }
+</style>

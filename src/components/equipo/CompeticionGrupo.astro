@@ -1,0 +1,76 @@
+---
+// src/components/equipo/CompeticionGrupo.astro
+import { agruparFasesPorNivel } from "@/lib/equipo-temporada.js";
+import FasesNav from "./FasesNav.astro";
+import TablaClasificacion from "./TablaClasificacion.astro";
+
+interface Props {
+  grupo: { competicion: any; fases: any[] };
+  esGrupoInicial: boolean; // true si es el primer grupo de competición de la página
+  equipoId: string | number;
+  nombreEquipo: string;
+  participantesPorFase: Map<string | number, any[]>;
+  clasificacionPorFase: Map<string | number, any[]>;
+}
+
+const {
+  grupo,
+  esGrupoInicial,
+  equipoId,
+  nombreEquipo,
+  participantesPorFase,
+  clasificacionPorFase,
+} = Astro.props;
+
+const niveles = agruparFasesPorNivel(grupo.fases);
+// Por defecto, solo la primera fase del primer grupo de la página está activa.
+const faseActivaId = esGrupoInicial ? (grupo.fases[0]?.id ?? null) : null;
+---
+
+<div class="competicion-grupo">
+  <h3 class="competicion-grupo-titulo">{grupo.competicion.nombre}</h3>
+
+  <div class="clasificacion-wrapper">
+    {
+      Object.keys(niveles).length > 0 && (
+        <FasesNav niveles={niveles} faseActivaId={faseActivaId} />
+      )
+    }
+
+    {
+      grupo.fases.map((f) => (
+        <TablaClasificacion
+          fase={f}
+          participantes={participantesPorFase.get(f.id) ?? []}
+          clasificacion={clasificacionPorFase.get(f.id) ?? []}
+          equipoId={equipoId}
+          nombreEquipo={nombreEquipo}
+          activa={f.id === faseActivaId}
+        />
+      ))
+    }
+  </div>
+</div>
+
+<style>
+  .competicion-grupo {
+    border: 1px solid var(--borde, rgba(255, 255, 255, 0.07));
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .competicion-grupo-titulo {
+    font-size: 0.95rem;
+    font-weight: 800;
+    padding: 0.9rem 1.2rem;
+    margin: 0;
+    background: rgba(249, 115, 22, 0.08);
+    border-bottom: 1px solid rgba(249, 115, 22, 0.2);
+    color: var(--orange, #f97316);
+  }
+  .clasificacion-wrapper {
+    padding: 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+</style>

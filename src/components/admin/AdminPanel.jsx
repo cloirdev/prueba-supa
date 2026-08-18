@@ -79,22 +79,70 @@ export default function AdminPanel({
     try {
       const ext = file.name.split(".").pop();
       const path = `${equipo.id}.${ext}`;
+
       const { error: uploadError } = await supabase.storage
         .from("equipos")
-        .upload(path, file, { upsert: true });
-      if (uploadError) throw new Error(uploadError.message);
+        .upload(path, file, { upsert: true, cacheControl: "0" });
+      if (uploadError) throw new Error(`Storage: ${uploadError.message}`);
+
       const { data } = supabase.storage.from("equipos").getPublicUrl(path);
-      const publicUrl = `${data.publicUrl}?t=${Date.now()}`;
-      await supabase
+      // Clave: versionamos la URL para que el navegador la trate como
+      // un recurso distinto y no sirva la copia cacheada en memoria.
+      const urlConVersion = `${data.publicUrl}?v=${Date.now()}`;
+
+      const { data: updated, error: updateError } = await supabase
         .from("equipos")
-        .update({ foto_url: data.publicUrl })
-        .eq("id", equipo.id);
-      setFotoUrl(publicUrl);
+        .update({ foto_url: urlConVersion })
+        .eq("id", equipo.id)
+        .select();
+
+      if (updateError) throw new Error(`BD: ${updateError.message}`);
+      if (!updated || updated.length === 0) {
+        throw new Error("BD: 0 filas actualizadas.");
+      }
+
+      setFotoUrl(urlConVersion);
     } catch (e) {
+      console.error("onFotoChange:", e);
       setFotoError(e.message);
     } finally {
       setSubiendoFoto(false);
       if (inputFotoRef.current) inputFotoRef.current.value = "";
+    }
+  }
+
+  async function borrarFoto() {
+    if (!confirm("¿Borrar la foto del equipo?")) return;
+    setBorrandoFoto(true);
+    setFotoError("");
+    try {
+      if (fotoUrl) {
+        const path = fotoUrl.split("/equipos/")[1]?.split("?")[0];
+        if (path) {
+          const { error: removeError } = await supabase.storage
+            .from("equipos")
+            .remove([path]);
+          if (removeError) throw new Error(`Storage: ${removeError.message}`);
+        }
+      }
+
+      const { data: updated, error: updateError } = await supabase
+        .from("equipos")
+        .update({ foto_url: null })
+        .eq("id", equipo.id)
+        .select();
+
+      if (updateError) throw new Error(`BD: ${updateError.message}`);
+      if (!updated || updated.length === 0) {
+        throw new Error("BD: 0 filas actualizadas.");
+      }
+
+      setFotoUrl(null);
+    } catch (e) {
+      console.error("borrarFoto:", e);
+      setFotoError(e.message);
+    } finally {
+      setBorrandoFoto(false);
     }
   }
 
@@ -122,26 +170,65 @@ export default function AdminPanel({
         .from("equipo_competiciones")
         .delete()
         .eq("equipo_id", equipo.id);
+      // convocatorias_partido también referencia equipo_id: si el equipo
+      // jugó algún partido con estadísticas de jugadores, esto bloqueaba
+      // el borrado sin dar ninguna pista.
+      await supabase
+        .from("convocatorias_partido")
+        .delete()
+        .eq("equipo_id", equipo.id);
 
-      // 2. Borrar la foto del storage si existe
+      // 1b. Limpiar referencias en perfiles (entrenadores) para que no
+      // queden apuntando a un equipo_id inexistente.
+      await supabase
+        .from("perfiles")
+        .update({ equipo_id: null })
+        .eq("equipo_id", equipo.id);
+
+      const { data: perfilesConEquipo } = await supabase
+        .from("perfiles")
+        .select("id, equipo_ids")
+        .contains("equipo_ids", [equipo.id]);
+
+      if (perfilesConEquipo?.length) {
+        await Promise.all(
+          perfilesConEquipo.map((p) =>
+            supabase
+              .from("perfiles")
+              .update({
+                equipo_ids: (p.equipo_ids ?? []).filter(
+                  (id) => id !== equipo.id,
+                ),
+              })
+              .eq("id", p.id),
+          ),
+        );
+      }
+
       if (fotoUrl) {
         const path = fotoUrl.split("/equipos/")[1]?.split("?")[0];
         if (path) await supabase.storage.from("equipos").remove([path]);
       }
 
-      // 3. Intentar borrar el equipo
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("equipos")
         .delete()
-        .eq("id", equipo.id);
+        .eq("id", equipo.id)
+        .select();
 
       if (error) {
         if (error.code === "23503") {
           throw new Error(
-            "No se puede eliminar: tiene partidos, participaciones o noticias asociadas.",
+            "No se puede eliminar: tiene partidos, participaciones o noticias asociadas. Elimínalos o reasígnalos primero.",
           );
         }
         throw error;
+      }
+
+      if (!data || data.length === 0) {
+        throw new Error(
+          "No se ha borrado ningún registro. Probablemente falta una política de RLS (DELETE) para este usuario en la tabla 'equipos'.",
+        );
       }
 
       onBack();
@@ -149,23 +236,6 @@ export default function AdminPanel({
       setEliminarError(e.message);
     } finally {
       setEliminando(false);
-    }
-  }
-
-  async function borrarFoto() {
-    if (!confirm("¿Borrar la foto del equipo?")) return;
-    setBorrandoFoto(true);
-    setFotoError("");
-    try {
-      await supabase
-        .from("equipos")
-        .update({ foto_url: null })
-        .eq("id", equipo.id);
-      setFotoUrl(null);
-    } catch (e) {
-      setFotoError(e.message);
-    } finally {
-      setBorrandoFoto(false);
     }
   }
 
@@ -427,6 +497,7 @@ export default function AdminPanel({
         {/* ── Columna derecha: cuadrícula 2×2 ── */}
         <div
           style={{
+            position: "relative",
             display: "grid",
             gridTemplateColumns: "1fr 1fr",
             gridTemplateRows: "1fr 1fr",
@@ -477,15 +548,16 @@ export default function AdminPanel({
             </div>
           ))}
 
-          {/* 4ª celda: eliminar equipo, deliberadamente discreto */}
+          {/* 4ª celda: ahora solo un enlace pequeño anclado a la esquina
+      inferior derecha del grid, en vez de ocupar una tarjeta entera. */}
           <div
             style={{
               display: "flex",
               flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "6px",
-              minHeight: "160px",
+              alignItems: "flex-end",
+              justifyContent: "flex-end",
+              gap: "4px",
+              padding: "8px",
             }}
           >
             <button
@@ -495,10 +567,10 @@ export default function AdminPanel({
                 background: "none",
                 border: "none",
                 color: "var(--muted)",
-                fontSize: "12px",
+                fontSize: "11px",
                 fontWeight: 500,
                 cursor: eliminando ? "not-allowed" : "pointer",
-                padding: "4px 8px",
+                padding: "4px 6px",
                 opacity: eliminando ? 0.5 : 1,
                 textDecoration: "underline",
                 textDecorationColor: "transparent",
@@ -520,7 +592,7 @@ export default function AdminPanel({
                 style={{
                   fontSize: "10px",
                   color: "#dc2626",
-                  textAlign: "center",
+                  textAlign: "right",
                   maxWidth: "140px",
                   margin: 0,
                 }}

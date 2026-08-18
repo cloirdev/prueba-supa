@@ -1,0 +1,53 @@
+---
+// src/components/equipo/ClasificacionPanel.astro
+import CompeticionGrupo from "./CompeticionGrupo.astro";
+
+interface Props {
+  fasesPorCompeticion: { competicion: any; fases: any[] }[];
+  equipoId: string | number;
+  nombreEquipo: string;
+  participantesPorFase: Map<string | number, any[]>;
+  clasificacionPorFase: Map<string | number, any[]>;
+}
+
+const {
+  fasesPorCompeticion,
+  equipoId,
+  nombreEquipo,
+  participantesPorFase,
+  clasificacionPorFase,
+} = Astro.props;
+---
+
+<div data-tab-panel="clasificacion" class="tab-panel">
+  <section class="seccion">
+    <h2 class="seccion-titulo">Clasificación</h2>
+
+    {
+      fasesPorCompeticion.length === 0 ? (
+        <p class="vacio">La clasificación aún no está disponible.</p>
+      ) : (
+        <div class="competiciones-wrapper">
+          {fasesPorCompeticion.map((grupo, grupoIdx) => (
+            <CompeticionGrupo
+              grupo={grupo}
+              esGrupoInicial={grupoIdx === 0}
+              equipoId={equipoId}
+              nombreEquipo={nombreEquipo}
+              participantesPorFase={participantesPorFase}
+              clasificacionPorFase={clasificacionPorFase}
+            />
+          ))}
+        </div>
+      )
+    }
+  </section>
+</div>
+
+<style>
+  .competiciones-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+  }
+</style>

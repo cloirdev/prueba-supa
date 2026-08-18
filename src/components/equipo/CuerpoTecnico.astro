@@ -1,0 +1,88 @@
+---
+// src/components/equipo/CuerpoTecnico.astro
+interface Props {
+  entrenadorPrincipal: any;
+  ayudantes: any[];
+}
+
+const { entrenadorPrincipal, ayudantes } = Astro.props;
+---
+
+<div class="cuerpo-tecnico">
+  <h3 class="cuerpo-tecnico-titulo">Cuerpo técnico</h3>
+  <div class="cuerpo-tecnico-lista">
+    {
+      entrenadorPrincipal && (
+        <div class="entrenador-card">
+          <div class="entrenador-icono">🏀</div>
+          <div>
+            <div class="entrenador-nombre">
+              {entrenadorPrincipal.entrenadores.nombre}{" "}
+              {entrenadorPrincipal.entrenadores.apellido}
+            </div>
+            <div class="entrenador-rol">Entrenador principal</div>
+          </div>
+        </div>
+      )
+    }
+    {
+      ayudantes.map((e) => (
+        <div class="entrenador-card">
+          <div class="entrenador-icono">📋</div>
+          <div>
+            <div class="entrenador-nombre">
+              {e.entrenadores.nombre} {e.entrenadores.apellido}
+            </div>
+            <div class="entrenador-rol">Ayudante</div>
+          </div>
+        </div>
+      ))
+    }
+  </div>
+</div>
+
+<style>
+  .cuerpo-tecnico {
+    margin-top: 2.5rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--borde, rgba(255, 255, 255, 0.07));
+  }
+  .cuerpo-tecnico-titulo {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--orange, #f97316);
+    margin-bottom: 1rem;
+  }
+  .cuerpo-tecnico-lista {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  .entrenador-card {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1.1rem;
+    background: var(--card, #1e293b);
+    border: 1px solid var(--borde, rgba(255, 255, 255, 0.07));
+    border-radius: 10px;
+    min-width: 220px;
+  }
+  .entrenador-icono {
+    font-size: 1.3rem;
+  }
+  .entrenador-nombre {
+    font-size: 0.9rem;
+    font-weight: 700;
+  }
+  .entrenador-rol {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted, #64748b);
+    margin-top: 2px;
+  }
+</style>

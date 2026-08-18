@@ -1,0 +1,168 @@
+---
+// src/components/equipo/PartidoProximo.astro
+import {
+  nombreRival,
+  escudoRival,
+  formatFecha,
+  etiquetaJornada,
+} from "@/lib/equipo-temporada.js";
+
+interface Props {
+  partido: any;
+  nombreEquipo: string;
+}
+
+const { partido: p, nombreEquipo } = Astro.props;
+---
+
+<div class="partido-card">
+  <div class="partido-meta">
+    <span class="jornada">{etiquetaJornada(p)}</span>
+    <span class="fecha">{formatFecha(p.fecha)}</span>
+  </div>
+  <div class="partido-vs">
+    <span class:list={["rival-nombre", p.es_local && "propio"]}>
+      {p.es_local ? nombreEquipo : nombreRival(p)}
+    </span>
+    <div class="escudos-vs">
+      <img
+        src={p.es_local ? "/escudo-naranja.png" : escudoRival(p)}
+        alt={p.es_local ? "CB Jaca" : nombreRival(p)}
+        class="escudo-mini"
+        onerror="this.src='/escudo.png'"
+      />
+      <span class="vs-sep">vs</span>
+      <img
+        src={p.es_local ? escudoRival(p) : "/escudo-naranja.png"}
+        alt={p.es_local ? nombreRival(p) : "CB Jaca"}
+        class="escudo-mini"
+        onerror="this.src='/escudo.png'"
+      />
+    </div>
+    {
+      p.puntos_favor !== null && (
+        <span
+          class:list={[
+            "marcador",
+            p.puntos_favor > p.puntos_contra ? "victoria" : "derrota",
+          ]}
+        >
+          {p.es_local ? p.puntos_favor : p.puntos_contra}
+          {" – "}
+          {p.es_local ? p.puntos_contra : p.puntos_favor}
+        </span>
+      )
+    }
+    <span class:list={["rival-nombre", !p.es_local && "propio"]}>
+      {p.es_local ? nombreRival(p) : nombreEquipo}
+    </span>
+  </div>
+  <span class:list={["condicion-pill", p.es_local ? "local" : "visitante"]}>
+    {p.es_local ? "Local" : "Visitante"}
+  </span>
+</div>
+
+<style>
+  .partido-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.8rem 1rem;
+    background: var(--card, #1e293b);
+    border: 1px solid var(--borde, rgba(255, 255, 255, 0.07));
+    border-left: 3px solid transparent;
+    border-radius: 10px;
+    text-decoration: none;
+    color: inherit;
+  }
+  .partido-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 75px;
+  }
+  .jornada {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--muted, #64748b);
+  }
+  .fecha {
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+  .partido-vs {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex: 1;
+    min-width: 0;
+  }
+  .rival-nombre {
+    font-size: 0.85rem;
+    color: var(--muted, #64748b);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .rival-nombre.propio {
+    font-weight: 700;
+    color: inherit;
+  }
+  .vs-sep {
+    font-size: 0.72rem;
+    color: var(--muted, #64748b);
+    flex-shrink: 0;
+  }
+  .marcador {
+    font-size: 1rem;
+    font-weight: 800;
+    min-width: 55px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .marcador.victoria {
+    color: #22c55e;
+  }
+  .marcador.derrota {
+    color: #f6603b;
+  }
+  .condicion-pill {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+    flex-shrink: 0;
+  }
+  .condicion-pill.local {
+    background: rgba(249, 115, 22, 0.15);
+    color: var(--orange, #f97316);
+  }
+  .condicion-pill.visitante {
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+  }
+  .escudos-vs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .escudo-mini {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+    border-radius: 4px;
+  }
+
+  @media (max-width: 640px) {
+    .partido-vs {
+      flex-wrap: wrap;
+    }
+    .rival-nombre {
+      flex: unset;
+      max-width: 120px;
+    }
+  }
+</style>

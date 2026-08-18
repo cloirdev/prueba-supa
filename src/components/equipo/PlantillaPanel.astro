@@ -1,0 +1,55 @@
+---
+// src/components/equipo/PlantillaPanel.astro
+import JugadorCard from "./JugadorCard.astro";
+import CuerpoTecnico from "./CuerpoTecnico.astro";
+
+interface Props {
+  plantilla: any[];
+  entrenadores: any[];
+}
+
+const { plantilla, entrenadores } = Astro.props;
+
+const entrenadorPrincipal = entrenadores.find((e) => e.rol === "principal");
+const ayudantes = entrenadores.filter((e) => e.rol === "ayudante");
+---
+
+<div data-tab-panel="plantilla" class="tab-panel">
+  <section class="seccion">
+    <h2 class="seccion-titulo">Plantilla</h2>
+    {
+      plantilla.length === 0 ? (
+        <p class="vacio">Sin jugadores registrados.</p>
+      ) : (
+        <div class="plantilla-grid">
+          {plantilla.map((c) => (
+            <JugadorCard convocatoria={c} />
+          ))}
+        </div>
+      )
+    }
+
+    {
+      entrenadores.length > 0 && (
+        <CuerpoTecnico
+          entrenadorPrincipal={entrenadorPrincipal}
+          ayudantes={ayudantes}
+        />
+      )
+    }
+  </section>
+</div>
+
+<style>
+  .plantilla-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.9rem;
+  }
+
+  @media (max-width: 640px) {
+    .plantilla-grid {
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    }
+  }
+</style>

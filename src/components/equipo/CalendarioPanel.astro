@@ -1,0 +1,64 @@
+---
+// src/components/equipo/CalendarioPanel.astro
+import PartidoProximo from "./PartidoProximo.astro";
+import PartidoResultado from "./PartidoResultado.astro";
+
+interface Props {
+  todosPartidos: any[];
+  nombreEquipo: string;
+}
+
+const { todosPartidos, nombreEquipo } = Astro.props;
+
+const pendientes = todosPartidos.filter((p) => p.puntos_favor === null);
+const disputados = [
+  ...todosPartidos.filter((p) => p.puntos_favor !== null),
+].reverse();
+---
+
+<div data-tab-panel="calendario" class="tab-panel">
+  <section class="seccion">
+    <h2 class="seccion-titulo">Calendario y Resultados</h2>
+    {
+      todosPartidos.length === 0 ? (
+        <p class="vacio">Sin partidos registrados.</p>
+      ) : (
+        <div class="partidos-columnas">
+          {pendientes.length > 0 && (
+            <div class="partidos-bloque">
+              <h3 class="bloque-label">Próximos partidos</h3>
+              <div class="partidos-lista">
+                {pendientes.map((p) => (
+                  <PartidoProximo partido={p} nombreEquipo={nombreEquipo} />
+                ))}
+              </div>
+            </div>
+          )}
+          {disputados.length > 0 && (
+            <div class="partidos-bloque">
+              <h3 class="bloque-label">Resultados</h3>
+              <div class="partidos-lista">
+                {disputados.map((p) => (
+                  <PartidoResultado partido={p} nombreEquipo={nombreEquipo} />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )
+    }
+  </section>
+</div>
+
+<style>
+  .partidos-columnas {
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+  }
+  .partidos-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+</style>

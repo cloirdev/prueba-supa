@@ -71,6 +71,27 @@ function nombresCompeticiones(equipo) {
   return nombres.length > 0 ? nombres.join(", ") : "Sin competición";
 }
 
+// Select reutilizado tanto en la carga de la lista como en el refetch
+// puntual al seleccionar un equipo, para que ambos devuelvan la misma forma.
+const SELECT_EQUIPO = `
+  id,
+  foto_url,
+  sponsor_id,
+  categoria_id,
+  temporada_id,
+  categorias (id, nombre, genero),
+  temporadas:temporadas!equipos_temporada_id_fkey (nombre),
+  sponsors (
+    id,
+    nombre,
+    logo_url
+  ),
+  equipo_competiciones (
+    competicion_id,
+    competiciones:competiciones!equipo_competiciones_competicion_id_fkey (id, nombre)
+  )
+`;
+
 export default function AdminEquipos({
   supabase,
   perfil,
@@ -90,26 +111,7 @@ export default function AdminEquipos({
         // Eliminado .order("sponsor") para evitar el fallo de columna inexistente
         let query = supabase
           .from("equipos")
-          .select(
-            `
-              id,
-              foto_url,
-              sponsor_id,
-              categoria_id,
-              temporada_id,
-              categorias (id, nombre, genero),
-              temporadas:temporadas!equipos_temporada_id_fkey (nombre),
-              sponsors (
-                id,
-                nombre,
-                logo_url
-              ),
-              equipo_competiciones (
-                competicion_id,
-                competiciones:competiciones!equipo_competiciones_competicion_id_fkey (id, nombre)
-              )
-            `,
-          )
+          .select(SELECT_EQUIPO)
           .eq("temporada_id", temporada.id);
 
         if (perfil?.rol !== "admin") {
@@ -145,6 +147,26 @@ export default function AdminEquipos({
     }
     if (temporada?.id) cargar();
   }, [temporada?.id, perfil]);
+
+  // Al entrar a un equipo, pedimos su fila fresca en vez de reenviar el
+  // objeto que quedó cacheado en `equipos` — así AdminPanel siempre arranca
+  // con foto_url/sponsor actuales, aunque esta lista no se haya recargado
+  // desde la última visita (p. ej. al volver con onBack sin desmontar este
+  // componente).
+  async function seleccionarEquipo(equipoBase) {
+    const { data, error } = await supabase
+      .from("equipos")
+      .select(SELECT_EQUIPO)
+      .eq("id", equipoBase.id)
+      .single();
+
+    if (error) {
+      console.error("Error refrescando equipo:", error);
+      onSelect(equipoBase);
+      return;
+    }
+    onSelect(data);
+  }
 
   if (cargando && equipos.length === 0)
     return <p style={{ color: "var(--muted)" }}>Cargando equipos...</p>;
@@ -252,7 +274,7 @@ export default function AdminEquipos({
         {equipos.map((e) => (
           <div
             key={e.id}
-            onClick={() => onSelect(e)}
+            onClick={() => seleccionarEquipo(e)}
             className="card adm-card-row adm-card-clickable"
             style={
               vistaCards

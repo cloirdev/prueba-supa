@@ -1,0 +1,55 @@
+/* src/styles/equipo.css
+   Clases "de layout" reutilizadas por varios componentes de la página de
+   equipo/temporada (PlantillaPanel, CalendarioPanel, ClasificacionPanel).
+   Import global (sin scoping) desde la página [temporada_slug]/index.astro. */
+
+.tab-panel {
+  display: none;
+}
+.tab-panel.active {
+  display: block;
+}
+
+.competicion-label {
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--orange, #f97316);
+  padding: 0.75rem;
+  background: rgba(249, 115, 22, 0.08);
+  border-bottom: 1px solid rgba(249, 115, 22, 0.2);
+}
+
+.seccion {
+  max-width: 1200px;
+  padding: 3rem 2rem;
+  margin: 0 auto;
+}
+
+.seccion-titulo {
+  font-size: 1.4rem;
+  font-weight: 800;
+  margin-bottom: 1.5rem;
+}
+.bloque-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--orange, #f97316);
+  margin-bottom: 0.75rem;
+}
+.vacio {
+  color: var(--muted, #64748b);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 640px) {
+  .tabla-clasificacion th,
+  .tabla-clasificacion td {
+    padding: 8px 6px;
+    font-size: 0.78rem;
+  }
+}

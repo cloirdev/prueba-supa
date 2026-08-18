@@ -1,0 +1,91 @@
+---
+// src/components/equipo/TabsNav.astro
+// Controla la visibilidad de los paneles marcados con `data-tab-panel`.
+// Usa data-attributes en vez de IDs para que funcione correctamente aunque
+// haya varios equipos (y por tanto varios paneles) en la misma página —
+// con IDs fijos como "tab-plantilla" solo el primero era alcanzable.
+---
+
+<nav class="tabs-nav" role="tablist">
+  <button class="tab-btn" data-tab="plantilla" role="tab">Plantilla</button>
+  <button class="tab-btn" data-tab="calendario" role="tab">Calendario</button>
+  <button class="tab-btn" data-tab="clasificacion" role="tab"
+    >Clasificación</button
+  >
+</nav>
+
+<script>
+  function initTabsNav() {
+    const tabBtns = document.querySelectorAll<HTMLButtonElement>(".tab-btn");
+    const tabPanels =
+      document.querySelectorAll<HTMLElement>("[data-tab-panel]");
+
+    function activarTab(nombre: string) {
+      tabBtns.forEach((b) =>
+        b.classList.toggle("active", b.dataset.tab === nombre),
+      );
+      tabPanels.forEach((p) =>
+        p.classList.toggle("active", p.dataset.tabPanel === nombre),
+      );
+    }
+
+    const tabsValidas = ["plantilla", "calendario", "clasificacion"];
+    const hashInicial = window.location.hash.replace("#", "");
+    activarTab(tabsValidas.includes(hashInicial) ? hashInicial : "plantilla");
+
+    tabBtns.forEach((btn) => {
+      if (btn.dataset.bound) return;
+      btn.dataset.bound = "true";
+      btn.addEventListener("click", () => {
+        const target = btn.dataset.tab!;
+        activarTab(target);
+        history.replaceState(history.state, "", `#${target}`);
+      });
+    });
+  }
+
+  initTabsNav();
+  document.addEventListener("astro:page-load", initTabsNav);
+</script>
+
+<style>
+  .tabs-nav {
+    display: flex;
+    gap: 0;
+    margin-top: 2rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .tab-btn {
+    padding: 0.75rem 1.25rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.5);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition:
+      color 0.2s,
+      border-color 0.2s;
+    margin-bottom: -1px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .tab-btn:hover {
+    color: rgba(255, 255, 255, 0.8);
+  }
+  .tab-btn.active {
+    color: var(--orange, #f97316);
+    border-bottom-color: var(--orange, #f97316);
+  }
+
+  @media (max-width: 640px) {
+    .tabs-nav {
+      gap: 0;
+    }
+    .tab-btn {
+      padding: 0.75rem 0.9rem;
+      font-size: 0.75rem;
+    }
+  }
+</style>

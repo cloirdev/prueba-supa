@@ -1,0 +1,93 @@
+---
+// src/components/equipo/FasesNav.astro
+interface Props {
+  niveles: Record<string, any[]>; // orden -> fases[]
+  faseActivaId: string | number | null;
+}
+
+const { niveles, faseActivaId } = Astro.props;
+---
+
+<div class="fases-nav" role="tablist">
+  {
+    Object.entries(niveles).map(([orden, fasesNivel]) => (
+      <>
+        <span class="fases-nivel-label">
+          {fasesNivel[0].tipo === "playoff" ? "Final" : `Fase ${orden}`}
+        </span>
+        {fasesNivel.map((f) => (
+          <button
+            class:list={["fase-btn", f.id === faseActivaId && "active"]}
+            data-fase={f.id}
+            role="tab"
+          >
+            {f.nombre}
+          </button>
+        ))}
+      </>
+    ))
+  }
+</div>
+
+<script>
+  function initFasesNav() {
+    const faseBtns = document.querySelectorAll<HTMLButtonElement>(".fase-btn");
+    const fasePanels = document.querySelectorAll<HTMLElement>(".fase-panel");
+
+    faseBtns.forEach((btn) => {
+      if (btn.dataset.bound) return;
+      btn.dataset.bound = "true";
+      btn.addEventListener("click", () => {
+        const faseId = btn.dataset.fase;
+        faseBtns.forEach((b) => b.classList.remove("active"));
+        fasePanels.forEach((p) => p.classList.remove("active"));
+        btn.classList.add("active");
+        document
+          .querySelector(`[data-fase-panel="${faseId}"]`)
+          ?.classList.add("active");
+      });
+    });
+  }
+
+  initFasesNav();
+  document.addEventListener("astro:page-load", initFasesNav);
+</script>
+
+<style>
+  .fases-nav {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--borde, rgba(255, 255, 255, 0.07));
+  }
+  .fases-nivel-label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--muted, #64748b);
+    padding-right: 4px;
+  }
+  .fase-btn {
+    padding: 5px 14px;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--borde, rgba(255, 255, 255, 0.1));
+    background: transparent;
+    color: rgba(255, 255, 255, 0.5);
+    transition: all 0.15s;
+  }
+  .fase-btn:hover {
+    color: white;
+    border-color: rgba(255, 255, 255, 0.3);
+  }
+  .fase-btn.active {
+    background: var(--orange, #f97316);
+    border-color: var(--orange, #f97316);
+    color: white;
+  }
+</style>
